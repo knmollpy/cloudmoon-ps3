@@ -376,10 +376,18 @@ namespace rtc::impl {
 class Ps3Thread {
 private:
     struct TaskBase { virtual ~TaskBase() {} virtual void run() = 0; };
-    template <class F> struct TaskModel final : TaskBase {
-        explicit TaskModel(F &&f) : fn(std::move(f)) {}
-        void run() override { fn(); }
+    template <class F, class... Args> struct TaskModel final : TaskBase {
+        template <class Fn, class... A>
+        explicit TaskModel(Fn &&f, A &&...args)
+            : fn(std::forward<Fn>(f)), args(std::forward<A>(args)...) {}
+        void run() override {
+            std::apply([this](auto &&...values) {
+                std::invoke(std::move(fn),
+                            std::forward<decltype(values)>(values)...);
+            }, std::move(args));
+        }
         F fn;
+        std::tuple<Args...> args;
     };
     static void *trampoline(void *arg) {
         std::unique_ptr<TaskBase> task(static_cast<TaskBase *>(arg));
@@ -408,9 +416,9 @@ public:
 
     template <class F, class... Args>
     explicit Ps3Thread(F &&f, Args &&...args) : joinable_(false) {
-        using Bound = decltype(std::bind(std::forward<F>(f), std::forward<Args>(args)...));
-        TaskBase *task = new TaskModel<Bound>(
-            std::bind(std::forward<F>(f), std::forward<Args>(args)...));
+        TaskBase *task = new TaskModel<typename std::decay<F>::type,
+                                        typename std::decay<Args>::type...>(
+            std::forward<F>(f), std::forward<Args>(args)...);
         int rc = pthread_create(&thread_, nullptr, &Ps3Thread::trampoline, task);
         if (rc != 0) {
             delete task;
