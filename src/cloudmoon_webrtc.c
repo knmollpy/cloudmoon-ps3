@@ -171,16 +171,17 @@ static void cm_rtc_input_loop(void*arg) {
         pad.triangle=!!(ps3.buttons_down&X_FLAG);
         pad.l1=!!(ps3.buttons_down&LB_FLAG);pad.r1=!!(ps3.buttons_down&RB_FLAG);\n        pad.l2=ps3.l2;pad.r2=ps3.r2;\n        pad.up=!!(ps3.buttons_down&UP_FLAG);pad.down=!!(ps3.buttons_down&DOWN_FLAG);\n        pad.left=!!(ps3.buttons_down&LEFT_FLAG);pad.right=!!(ps3.buttons_down&RIGHT_FLAG);
         pad.start=!!(ps3.buttons_down&PLAY_FLAG);pad.select=!!(ps3.buttons_down&BACK_FLAG);
-        {
+        if(rtc->data_channel>=0&&rtcIsOpen(rtc->data_channel)) {
             int n=cm_input_translate(&rtc->layout,&rtc->input_state,&pad,messages,sizeof(messages));
             size_t off=0;
             while(n>0&&off<(size_t)n) {
                 size_t z=strlen(messages+off);
                 if(z==0)break;
-                if(rtc->data_channel>=0&&rtcIsOpen(rtc->data_channel))
-                    (void)rtcSendMessage(rtc->data_channel,messages+off,(int)z);
+                (void)rtcSendMessage(rtc->data_channel,messages+off,(int)z);
                 off+=z+1;
             }
+        } else {
+            cm_input_reset(&rtc->input_state);
         }
         usleep(16000);
     }
