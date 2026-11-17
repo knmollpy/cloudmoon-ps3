@@ -6,9 +6,12 @@ on:
     branches: [main]
     paths:
       - 'src/**'
+      - 'tests/**'
       - 'scripts/**'
       - 'cmake/**'
       - 'Makefile'
+      - 'Makefile.host-test'
+      - 'assets/**'
       - '.gitmodules'
       - '.github/workflows/cloudmoon-ppu.yml'
 
