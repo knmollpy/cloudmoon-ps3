@@ -3,7 +3,7 @@
 #include <string.h>
 #define CM_LEFT_ID 10
 #define CM_RIGHT_ID 11
-#define CM_BUTTON_ID_BASE 20
+#define CM_BUTTON_ID_BASE 12
 static int clampi(int v,int lo,int hi){return v<lo?lo:(v>hi?hi:v);}
 static int axis_to_delta(int16_t axis,int radius){return ((int)axis*radius)/32767;}
 static int emit(char*out,size_t cap,size_t*used,const char*phase,int id,int x,int y){int n;if(*used>=cap)return -1;n=snprintf(out+*used,cap-*used,"touch>Touch %s:%d,%d,%d",phase,id,x,y);if(n<0||(size_t)n+1>cap-*used)return -1;*used+=(size_t)n+1;return 0;}
