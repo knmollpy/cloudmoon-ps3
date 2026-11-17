@@ -16,7 +16,9 @@
 typedef struct { cm_cloudmoon_webrtc_t *rtc; } cm_launch_rtc_context;
 static void cm_launch_signal(void *context,cm_cloudmoon_client_t *client,const char *json,size_t length){
  cm_launch_rtc_context *state=(cm_launch_rtc_context*)context;
- if(!state||!client||!json||!length)return;
+ if(!state)return;
+ if(!json&&!length){if(state->rtc)cm_cloudmoon_webrtc_detach_signaling(state->rtc);return;}
+ if(!client||!json||!length)return;
  if(!state->rtc){if(cm_cloudmoon_webrtc_create(&state->rtc,client,720,1280)!=0){ui_push_log("CloudMoon: WebRTC peer initialization failed.");return;}}
  cm_cloudmoon_webrtc_signal(state->rtc,json,length);
 }
