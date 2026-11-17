@@ -8,9 +8,10 @@ SCTP="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_bsd_a
 SCTP_IND="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_indata.c"
 SCTP_INPUT="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_input.c"
 SCTP_OUTPUT="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_output.c"
+SCTP_PCB="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_pcb.c"
 SCTP_OS="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_os_userspace.h"
 
-for file in "$JUICE" "$UDP" "$SCTP" "$SCTP_IND" "$SCTP_INPUT" "$SCTP_OUTPUT" "$SCTP_OS"; do
+for file in "$JUICE" "$UDP" "$SCTP" "$SCTP_IND" "$SCTP_INPUT" "$SCTP_OUTPUT" "$SCTP_PCB" "$SCTP_OS"; do
   [ -f "$file" ] || { echo "WebRTC source not found: $file" >&2; exit 1; }
 done
 
@@ -183,5 +184,10 @@ fi
 grep -q 'FNONBIO' "$JUICE"
 grep -q 'FNONBIO' "$UDP"
 grep -q 'get_local_default_inet4' "$UDP"
-grep -q 'SCTP_BASE_VAR(iterator_thread_started)' "$SCTP"
+# pthread_t is a structure in PSL1GHT; assigning integer zero after join is invalid.
+if grep -q 'sctp_it_ctl.thread_proc = 0;' "$SCTP_PCB"; then
+  sed -i 's/sctp_it_ctl.thread_proc = 0;/memset(\&sctp_it_ctl.thread_proc, 0, sizeof(sctp_it_ctl.thread_proc));/' "$SCTP_PCB"
+fi
+
+grep -q 'memset(\&sctp_it_ctl.thread_proc' "$SCTP_PCB"
 echo "Applied PS3 libjuice/usrsctp compatibility patches."
