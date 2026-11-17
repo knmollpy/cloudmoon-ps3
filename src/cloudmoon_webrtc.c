@@ -64,7 +64,7 @@ static int cm_rtc_send_signal(cm_cloudmoon_webrtc_t*rtc,const char*type,
         return -1;
     }
     if(mid) {
-        if(cm_json_quote(qmid,sizeof(qmid),mid)<0)return -1;
+        if(cm_json_quote(qmid,sizeof(qmid),mid)<0){__sync_sub_and_fetch(&rtc->signaling_users,1);return -1;}
         n=snprintf(json,sizeof(json),"{\"type\":\"%s\",\"candidate\":%s,\"mid\":%s,\"label\":%d,\"sdpMid\":%s,\"sdpMLineIndex\":%d}",type,qvalue,qmid,label,qmid,label);
     } else n=snprintf(json,sizeof(json),"{\"type\":\"%s\",\"sdp\":%s}",type,qvalue);
     if(n<0||(size_t)n>=sizeof(json))result=-1;
