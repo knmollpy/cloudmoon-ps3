@@ -217,6 +217,10 @@ if count != 1:
 p.write_text(updated)
 PY
 grep -q 'return (if_index == 0xffffffff) ? 1280 : 1500;' "$SCTP_USERSPACE"
+if grep -q 'if (if_indextoname(if_index' "$SCTP_USERSPACE" || grep -q 'struct ifreq ifr;' "$SCTP_USERSPACE"; then
+  echo "Unsupported BSD interface-query code remains in usrsctp MTU helper" >&2
+  exit 1
+fi
 
 grep -q 'FNONBIO' "$JUICE"
 grep -q 'FNONBIO' "$UDP"
