@@ -10,6 +10,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <sys/thread.h>
+#include <unistd.h>
 #define CM_CONFIG_PATH "/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon.ini"
 #define CM_CA_PATH "/dev_hdd0/game/MNLT00001/USRDIR/cacert.pem"
 typedef struct { cm_cloudmoon_webrtc_t *rtc; } cm_launch_rtc_context;
@@ -50,6 +51,15 @@ static void cm_cloudmoon_worker(void *arg){
  NLOG("CloudMoon: coordinator session starting for package %s",cfg->game);
  rc=cm_cloudmoon_client_run_from_instance_id(normalized,CM_CA_PATH,20,&registration,
       cm_ps3_random_source,NULL,cm_launch_signal,&rtc_state);
+ /* CloudMoon closes Socket.IO with getout/errorCode=10 after WebRTC setup.
+    Keep the independent media peer alive after the signaling socket exits. */
+ if(rtc_state.rtc&&rc==0){
+  unsigned int wait_seconds=0;
+  while(!cm_cloudmoon_webrtc_is_connected(rtc_state.rtc)&&wait_seconds<90){
+   usleep(1000000);wait_seconds++;
+  }
+  while(cm_cloudmoon_webrtc_is_connected(rtc_state.rtc))usleep(250000);
+ }
  if(rtc_state.rtc){cm_cloudmoon_webrtc_close(rtc_state.rtc);rtc_state.rtc=NULL;}
  NLOG("CloudMoon: session ended with status %d",rc);
  if(rc!=0)ui_push_log("CloudMoon: connection failed. Check session data and CA bundle.");
