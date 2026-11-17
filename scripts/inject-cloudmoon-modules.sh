@@ -51,11 +51,31 @@ if [ "${CLOUDMOON_WEBRTC:-0}" = "1" ]; then
   fi
   # Remove the obsolete empty-interface shim from checkouts patched by older revisions.
   sed -i 's# src/cloudmoon_ifaddrs_stub.c##g' "$PS3_BASE/Makefile"
-  if ! grep -q 'src/cloudmoon_webrtc.c' "$PS3_BASE/Makefile"; then
+  # The legacy Moonlight compatibility header aliases Mbed TLS names to PolarSSL.
+# The hardware entropy shim must include the real Mbed TLS 3.x headers instead.
+python3 - "$PS3_BASE/src/openssl_compat.h" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+s = p.read_text()
+if "CLOUDMOON_MBEDTLS_ENTROPY" not in s:
+    first = "#define OPENSSL_COMPAT_H"
+    if first not in s:
+        raise SystemExit("Cannot guard the legacy OpenSSL compatibility header")
+    s = s.replace(first, first + "\n#ifndef CLOUDMOON_MBEDTLS_ENTROPY", 1)
+    pos = s.rfind("#endif")
+    if pos < 0:
+        raise SystemExit("Cannot close legacy OpenSSL compatibility guard")
+    s = s[:pos] + "#endif /* CLOUDMOON_MBEDTLS_ENTROPY */\n" + s[pos:]
+p.write_text(s)
+PY
+
+if ! grep -q 'src/cloudmoon_webrtc.c' "$PS3_BASE/Makefile"; then
     sed -i 's#src/cloudmoon_ws_tls.c#src/cloudmoon_ws_tls.c src/cloudmoon_mbedtls_entropy.c src/cloudmoon_clock_compat.c src/cloudmoon_time_compat.c src/cloudmoon_webrtc.c src/cloudmoon_launch.c#' "$PS3_BASE/Makefile"
     # Put the freshly built Mbed TLS headers before PSL1GHT's older bundled headers.
     sed -i 's#COMMON_INCLUDES[[:space:]]*:=[[:space:]]*#COMMON_INCLUDES := -I'"$ROOT_DIR"'/build/ps3deps/include #' "$PS3_BASE/Makefile"
     sed -i 's#-I./src -I./src/spu/include#-I./src -I./src/spu/include -DCM_ENABLE_WEBRTC -DRTC_STATIC#' "$PS3_BASE/Makefile"
+    # Only the Mbed TLS entropy object opts out of the legacy PolarSSL aliases.
+    sed -i '/$(BUILD)\\/obj\\/%.o: src\\/%.c/i $(BUILD)/obj/cloudmoon_mbedtls_entropy.o: CFLAGS += -DCLOUDMOON_MBEDTLS_ENTROPY' "$PS3_BASE/Makefile"
     sed -i 's#-lpolarssl#-lpolarssl -L'"$ROOT_DIR"'/build/ps3deps/lib -ldatachannel -lsrtp2 -lusrsctp -ljuice -lmbedtls -lmbedx509 -lmbedcrypto -lpthread -lstdc++#g' "$PS3_BASE/Makefile"
   fi
   if ! grep -q 'cloudmoon_autostart' "$DST/main.c"; then
