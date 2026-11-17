@@ -11,8 +11,10 @@ SCTP_PCB="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_p
 SCTP_BSD_ADDR="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_bsd_addr.c"
 SCTP_OS="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_os_userspace.h"
 SCTP_USERSPACE="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_userspace.c"
+RTC_UTILS="$ROOT_DIR/vendor/libdatachannel/include/rtc/utils.hpp"
+RTC_CANDIDATE="$ROOT_DIR/vendor/libdatachannel/src/candidate.cpp"
 
-for file in "$JUICE" "$UDP" "$SCTP_IND" "$SCTP_INPUT" "$SCTP_OUTPUT" "$SCTP_PCB" "$SCTP_BSD_ADDR" "$SCTP_OS" "$SCTP_USERSPACE"; do
+for file in "$JUICE" "$UDP" "$SCTP_IND" "$SCTP_INPUT" "$SCTP_OUTPUT" "$SCTP_PCB" "$SCTP_BSD_ADDR" "$SCTP_OS" "$SCTP_USERSPACE" "$RTC_UTILS" "$RTC_CANDIDATE"; do
   [ -f "$file" ] || { echo "WebRTC source not found: $file" >&2; exit 1; }
 done
 
@@ -221,6 +223,136 @@ if "#define UIO_MAXIOV 16" not in s:
         raise SystemExit("Could not locate socket include for usrsctp socket constants")
     s = s.replace(needle, needle + "\\n" + compat, 1)
     p.write_text(s)
+PY
+
+# libdatachannel's pinned headers omit direct standard includes needed by PPU GCC.
+# PSL1GHT's netdb.h exposes gethostbyname(), but not the POSIX getaddrinfo family.
+python3 - "$RTC_UTILS" "$RTC_CANDIDATE" <<'PY'
+import pathlib, sys
+
+utils = pathlib.Path(sys.argv[1])
+s = utils.read_text()
+if "#include <mutex>" not in s:
+    needle = "#include <memory>"
+    if needle not in s:
+        raise SystemExit("Could not locate standard includes in rtc/utils.hpp")
+    s = s.replace(needle, needle + "\n#include <mutex>", 1)
+utils.write_text(s)
+
+candidate = pathlib.Path(sys.argv[2])
+s = candidate.read_text()
+for header, anchor in [
+    ("#include <string>", "#include <sstream>"),
+    ("#include <cstdlib>", "#include <cctype>"),
+    ("#include <cstring>", "#include <cstdlib>"),
+    ("#include <cstdio>", "#include <cstring>"),
+]:
+    if header not in s:
+        if anchor not in s:
+            raise SystemExit("Could not locate standard include anchor in candidate.cpp: " + anchor)
+        s = s.replace(anchor, anchor + "\n" + header, 1)
+
+# Keep the implementation local to this translation unit: PSL1GHT's netdb.h
+# declares gethostbyname(), but does not declare or implement getaddrinfo(),
+# getnameinfo(), or freeaddrinfo(). Resolve IPv4 names through libnet.
+if "PS3 libnet getaddrinfo compatibility" not in s:
+    needle = "using std::array;"
+    wrapper = r"""
+#if defined(__Userspace__) || defined(__PS3__)
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <netinet/in.h>
+
+#ifndef EAI_FAIL
+#define EAI_FAIL (-4)
+#endif
+#ifndef EAI_NONAME
+#define EAI_NONAME (-2)
+#endif
+#ifndef EAI_SERVICE
+#define EAI_SERVICE (-8)
+#endif
+#ifndef EAI_FAMILY
+#define EAI_FAMILY (-6)
+#endif
+
+/* PS3 libnet resolver adapter; IPv4 only (PSL1GHT networking is IPv4 here). */
+static int getaddrinfo(const char *node, const char *service,
+                       const struct addrinfo *hints, struct addrinfo **result) {
+    if (!node || !service || !result)
+        return EAI_FAIL;
+    *result = nullptr;
+    if (hints && hints->ai_family != AF_UNSPEC && hints->ai_family != AF_INET)
+        return EAI_FAMILY;
+
+    char *end = nullptr;
+    unsigned long port = strtoul(service, &end, 10);
+    if (end == service || *end != '\0' || port > 65535)
+        return EAI_SERVICE;
+
+    struct in_addr address;
+    if (inet_pton(AF_INET, node, &address) != 1) {
+        struct hostent *host = gethostbyname(node);
+        if (!host || host->h_addrtype != AF_INET ||
+            host->h_length != (int)sizeof(address) ||
+            !host->h_addr_list || !host->h_addr_list[0])
+            return EAI_NONAME;
+        memcpy(&address, host->h_addr_list[0], sizeof(address));
+    }
+
+    struct addrinfo *ai = (struct addrinfo *)calloc(1, sizeof(*ai));
+    struct sockaddr_in *sin = (struct sockaddr_in *)calloc(1, sizeof(*sin));
+    if (!ai || !sin) {
+        free(ai);
+        free(sin);
+        return EAI_FAIL;
+    }
+    sin->sin_family = AF_INET;
+    sin->sin_port = htons((uint16_t)port);
+    sin->sin_addr = address;
+    ai->ai_family = AF_INET;
+    ai->ai_socktype = hints ? hints->ai_socktype : 0;
+    ai->ai_protocol = hints ? hints->ai_protocol : 0;
+    ai->ai_addrlen = sizeof(*sin);
+    ai->ai_addr = (struct sockaddr *)sin;
+    *result = ai;
+    return 0;
+}
+
+static int getnameinfo(const struct sockaddr *address, socklen_t address_len,
+                       char *host, socklen_t host_len,
+                       char *service, socklen_t service_len, int flags) {
+    (void)flags;
+    if (!address || address->sa_family != AF_INET ||
+        address_len < sizeof(struct sockaddr_in))
+        return EAI_FAMILY;
+    const struct sockaddr_in *sin = (const struct sockaddr_in *)address;
+    if (host && (!inet_ntop(AF_INET, &sin->sin_addr, host, host_len)))
+        return EAI_FAIL;
+    if (service) {
+        int n = snprintf(service, service_len, "%u", (unsigned)ntohs(sin->sin_port));
+        if (n < 0 || (socklen_t)n >= service_len)
+            return EAI_FAIL;
+    }
+    return 0;
+}
+
+static void freeaddrinfo(struct addrinfo *ai) {
+    while (ai) {
+        struct addrinfo *next = ai->ai_next;
+        free(ai->ai_addr);
+        free(ai->ai_canonname);
+        free(ai);
+        ai = next;
+    }
+}
+#endif
+"""
+    if needle not in s:
+        raise SystemExit("Could not locate candidate.cpp using declarations")
+    s = s.replace(needle, wrapper + "\n" + needle, 1)
+    s = s.replace("PS3 libnet getaddrinfo compatibility", "PS3 libnet getaddrinfo compatibility", 1)
+candidate.write_text(s)
 PY
 
 # usrsctp has no RNG backend selected for the PSL1GHT/newlib target.
