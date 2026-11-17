@@ -395,15 +395,11 @@ s = p.read_text()
 needle = '#elif defined(__linux__)'
 branch = r"""
 #elif defined(__PS3__) || defined(__Userspace__)
-#include <fcntl.h>
-#include <unistd.h>
-
-static int ps3_random_fd = -1;
+#include <lv2/system.h>
 
 void
 init_random(void)
 {
-    ps3_random_fd = open("/dev/urandom", O_RDONLY);
 }
 
 void
@@ -411,26 +407,18 @@ read_random(void *buf, size_t size)
 {
     size_t done = 0;
     while (done < size) {
-        ssize_t n;
-        if (ps3_random_fd < 0)
+        u32 chunk = (u32)((size - done) > 64 ? 64 : (size - done));
+        if (sysGetRandomNumber((uint8_t *)buf + done, chunk) != 0)
             abort();
-        n = read(ps3_random_fd, (char *)buf + done, size - done);
-        if (n > 0)
-            done += (size_t)n;
-        else if (errno != EINTR)
-            abort();
+        done += chunk;
     }
 }
 
 void
 finish_random(void)
 {
-    if (ps3_random_fd >= 0) {
-        close(ps3_random_fd);
-        ps3_random_fd = -1;
-    }
 }
-"""
+
 if "ps3_random_fd" not in s:
     if needle not in s:
         raise SystemExit("Could not locate usrsctp Linux RNG branch")
