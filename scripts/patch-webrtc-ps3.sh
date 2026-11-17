@@ -232,25 +232,23 @@ import pathlib, sys
 
 utils = pathlib.Path(sys.argv[1])
 s = utils.read_text()
-if "#include <mutex>" not in s:
-    needle = "#include <memory>"
+marker = "/* PS3 PPU: force the recursive mutex declaration before use. */"
+if marker not in s:
+    needle = "#define RTC_UTILS_H"
     if needle not in s:
-        raise SystemExit("Could not locate standard includes in rtc/utils.hpp")
-    s = s.replace(needle, needle + "\n#include <mutex>", 1)
+        raise SystemExit("Could not locate include guard in rtc/utils.hpp")
+    s = s.replace(needle, needle + "\n\n" + marker + "\n#include <mutex>", 1)
 utils.write_text(s)
 
 candidate = pathlib.Path(sys.argv[2])
 s = candidate.read_text()
-for header, anchor in [
-    ("#include <string>", "#include <sstream>"),
-    ("#include <cstdlib>", "#include <cctype>"),
-    ("#include <cstring>", "#include <cstdlib>"),
-    ("#include <cstdio>", "#include <cstring>"),
-]:
-    if header not in s:
-        if anchor not in s:
-            raise SystemExit("Could not locate standard include anchor in candidate.cpp: " + anchor)
-        s = s.replace(anchor, anchor + "\n" + header, 1)
+marker = "/* PS3 PPU: explicit C++ string and C runtime declarations. */"
+if marker not in s:
+    needle = '#include "impl/internals.hpp"'
+    if needle not in s:
+        raise SystemExit("Could not locate include section in candidate.cpp")
+    s = s.replace(needle, needle + "\n\n" + marker +
+                  "\n#include <string>\n#include <cstdlib>\n#include <cstring>\n#include <cstdio>", 1)
 
 # Keep the implementation local to this translation unit: PSL1GHT's netdb.h
 # declares gethostbyname(), but does not declare or implement getaddrinfo(),
@@ -262,6 +260,9 @@ if "PS3 libnet getaddrinfo compatibility" not in s:
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
 
 #ifndef EAI_FAIL
 #define EAI_FAIL (-4)
@@ -354,6 +355,10 @@ static void freeaddrinfo(struct addrinfo *ai) {
     s = s.replace("PS3 libnet getaddrinfo compatibility", "PS3 libnet getaddrinfo compatibility", 1)
 candidate.write_text(s)
 PY
+
+grep -q 'force the recursive mutex declaration' "$RTC_UTILS"
+grep -q 'explicit C++ string and C runtime declarations' "$RTC_CANDIDATE"
+grep -q 'PS3 libnet resolver adapter' "$RTC_CANDIDATE"
 
 # usrsctp has no RNG backend selected for the PSL1GHT/newlib target.
 # Use the OS entropy device (never a deterministic/fuzzing RNG).
