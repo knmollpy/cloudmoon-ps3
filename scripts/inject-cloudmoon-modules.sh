@@ -142,6 +142,58 @@ if ! grep -q 'src/cloudmoon_webrtc.c' "$PS3_BASE/Makefile"; then
     sed -i '/#include "input.h"/a #include "cloudmoon_launch.h"' "$DST/main.c"
     sed -i '/ps3input_start();/a\  cm_cloudmoon_autostart();' "$DST/main.c"
   fi
+  if [ -s "$ROOT_DIR/assets/ICON0.PNG" ]; then
+    cp "$ROOT_DIR/assets/ICON0.PNG" "$PS3_BASE/ICON0.PNG"
+  else
+    echo "CloudMoon ICON0.PNG missing from assets/" >&2
+    exit 1
+  fi
+  python3 - "$DST/main.c" <<'PY'
+import pathlib
+import sys
+p = pathlib.Path(sys.argv[1])
+s = p.read_text()
+start = s.find("/* PSL1GHT libnet gatekeeper:")
+end = s.find("static void ps3_net_shutdown", start)
+if start < 0 or end < 0:
+    raise SystemExit("Could not locate PS3 network initialization block")
+replacement = """static int ps3_net_init(void) {
+  int ret = sysModuleLoad(SYSMODULE_NET);
+  if (ret != 0) return ret;
+  ret = netInitialize();
+  if (ret != 0) {
+    sysModuleUnload(SYSMODULE_NET);
+    return ret;
+  }
+  ret = netCtlInit();
+  if (ret != 0) {
+    netDeinitialize();
+    sysModuleUnload(SYSMODULE_NET);
+    return ret;
+  }
+  return 0;
+}
+
+"""
+s = s[:start] + replacement + s[end:]
+s = s.replace("  // Ağı başlat (Genişletilmiş yüksek verimli bellek havuzu ile)\\n  ps3_net_init();\\n\\n", "")
+needle = "  ui_init(width, height, is_4_3);\\n  ps3input_start();\\n"
+if needle not in s:
+    raise SystemExit("Could not locate UI startup sequence")
+s = s.replace(needle, needle + """  NLOG("CloudMoon PS3 UI initialized; starting network stack...");
+  int net_status = ps3_net_init();
+  if (net_status == 0) {
+    NLOG("PS3 network stack initialized.");
+    cm_cloudmoon_autostart();
+  } else {
+    char net_error[96];
+    snprintf(net_error, sizeof(net_error), "Network initialization failed (%d).", net_status);
+    ui_push_log(net_error);
+    NLOG("%s", net_error);
+  }
+""", 1)
+p.write_text(s)
+PY
   # Ship a real CA bundle inside the PKG so TLS certificate verification works.
   if ! grep -q 'cacert.pem' "$PS3_BASE/Makefile"; then
     sed -i '/mkdir -p $(BUILD)\/pkg\/USRDIR/a\	cp '"$ROOT_DIR"'/assets/cacert.pem $(BUILD)/pkg/USRDIR/cacert.pem' "$PS3_BASE/Makefile"
