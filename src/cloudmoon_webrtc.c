@@ -20,6 +20,8 @@
 #define CM_RTC_SDP_MAX 16384
 #define CM_RTC_MESSAGE_MAX 2048
 #define CM_RTC_MAX_MIDS 8
+#define CM_RTC_PENDING_CANDIDATES 16
+#define CM_RTC_CANDIDATE_MAX 2048
 #define CM_ATOMIC_LOAD(p) __sync_fetch_and_add((p), 0)
 #define CM_ATOMIC_STORE(p, v) __sync_lock_test_and_set((p), (v))
 #define CM_ATOMIC_CAS(p, oldv, newv) __sync_val_compare_and_swap((p), (oldv), (newv))
@@ -35,6 +37,9 @@ struct cm_cloudmoon_webrtc {
     cm_input_state_t input_state;
     cm_cloudmoon_client_t *client;
     volatile int signaling_detached, signaling_users;
+    volatile int pending_lock;
+    int remote_description_set, pending_count;
+    struct { char candidate[CM_RTC_CANDIDATE_MAX]; char mid[32]; } pending[CM_RTC_PENDING_CANDIDATES];
     char remote_mids[CM_RTC_MAX_MIDS][32];
 };
 
@@ -88,6 +93,8 @@ static void cm_rtc_local_candidate(int pc,const char*candidate,const char*mid,vo
     cm_cloudmoon_webrtc_t*rtc=(cm_cloudmoon_webrtc_t*)ptr;
     int label=0;
     if(!rtc||pc!=rtc->pc||!candidate)return;
+    /* The browser client deliberately excludes host ICE candidates. */
+    if(strstr(candidate," typ host"))return;
     if(mid&&mid[0]>='0'&&mid[0]<='9')label=atoi(mid);
     (void)cm_rtc_send_signal(rtc,"candidate",candidate,mid?mid:"0",label);
 }
@@ -306,6 +313,24 @@ void cm_cloudmoon_webrtc_signal(void*context,const char*json,size_t length) {
         if(cm_json_get_string(json,length,"sdp",sdp,sizeof(sdp))<0)return;
         cm_rtc_parse_mids(rtc,sdp);
         if(rtcSetRemoteDescription(rtc->pc,sdp,"offer")!=RTC_ERR_SUCCESS)return;
+        __sync_lock_test_and_set(&rtc->pending_lock,1);
+        rtc->remote_description_set=1;
+        __sync_lock_release(&rtc->pending_lock);
+        for(;;) {
+            char queued_candidate[CM_RTC_CANDIDATE_MAX],queued_mid[32];
+            __sync_lock_test_and_set(&rtc->pending_lock,1);
+            if(rtc->pending_count<=0) {
+                __sync_lock_release(&rtc->pending_lock);
+                break;
+            }
+            memcpy(queued_candidate,rtc->pending[0].candidate,sizeof(queued_candidate));
+            memcpy(queued_mid,rtc->pending[0].mid,sizeof(queued_mid));
+            if(--rtc->pending_count>0)
+                memmove(&rtc->pending[0],&rtc->pending[1],
+                        (size_t)rtc->pending_count*sizeof(rtc->pending[0]));
+            __sync_lock_release(&rtc->pending_lock);
+            (void)rtcAddRemoteCandidate(rtc->pc,queued_candidate,queued_mid);
+        }
         (void)rtcSetLocalDescription(rtc->pc,"answer");
     } else if(!strcmp(type,"candidate")) {
         const char*mid=NULL;
@@ -321,6 +346,21 @@ void cm_cloudmoon_webrtc_signal(void*context,const char*json,size_t length) {
         else if(label>=0&&label<CM_RTC_MAX_MIDS&&rtc->remote_mids[label][0])
             mid=rtc->remote_mids[label];
         else mid=rtc->remote_mids[0][0]?rtc->remote_mids[0]:"0";
+        __sync_lock_test_and_set(&rtc->pending_lock,1);
+        if(!rtc->remote_description_set) {
+            if(rtc->pending_count<CM_RTC_PENDING_CANDIDATES) {
+                size_t candidate_len=strlen(candidate),mid_len=strlen(mid);
+                if(candidate_len<sizeof(rtc->pending[0].candidate)&&
+                   mid_len<sizeof(rtc->pending[0].mid)) {
+                    memcpy(rtc->pending[rtc->pending_count].candidate,candidate,candidate_len+1);
+                    memcpy(rtc->pending[rtc->pending_count].mid,mid,mid_len+1);
+                    rtc->pending_count++;
+                }
+            }
+            __sync_lock_release(&rtc->pending_lock);
+            return;
+        }
+        __sync_lock_release(&rtc->pending_lock);
         (void)rtcAddRemoteCandidate(rtc->pc,candidate,mid);
     }
 }
