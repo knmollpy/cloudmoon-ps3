@@ -29,7 +29,7 @@ if ! grep -q 'src/cloudmoon_client.c' "$PS3_BASE/Makefile"; then
 fi
 
 if [ "${CLOUDMOON_WEBRTC:-0}" = "1" ]; then
-  for file in cloudmoon_webrtc.c cloudmoon_webrtc.h cloudmoon_launch.c cloudmoon_launch.h; do cp "$SRC/$file" "$DST/$file"; done
+  for file in cloudmoon_webrtc.c cloudmoon_webrtc.h cloudmoon_launch.c cloudmoon_launch.h cloudmoon_clock_compat.c cloudmoon_clock_compat.h; do cp "$SRC/$file" "$DST/$file"; done
   if ! grep -q 'ps3video_cloudmoon_start' "$DST/video.c"; then cat "$SRC/cloudmoon_video_bridge.inc" >> "$DST/video.c"; fi
   if ! grep -q 'ps3audio_cloudmoon_start' "$DST/audio.c"; then cat "$SRC/cloudmoon_audio_bridge.inc" >> "$DST/audio.c"; fi
   if ! grep -q 'ps3video_cloudmoon_start' "$DST/video.h"; then
