@@ -276,6 +276,22 @@ fi
 
 
 
+# PSL1GHT's <cstdio> does not re-export vsnprintf into namespace std.
+python3 - "$ROOT_DIR/vendor/libdatachannel/src/impl/sctptransport.cpp" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+s = p.read_text()
+s = s.replace("std::vsnprintf(", "::vsnprintf(")
+if "std::vsnprintf(" in s:
+    raise SystemExit("std::vsnprintf compatibility replacement failed")
+if "#include <stdio.h>" not in s:
+    anchor = "#include <cstdio>"
+    if anchor not in s:
+        raise SystemExit("Cannot locate cstdio include in sctptransport.cpp")
+    s = s.replace(anchor, anchor + "\n#include <stdio.h>", 1)
+p.write_text(s)
+PY
+
 # The PS3 libstdc++ omits the std::sto* string conversion helpers.
 # Patch every remaining conversion in libdatachannel's compiled source tree.
 python3 - "$ROOT_DIR/vendor/libdatachannel/src" <<'PY'
