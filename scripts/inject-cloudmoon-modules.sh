@@ -177,6 +177,28 @@ static int ps3_net_init(void) {
 
 """
 s = s[:start] + replacement + s[end:]
+old_shutdown = """static void ps3_net_shutdown(void) {
+  netCtlTerm();
+  if (g_net_memory_pool) {
+    __netMemory = NULL;
+    netFinalizeNetwork();
+    free(g_net_memory_pool);
+    g_net_memory_pool = NULL;
+  } else {
+    netDeinitialize();
+  }
+  sysModuleUnload(SYSMODULE_NET);
+}"""
+new_shutdown = """static void ps3_net_shutdown(void) {
+  if (!g_net_initialized) return;
+  netCtlTerm();
+  netDeinitialize();
+  sysModuleUnload(SYSMODULE_NET);
+  g_net_initialized = 0;
+}"""
+if old_shutdown not in s:
+    raise SystemExit("Could not locate legacy network shutdown block")
+s = s.replace(old_shutdown, new_shutdown, 1)
 s = s.replace("  // Ağı başlat (Genişletilmiş yüksek verimli bellek havuzu ile)\\n  ps3_net_init();\\n\\n", "")
 needle = "  ui_init(width, height, is_4_3);\\n  ps3input_start();\\n"
 if needle not in s:
