@@ -4,14 +4,13 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 JUICE="$ROOT_DIR/vendor/libdatachannel/deps/libjuice/src/tcp.c"
 UDP="$ROOT_DIR/vendor/libdatachannel/deps/libjuice/src/udp.c"
-SCTP="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_bsd_addr.c"
 SCTP_IND="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_indata.c"
 SCTP_INPUT="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_input.c"
 SCTP_OUTPUT="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_output.c"
 SCTP_PCB="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_pcb.c"
 SCTP_OS="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_os_userspace.h"
 
-for file in "$JUICE" "$UDP" "$SCTP" "$SCTP_IND" "$SCTP_INPUT" "$SCTP_OUTPUT" "$SCTP_PCB" "$SCTP_OS"; do
+for file in "$JUICE" "$UDP" "$SCTP_IND" "$SCTP_INPUT" "$SCTP_OUTPUT" "$SCTP_PCB" "$SCTP_OS"; do
   [ -f "$file" ] || { echo "WebRTC source not found: $file" >&2; exit 1; }
 done
 
@@ -175,11 +174,6 @@ if "PSL1GHT's socket headers do not expose" not in s:
     s = s.replace(needle, needle + "\n" + compat, 1)
     os_header.write_text(s)
 PY
-
-# PSL1GHT pthread_t is a structure; use usrsctp's existing started flag.
-if grep -q 'if (sctp_it_ctl.thread_proc)' "$SCTP"; then
-  sed -i 's/if (sctp_it_ctl.thread_proc)/if (SCTP_BASE_VAR(iterator_thread_started))/' "$SCTP"
-fi
 
 grep -q 'FNONBIO' "$JUICE"
 grep -q 'FNONBIO' "$UDP"
