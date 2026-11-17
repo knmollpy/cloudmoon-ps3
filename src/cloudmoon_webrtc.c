@@ -313,6 +313,7 @@ void cm_cloudmoon_webrtc_signal(void*context,const char*json,size_t length) {
         if(cm_json_get_string(json,length,"sdp",sdp,sizeof(sdp))<0)return;
         cm_rtc_parse_mids(rtc,sdp);
         if(rtcSetRemoteDescription(rtc->pc,sdp,"offer")!=RTC_ERR_SUCCESS)return;
+        if(rtcSetLocalDescription(rtc->pc,"answer")!=RTC_ERR_SUCCESS)return;
         __sync_lock_test_and_set(&rtc->pending_lock,1);
         rtc->remote_description_set=1;
         __sync_lock_release(&rtc->pending_lock);
@@ -331,7 +332,6 @@ void cm_cloudmoon_webrtc_signal(void*context,const char*json,size_t length) {
             __sync_lock_release(&rtc->pending_lock);
             (void)rtcAddRemoteCandidate(rtc->pc,queued_candidate,queued_mid);
         }
-        (void)rtcSetLocalDescription(rtc->pc,"answer");
     } else if(!strcmp(type,"candidate")) {
         const char*mid=NULL;
         if(cm_json_get_string(json,length,"candidate",candidate,sizeof(candidate))<0)return;
