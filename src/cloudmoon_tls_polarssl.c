@@ -177,6 +177,7 @@ int cm_tls_wait_readable(cm_tls_connection *c, unsigned timeout_ms) {
     struct timeval timeout;
     int rc;
     if (!c || c->socket_fd < 0) return -1;
+    if (ssl_get_bytes_avail(&c->ssl) > 0) return 1;
     FD_ZERO(&readfds);
     FD_SET(c->socket_fd, &readfds);
     timeout.tv_sec = (long)(timeout_ms / 1000U);
