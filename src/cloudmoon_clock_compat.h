@@ -10,7 +10,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-int clock_gettime(clockid_t clock_id, struct timespec *value);
+int clock_gettime(int clock_id, struct timespec *value);
 #ifdef __cplusplus
 }
 #endif
