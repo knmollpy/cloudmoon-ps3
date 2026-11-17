@@ -1,0 +1,36 @@
+name: PS3 build checks
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Run portable protocol and transport tests
+        run: make host-test
+
+  baseline-pkg:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build upstream PS3 package
+        run: make baseline-pkg
+      - name: Upload baseline PKG
+        uses: actions/upload-artifact@v4
+        with:
+          name: moonlight-ps3-baseline-pkg
+          path: vendor/PS3-Moonlight/build/*.pkg
+          if-no-files-found: error
+          retention-days: 7
