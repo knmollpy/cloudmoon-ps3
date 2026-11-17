@@ -7,9 +7,10 @@ UDP="$ROOT_DIR/vendor/libdatachannel/deps/libjuice/src/udp.c"
 SCTP="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_bsd_addr.c"
 SCTP_IND="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_indata.c"
 SCTP_INPUT="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_input.c"
+SCTP_OUTPUT="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_output.c"
 SCTP_OS="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_os_userspace.h"
 
-for file in "$JUICE" "$UDP" "$SCTP" "$SCTP_IND" "$SCTP_INPUT" "$SCTP_OS"; do
+for file in "$JUICE" "$UDP" "$SCTP" "$SCTP_IND" "$SCTP_INPUT" "$SCTP_OUTPUT" "$SCTP_OS"; do
   [ -f "$file" ] || { echo "WebRTC source not found: $file" >&2; exit 1; }
 done
 
@@ -86,11 +87,12 @@ p.write_text(s)
 PY
 
 # PSL1GHT's newlib headers omit BSD timeval and ancillary-data macros used by usrsctp.
-python3 - "$SCTP_IND" "$SCTP_INPUT" "$SCTP_OS" <<'PY'
+python3 - "$SCTP_IND" "$SCTP_INPUT" "$SCTP_OUTPUT" "$SCTP_OS" <<'PY'
 import pathlib, sys
 
 indata = pathlib.Path(sys.argv[1])
 sctp_input = pathlib.Path(sys.argv[2])
+sctp_output = pathlib.Path(sys.argv[3])
 s = indata.read_text()
 needle = "#include <netinet/sctp_os.h>"
 compat = r"""
@@ -134,7 +136,21 @@ if "define timercmp(a, b, op)" not in s:
     s = s.replace(needle, needle + "\n" + compat, 1)
     sctp_input.write_text(s)
 
-os_header = pathlib.Path(sys.argv[3])
+# PSL1GHT's IPv4 headers provide struct ip but omit BSD IPVERSION.
+s = sctp_output.read_text()
+needle = "#include <netinet/sctp_os.h>"
+compat = """
+#ifndef IPVERSION
+#define IPVERSION 4
+#endif
+"""
+if "#define IPVERSION 4" not in s:
+    if needle not in s:
+        raise SystemExit("Could not locate sctp_output.c OS include")
+    s = s.replace(needle, needle + "\\n" + compat, 1)
+    sctp_output.write_text(s)
+
+os_header = pathlib.Path(sys.argv[4])
 s = os_header.read_text()
 needle = "#include <sys/socket.h>"
 compat = r"""
