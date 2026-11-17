@@ -3,6 +3,7 @@
 #include "cloudmoon_ps3_random.h"
 
 #include <polarssl/ssl.h>
+#include <polarssl/net.h>
 #include <polarssl/x509_crt.h>
 #include <polarssl/ctr_drbg.h>
 #include <polarssl/entropy.h>
