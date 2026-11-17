@@ -396,7 +396,7 @@ python3 - "$SCTP_OS" <<'PY'
 import pathlib, sys
 p = pathlib.Path(sys.argv[1])
 s = p.read_text()
-s = s.replace(r'\n', '\n')
+s = s.replace("#include <sys/socket.h>\\n", "#include <sys/socket.h>\n")
 p.write_text(s)
 PY
 
