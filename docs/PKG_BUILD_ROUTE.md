@@ -1,8 +1,6 @@
-# Build route and current boundary
+# Build route and implementation boundary
 
-## Fastest PS3 cross-compile route
-
-The repository pins [PS3-Moonlight](https://github.com/Cruslan/PS3-Moonlight) as a Git submodule. The `prototype-pkg` target copies the CloudMoon modules into that build tree, appends them to its PPU source list, and invokes the upstream PSL1GHT package pipeline.
+## Build
 
 ```sh
 git clone --recurse-submodules https://github.com/knmollpy/cloudmoon-ps3.git
@@ -11,26 +9,27 @@ make host-test
 make prototype-pkg
 ```
 
-## CloudMoon progress
+The prototype package is built from the PS3-Moonlight base and links the CloudMoon C modules. It is not yet a CloudMoon streaming client.
 
-- Base64 decode of `android_instance_id` and extraction of HTTPS `coorUrl`.
-- Coordinator URL parsing (hostname, port and Socket.IO path).
+## Verified protocol observations
+
+The public CloudMoon teardown describes:
+- Socket.IO path `/client/socket.io`, WebSocket-only transport.
+- `hello_server` followed by `client_register`.
+- `action_done2` provides `signalingRoomId`; the client emits `register` with `clientid: "1111111"`.
+- `msg` carries WebRTC offer/candidate signaling.
+- `getout` carries a JSON string with an `errorCode`; code 10 indicates the web client considers the stream established.
+- `android_instance_id` is Base64 JSON containing `coorUrl`.
+
+## Implemented in this repository
+
+- Base64 decoder and HTTPS coordinator URL parser.
 - Engine.IO open/ping and Socket.IO connect handling.
-- Client registration after `hello_server`.
-- Room registration after `action_done2`.
-- Dispatch of signaling payloads from `msg` and shutdown on `getout`.
-- WebSocket framing, HTTP Upgrade validation and TLS integration.
-- Initial PolarSSL TLS 1.2 adapter with mandatory CA-chain and hostname verification.
-- Host-side tests for protocol handling, coordinator parsing and a simulated TLS/WebSocket transport.
+- Registration and room-join message builders.
+- Signaling message receive callback and outbound `msg` helper.
+- `getout.errorCode` handling.
+- TLS/WebSocket Upgrade transport with post-header spillover preservation.
 
-The prototype PKG still launches the upstream Moonlight/Sunshine app. CloudMoon modules are compiled into the executable but are not yet connected to its UI or media pipeline. Host tests do not validate TLS handshakes, DNS, certificates, or PS3 sockets.
+## Still required
 
-## Remaining blockers
-
-1. Confirm authentication and obtain the real instance/session parameters from CloudMoon.
-2. Implement or port ICE, DTLS, SRTP, RTP and SCTP/DataChannel to PS3.
-3. Bridge decoded H.264 and Opus into the upstream PS3 media callbacks.
-4. Connect the CloudMoon session to the native UI and DualShock 3.
-5. Verify a complete session on real PS3 HEN hardware.
-
-A WebSocket connection only handles signaling. It does not provide the media stream.
+CloudMoon's browser client relies on native WebRTC. A PS3 implementation still needs ICE, DTLS, SRTP, RTP and SCTP/DataChannel, plus H.264/VP8 video and audio playback integration. The current PKG is a cross-compile prototype using the upstream Moonlight shell; it does not yet stream CloudMoon.

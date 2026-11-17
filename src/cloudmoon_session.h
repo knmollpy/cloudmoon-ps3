@@ -12,6 +12,8 @@ typedef enum { CM_SESSION_ACTION_NONE=0,CM_SESSION_ACTION_SEND_CLIENT_REGISTER,C
 typedef struct { cm_session_state_t state; char room_id[256]; char client_id[128]; } cm_session_t;
 int cm_socketio_parse_event(const char *packet,cm_sio_event_t *event);
 int cm_json_get_string(const char *json,size_t json_len,const char *key,char *out,size_t out_cap);
+int cm_json_decode_string(const char *json_string,size_t json_len,char *out,size_t out_cap);
+int cm_json_get_integer(const char *json,size_t json_len,const char *key,int *out);
 void cm_session_init(cm_session_t *session);
 cm_session_action_t cm_session_on_event(cm_session_t *session,const cm_sio_event_t *event);
 #ifdef __cplusplus
