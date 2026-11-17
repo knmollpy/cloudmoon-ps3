@@ -9,6 +9,7 @@
  */
 #include <pthread.h>
 #include <time.h>
+extern "C" int nanosleep(const struct timespec *, struct timespec *);
 #include <errno.h>
 #include <stdint.h>
 #include <chrono>
@@ -323,6 +324,18 @@ private:
 namespace rtc::impl {
 
 class Ps3Thread {
+private:
+    struct TaskBase { virtual ~TaskBase() {} virtual void run() = 0; };
+    template <class F> struct TaskModel final : TaskBase {
+        explicit TaskModel(F &&f) : fn(std::move(f)) {}
+        void run() override { fn(); }
+        F fn;
+    };
+    static void *trampoline(void *arg) {
+        std::unique_ptr<TaskBase> task(static_cast<TaskBase *>(arg));
+        try { task->run(); } catch (...) { std::terminate(); }
+        return nullptr;
+    }
 public:
     Ps3Thread() noexcept : joinable_(false) {}
     Ps3Thread(const Ps3Thread &) = delete;
@@ -345,8 +358,9 @@ public:
 
     template <class F, class... Args>
     explicit Ps3Thread(F &&f, Args &&...args) : joinable_(false) {
-        using Task = std::function<void()>;
-        Task *task = new Task(std::bind(std::forward<F>(f), std::forward<Args>(args)...));
+        using Bound = decltype(std::bind(std::forward<F>(f), std::forward<Args>(args)...));
+        TaskBase *task = new TaskModel<Bound>(
+            std::bind(std::forward<F>(f), std::forward<Args>(args)...));
         int rc = pthread_create(&thread_, nullptr, &Ps3Thread::trampoline, task);
         if (rc != 0) {
             delete task;
