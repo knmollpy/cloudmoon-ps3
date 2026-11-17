@@ -312,3 +312,102 @@ private:
 };
 
 }  // namespace std
+
+
+/*
+ * libstdc++ in the PSL1GHT SDK is built without gthreads. Its std::thread
+ * declaration therefore has no callable constructor. libdatachannel needs
+ * real joinable/detached workers, so use a separate pthread-backed type
+ * rather than redefining std::thread.
+ */
+namespace rtc::impl {
+
+class Ps3Thread {
+public:
+    Ps3Thread() noexcept : joinable_(false) {}
+    Ps3Thread(const Ps3Thread &) = delete;
+    Ps3Thread &operator=(const Ps3Thread &) = delete;
+
+    Ps3Thread(Ps3Thread &&other) noexcept : thread_(other.thread_), joinable_(other.joinable_) {
+        other.joinable_ = false;
+    }
+
+    Ps3Thread &operator=(Ps3Thread &&other) noexcept {
+        if (this != &other) {
+            if (joinable_)
+                pthread_detach(thread_);
+            thread_ = other.thread_;
+            joinable_ = other.joinable_;
+            other.joinable_ = false;
+        }
+        return *this;
+    }
+
+    template <class F, class... Args>
+    explicit Ps3Thread(F &&f, Args &&...args) : joinable_(false) {
+        using Task = std::function<void()>;
+        Task *task = new Task(std::bind(std::forward<F>(f), std::forward<Args>(args)...));
+        int rc = pthread_create(&thread_, nullptr, &Ps3Thread::trampoline, task);
+        if (rc != 0) {
+            delete task;
+            throw std::runtime_error("PS3 pthread_create failed");
+        }
+        joinable_ = true;
+    }
+
+    ~Ps3Thread() {
+        if (joinable_)
+            pthread_detach(thread_);
+    }
+
+    bool joinable() const noexcept { return joinable_; }
+
+    void join() {
+        if (!joinable_)
+            throw std::runtime_error("PS3 thread is not joinable");
+        int rc = pthread_join(thread_, nullptr);
+        if (rc != 0)
+            throw std::runtime_error("PS3 pthread_join failed");
+        joinable_ = false;
+    }
+
+    void detach() {
+        if (!joinable_)
+            throw std::runtime_error("PS3 thread is not joinable");
+        int rc = pthread_detach(thread_);
+        if (rc != 0)
+            throw std::runtime_error("PS3 pthread_detach failed");
+        joinable_ = false;
+    }
+
+    static unsigned int hardware_concurrency() noexcept { return 2; }
+
+private:
+    static void *trampoline(void *arg) {
+        std::unique_ptr<std::function<void()>> task(
+            static_cast<std::function<void()> *>(arg));
+        try {
+            (*task)();
+        } catch (...) {
+            std::terminate();
+        }
+        return nullptr;
+    }
+
+    pthread_t thread_;
+    bool joinable_;
+};
+
+template <class Rep, class Period>
+inline void ps3_sleep_for(const std::chrono::duration<Rep, Period> &duration) {
+    auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
+    if (ns <= 0)
+        return;
+    timespec request;
+    request.tv_sec = static_cast<time_t>(ns / 1000000000LL);
+    request.tv_nsec = static_cast<long>(ns % 1000000000LL);
+    while (nanosleep(&request, &request) != 0 && errno == EINTR) {
+    }
+}
+
+} // namespace rtc::impl
