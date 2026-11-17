@@ -9,6 +9,9 @@
 #include <sched.h>
 #include <stdint.h>
 #include <chrono>
+#include <condition_variable>
+#include <future>
+#include <thread>
 #include <exception>
 #include <functional>
 #include <memory>
@@ -132,8 +135,6 @@ private:
     M *a_;
     M *b_;
 };
-
-enum class cv_status { no_timeout, timeout };
 
 class condition_variable {
 public:
