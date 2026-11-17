@@ -8,9 +8,10 @@ SCTP_IND="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_i
 SCTP_INPUT="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_input.c"
 SCTP_OUTPUT="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_output.c"
 SCTP_PCB="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_pcb.c"
+SCTP_BSD_ADDR="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_bsd_addr.c"
 SCTP_OS="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_os_userspace.h"
 
-for file in "$JUICE" "$UDP" "$SCTP_IND" "$SCTP_INPUT" "$SCTP_OUTPUT" "$SCTP_PCB" "$SCTP_OS"; do
+for file in "$JUICE" "$UDP" "$SCTP_IND" "$SCTP_INPUT" "$SCTP_OUTPUT" "$SCTP_PCB" "$SCTP_BSD_ADDR" "$SCTP_OS"; do
   [ -f "$file" ] || { echo "WebRTC source not found: $file" >&2; exit 1; }
 done
 
@@ -184,6 +185,13 @@ PY
 grep -q 'FNONBIO' "$JUICE"
 grep -q 'FNONBIO' "$UDP"
 grep -q 'get_local_default_inet4' "$UDP"
+# pthread_t is an opaque structure in PSL1GHT, not a scalar condition.
+# usrsctp already tracks successful iterator-thread startup in this flag.
+if grep -q 'if (sctp_it_ctl.thread_proc)' "$SCTP_BSD_ADDR"; then
+  sed -i 's/if (sctp_it_ctl.thread_proc)/if (SCTP_BASE_VAR(iterator_thread_started))/' "$SCTP_BSD_ADDR"
+fi
+grep -q 'if (SCTP_BASE_VAR(iterator_thread_started))' "$SCTP_BSD_ADDR"
+
 # pthread_t is a structure in PSL1GHT; assigning integer zero after join is invalid.
 if grep -q 'sctp_it_ctl.thread_proc = 0;' "$SCTP_PCB"; then
   sed -i 's/sctp_it_ctl.thread_proc = 0;/memset(\&sctp_it_ctl.thread_proc, 0, sizeof(sctp_it_ctl.thread_proc));/' "$SCTP_PCB"
