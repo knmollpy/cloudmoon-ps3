@@ -19,7 +19,8 @@ for file in \
   cloudmoon_random.c cloudmoon_random.h \
   cloudmoon_ps3_random.c cloudmoon_ps3_random.h \
   cloudmoon_tls_polarssl.c cloudmoon_tls_polarssl.h \
-  cloudmoon_ws_tls.c cloudmoon_ws_tls.h
+  cloudmoon_ws_tls.c cloudmoon_ws_tls.h \
+  cloudmoon_mbedtls_entropy.c
 do
   cp "$SRC/$file" "$DST/$file"
 done
