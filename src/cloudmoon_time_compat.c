@@ -2,7 +2,7 @@
 #include <sys/time.h>
 #include <sys/systime.h>
 
-int gettimeofday(struct timeval *tv, void *tz) {
+int gettimeofday(struct timeval *tv, struct timezone *tz) {
     u64 seconds = 0, nanoseconds = 0;
     (void)tz;
     if (!tv || sysGetCurrentTime(&seconds, &nanoseconds) != 0) return -1;
