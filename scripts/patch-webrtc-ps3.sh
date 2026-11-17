@@ -783,7 +783,7 @@ static ssize_t cm_ps3_sendmsg_compat(int fd, const struct msghdr *msg, int flags
 """
     if anchor not in s:
         raise SystemExit("usrsctp user_socket.c include anchor missing")
-    s = s.replace(anchor, anchor + "\n" + helper, 1)
+    s = s.replace(anchor, anchor + "\n#include <stdlib.h>\n#include <string.h>\n" + helper, 1)
     s = re.sub(r"(?<![A-Za-z0-9_])sendmsg\(", "cm_ps3_sendmsg_compat(", s)
     if "sendmsg(SCTP_BASE_VAR(userspace_" in s:
         raise SystemExit("usrsctp sendmsg calls remain in user_socket.c")
