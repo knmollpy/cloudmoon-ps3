@@ -1,0 +1,9 @@
+CC ?= cc
+CFLAGS ?= -std=c99 -Wall -Wextra -Werror -O2
+.PHONY: test clean
+test: tests/test_cloudmoon
+	./tests/test_cloudmoon
+tests/test_cloudmoon: tests/test_cloudmoon.c src/cloudmoon_input.c src/cloudmoon_protocol.c src/cloudmoon_session.c src/cloudmoon_ws.c src/cloudmoon_upgrade.c src/cloudmoon_random.c
+	$(CC) $(CFLAGS) -Isrc -o $@ tests/test_cloudmoon.c src/cloudmoon_input.c src/cloudmoon_protocol.c src/cloudmoon_session.c src/cloudmoon_ws.c src/cloudmoon_upgrade.c src/cloudmoon_random.c
+clean:
+	rm -f tests/test_cloudmoon

@@ -1,0 +1,5 @@
+Command: make -f Makefile.host-test clean test
+Result: PASS in the previous local workspace.
+Compiler: host cc (C99, -Wall -Wextra -Werror -O2)
+Checks: Engine.IO, Socket.IO, RFC6455 frames and HTTP Upgrade validation, RNG failure behavior, registration JSON, DualShock touch events.
+This is a host-side test only. It does not compile a PS3 ELF/PKG or test PS3 hardware, TLS adapter integration, CloudMoon authentication, or WebRTC streaming.
