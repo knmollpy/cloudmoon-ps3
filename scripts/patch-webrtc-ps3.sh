@@ -279,7 +279,7 @@ fi
 # The PS3 libstdc++ omits the std::sto* string conversion helpers.
 # Patch every remaining conversion in libdatachannel's compiled source tree.
 python3 - "$ROOT_DIR/vendor/libdatachannel/src" <<'PY'
-import pathlib, re, sys
+import pathlib, sys
 root = pathlib.Path(sys.argv[1])
 
 description = root / "description.cpp"
@@ -349,8 +349,9 @@ ice.write_text(s)
 
 for p in root.rglob("*.cpp"):
     text = p.read_text(errors="ignore")
-    if re.search(r"std::sto(?:i|l|ul|ll|ull|f|d)\s*\(", text):
-        raise SystemExit("Unsupported std::sto* conversion remains in " + str(p))
+    for token in ("std::stoi(", "std::stol(", "std::stoul(", "std::stoll(", "std::stoull(", "std::stof(", "std::stod("):
+        if token in text:
+            raise SystemExit("Unsupported std::sto* conversion remains in " + str(p))
 PY
 
 # usrsctp has no RNG backend selected for the PSL1GHT/newlib target.
