@@ -418,14 +418,14 @@ void
 finish_random(void)
 {
 }
-
-if "ps3_random_fd" not in s:
+"""
+if "sysGetRandomNumber" not in s:
     if needle not in s:
         raise SystemExit("Could not locate usrsctp Linux RNG branch")
     s = s.replace(needle, branch + "\n" + needle, 1)
 p.write_text(s)
 PY
-grep -q 'ps3_random_fd' "$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/user_environment.c"
+grep -q 'sysGetRandomNumber' "$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/user_environment.c"
 
 # PSL1GHT lacks the BSD/Linux interface-query API used by usrsctp.
 # Use the PS3 GameOS Ethernet/WLAN MTU rather than emulating ifreq/ioctl.
