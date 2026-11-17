@@ -506,9 +506,9 @@ if marker not in s:
         raise SystemExit("Could not locate datachannel target in libdatachannel CMakeLists.txt")
     block = marker + r"""
 if(CMAKE_SYSTEM_NAME STREQUAL "Generic")
-    target_compile_options(datachannel PRIVATE -include "\${CMAKE_SOURCE_DIR}/../../cmake/ps3/include/ps3_threads.hpp")
+    target_compile_options(datachannel PRIVATE -include "${CMAKE_SOURCE_DIR}/../../cmake/ps3/include/ps3_threads.hpp")
     target_link_libraries(datachannel PRIVATE -lpthread)
-    target_compile_options(datachannel-static PRIVATE -include "\${CMAKE_SOURCE_DIR}/../../cmake/ps3/include/ps3_threads.hpp")
+    target_compile_options(datachannel-static PRIVATE -include "${CMAKE_SOURCE_DIR}/../../cmake/ps3/include/ps3_threads.hpp")
     target_link_libraries(datachannel-static PRIVATE -lpthread)
 endif()
 
