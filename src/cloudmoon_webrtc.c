@@ -108,6 +108,10 @@ static void cm_rtc_channel_message(int id,const char*message,int size,void*ptr) 
     cm_cloudmoon_webrtc_t*rtc=(cm_cloudmoon_webrtc_t*)ptr;
     (void)id;
     if(!rtc||CM_ATOMIC_LOAD(&rtc->closing)||!message||size<=0)return;
+    if(size>=9&&!memcmp(message,"rotation>",9)) {
+        ui_set_state(UI_STATE_STREAMING);
+        return;
+    }
     if(size>=8&&!memcmp(message,"kickout>",8)){
         CM_ATOMIC_STORE(&rtc->connected,0);
         ui_set_state(UI_STATE_ERROR);
@@ -203,6 +207,79 @@ static void cm_rtc_parse_mids(cm_cloudmoon_webrtc_t*rtc,const char*sdp) {
         if(!e)break;p=e+1;
     }
     if(!rtc->remote_mids[0][0])strcpy(rtc->remote_mids[0],"0");
+}
+
+static int cm_rtc_prefer_video_payload(char *line) {
+    char payloads[512], rebuilt[2048];
+    char *tokens[64], *cursor;
+    char *sp1=strchr(line,' '), *sp2, *sp3;
+    size_t prefix, used;
+    int count=0, preferred=-1, i, n;
+    if(!sp1 || !(sp2=strchr(sp1+1,' ')) || !(sp3=strchr(sp2+1,' ')))
+        return 0;
+    if(strlen(sp3+1)>=sizeof(payloads))return -1;
+    strcpy(payloads,sp3+1);
+    cursor=payloads;
+    while(*cursor) {
+        while(*cursor==' ')cursor++;
+        if(!*cursor)break;
+        if(count>=64)return -1;
+        tokens[count]=cursor;
+        while(*cursor && *cursor!=' ')cursor++;
+        if(*cursor)*cursor++=0;
+        if(!strcmp(tokens[count],"100"))preferred=count;
+        count++;
+    }
+    if(preferred<=0)return 0;
+    prefix=(size_t)(sp3-line+1);
+    if(prefix>=sizeof(rebuilt))return -1;
+    memcpy(rebuilt,line,prefix);used=prefix;rebuilt[used]=0;
+    n=snprintf(rebuilt+used,sizeof(rebuilt)-used,"%s",tokens[preferred]);
+    if(n<0||(size_t)n>=sizeof(rebuilt)-used)return -1;
+    used+=(size_t)n;
+    for(i=0;i<count;i++) {
+        if(i==preferred)continue;
+        n=snprintf(rebuilt+used,sizeof(rebuilt)-used," %s",tokens[i]);
+        if(n<0||(size_t)n>=sizeof(rebuilt)-used)return -1;
+        used+=(size_t)n;
+    }
+    if(used>=2048)return -1;
+    memcpy(line,rebuilt,used+1);
+    return 0;
+}
+
+static int cm_rtc_prepare_offer(char *sdp,size_t cap) {
+    char output[CM_RTC_SDP_MAX+256];
+    const char *p=sdp;
+    size_t used=0;
+    while(p && *p) {
+        const char *end=strchr(p,'\n');
+        size_t raw_len=end?(size_t)(end-p):strlen(p);
+        size_t line_len=raw_len;
+        char line[2048];
+        int media=0;
+        if(line_len>=sizeof(line))return -1;
+        memcpy(line,p,line_len);line[line_len]=0;
+        if(line_len && line[line_len-1]=='\r')line[--line_len]=0;
+        if(!strncmp(line,"m=video ",8)) {
+            media=1;
+            if(cm_rtc_prefer_video_payload(line)<0)return -1;
+        } else if(!strncmp(line,"m=audio ",8)) {
+            media=1;
+        }
+        if(used+line_len+2+(media?16:0)+1>sizeof(output))return -1;
+        memcpy(output+used,line,line_len);used+=line_len;
+        output[used++]='\r';output[used++]='\n';
+        if(media) {
+            memcpy(output+used,"a=rtcp-xr:rrtr\r\n",16);
+            used+=16;
+        }
+        p=end?end+1:NULL;
+    }
+    if(used+1>cap)return -1;
+    output[used]=0;
+    memcpy(sdp,output,used+1);
+    return 0;
 }
 
 static void cm_rtc_input_loop(void*arg) {
@@ -306,11 +383,12 @@ fail:
 
 void cm_cloudmoon_webrtc_signal(void*context,const char*json,size_t length) {
     cm_cloudmoon_webrtc_t*rtc=(cm_cloudmoon_webrtc_t*)context;
-    char type[32],sdp[CM_RTC_SDP_MAX],candidate[2048],candidate_mid[64];
+    char type[32],sdp[CM_RTC_SDP_MAX+256],candidate[2048],candidate_mid[64];
     int label=0;
     if(!rtc||!json||!length||cm_json_get_string(json,length,"type",type,sizeof(type))<0)return;
     if(!strcmp(type,"offer")) {
         if(cm_json_get_string(json,length,"sdp",sdp,sizeof(sdp))<0)return;
+        if(cm_rtc_prepare_offer(sdp,sizeof(sdp))<0)return;
         cm_rtc_parse_mids(rtc,sdp);
         if(rtcSetRemoteDescription(rtc->pc,sdp,"offer")!=RTC_ERR_SUCCESS)return;
         if(rtcSetLocalDescription(rtc->pc,"answer")!=RTC_ERR_SUCCESS)return;
