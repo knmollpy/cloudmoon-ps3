@@ -4,8 +4,7 @@
 extern "C" {
 #endif
 #include <sys/time.h>
-struct timezone;
-int gettimeofday(struct timeval *tv, struct timezone *tz);
+int gettimeofday(struct timeval *tv, void *tz);
 #ifdef __cplusplus
 }
 #endif
