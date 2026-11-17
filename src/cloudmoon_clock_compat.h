@@ -7,14 +7,6 @@
 #ifndef CLOCK_REALTIME
 #define CLOCK_REALTIME 0
 #endif
-
-/* POSIX/BSD constants missing from the PSL1GHT socket headers. */
-#ifndef SOCK_SEQPACKET
-#define SOCK_SEQPACKET 5
-#endif
-#ifndef IPPORT_RESERVED
-#define IPPORT_RESERVED 1024
-#endif
 #ifdef __cplusplus
 extern "C" {
 #endif
