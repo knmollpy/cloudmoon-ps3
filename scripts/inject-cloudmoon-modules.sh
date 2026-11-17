@@ -140,7 +140,6 @@ if ! grep -q 'src/cloudmoon_webrtc.c' "$PS3_BASE/Makefile"; then
   fi
   if ! grep -q 'cloudmoon_autostart' "$DST/main.c"; then
     sed -i '/#include "input.h"/a #include "cloudmoon_launch.h"' "$DST/main.c"
-    sed -i '/ps3input_start();/a\  cm_cloudmoon_autostart();' "$DST/main.c"
   fi
   if [ -s "$ROOT_DIR/assets/ICON0.PNG" ]; then
     cp "$ROOT_DIR/assets/ICON0.PNG" "$PS3_BASE/ICON0.PNG"
@@ -157,7 +156,8 @@ start = s.find("/* PSL1GHT libnet gatekeeper:")
 end = s.find("static void ps3_net_shutdown", start)
 if start < 0 or end < 0:
     raise SystemExit("Could not locate PS3 network initialization block")
-replacement = """static int ps3_net_init(void) {
+replacement = """static int g_net_initialized = 0;
+static int ps3_net_init(void) {
   int ret = sysModuleLoad(SYSMODULE_NET);
   if (ret != 0) return ret;
   ret = netInitialize();
@@ -171,6 +171,7 @@ replacement = """static int ps3_net_init(void) {
     sysModuleUnload(SYSMODULE_NET);
     return ret;
   }
+  g_net_initialized = 1;
   return 0;
 }
 
