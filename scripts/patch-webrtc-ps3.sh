@@ -5,8 +5,10 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 JUICE="$ROOT_DIR/vendor/libdatachannel/deps/libjuice/src/tcp.c"
 UDP="$ROOT_DIR/vendor/libdatachannel/deps/libjuice/src/udp.c"
 SCTP="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_bsd_addr.c"
+SCTP_IND="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_indata.c"
+SCTP_OS="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_os_userspace.h"
 
-for file in "$JUICE" "$UDP" "$SCTP"; do
+for file in "$JUICE" "$UDP" "$SCTP" "$SCTP_IND" "$SCTP_OS"; do
   [ -f "$file" ] || { echo "WebRTC source not found: $file" >&2; exit 1; }
 done
 
@@ -80,6 +82,52 @@ replacement = r'''#else // NO_IFADDRS defined
     }'''
 s = s[:a] + replacement + s[b:]
 p.write_text(s)
+PY
+
+# PSL1GHT's newlib headers omit BSD timeval and ancillary-data macros used by usrsctp.
+python3 - "$SCTP_IND" "$SCTP_OS" <<'PY'
+import pathlib, sys
+
+indata = pathlib.Path(sys.argv[1])
+s = indata.read_text()
+needle = "#include <netinet/sctp_os.h>"
+compat = r"""
+#ifndef timercmp
+#define timercmp(a, b, op) \
+    (((a)->tv_sec == (b)->tv_sec) ? \
+     ((a)->tv_usec op (b)->tv_usec) : \
+     ((a)->tv_sec op (b)->tv_sec))
+#endif
+"""
+if "define timercmp(a, b, op)" not in s:
+    if needle not in s:
+        raise SystemExit("Could not locate sctp_indata.c OS include")
+    s = s.replace(needle, needle + "\n" + compat, 1)
+    indata.write_text(s)
+
+os_header = pathlib.Path(sys.argv[2])
+s = os_header.read_text()
+needle = "#include <sys/socket.h>"
+compat = r"""
+/* PSL1GHT's socket headers do not expose the POSIX ancillary-data macros. */
+#ifndef CMSG_ALIGN
+#define CMSG_ALIGN(len) (((len) + sizeof(size_t) - 1) & ~(sizeof(size_t) - 1))
+#endif
+#ifndef CMSG_DATA
+#define CMSG_DATA(cmsg) ((unsigned char *)(cmsg) + CMSG_ALIGN(sizeof(struct cmsghdr)))
+#endif
+#ifndef CMSG_LEN
+#define CMSG_LEN(len) (CMSG_ALIGN(sizeof(struct cmsghdr)) + (len))
+#endif
+#ifndef CMSG_SPACE
+#define CMSG_SPACE(len) (CMSG_ALIGN(sizeof(struct cmsghdr)) + CMSG_ALIGN(len))
+#endif
+"""
+if "PSL1GHT's socket headers do not expose" not in s:
+    if needle not in s:
+        raise SystemExit("Could not locate sctp_os_userspace.h socket include")
+    s = s.replace(needle, needle + "\n" + compat, 1)
+    os_header.write_text(s)
 PY
 
 # PSL1GHT pthread_t is a structure; use usrsctp's existing started flag.
