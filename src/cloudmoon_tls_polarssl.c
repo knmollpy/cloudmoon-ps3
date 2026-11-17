@@ -11,6 +11,7 @@
 #include <polarssl/entropy.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <sys/select.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
@@ -168,6 +169,21 @@ int cm_tls_read_polarssl(cm_tls_connection *c, void *data, size_t capacity) {
     } while (n == POLARSSL_ERR_NET_WANT_READ ||
              n == POLARSSL_ERR_NET_WANT_WRITE);
     return n;
+}
+
+
+int cm_tls_wait_readable(cm_tls_connection *c, unsigned timeout_ms) {
+    fd_set readfds;
+    struct timeval timeout;
+    int rc;
+    if (!c || c->socket_fd < 0) return -1;
+    FD_ZERO(&readfds);
+    FD_SET(c->socket_fd, &readfds);
+    timeout.tv_sec = (long)(timeout_ms / 1000U);
+    timeout.tv_usec = (long)((timeout_ms % 1000U) * 1000U);
+    rc = select(c->socket_fd + 1, &readfds, NULL, NULL, &timeout);
+    if (rc < 0 && errno == EINTR) return 0;
+    return rc < 0 ? -1 : rc;
 }
 
 void cm_tls_close_polarssl(cm_tls_connection *c) {
