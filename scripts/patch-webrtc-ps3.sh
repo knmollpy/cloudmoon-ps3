@@ -230,123 +230,13 @@ PY
 # PSL1GHT's netdb.h exposes gethostbyname(), but not the POSIX getaddrinfo family.
 python3 - "$RTC_UTILS" "$RTC_CANDIDATE" <<'PY'
 import pathlib, sys
-
-# The target-wide ps3_threads.hpp shim supplies std::recursive_mutex.
 candidate = pathlib.Path(sys.argv[2])
 s = candidate.read_text()
-# Use the C runtime conversion already available in PSL1GHT newlib.
 s = s.replace("std::stoul(servbuffer)", "strtoul(servbuffer, nullptr, 10)")
 if "std::stoul(servbuffer)" in s:
     raise SystemExit("std::stoul remains in candidate.cpp")
 if "strtoul(servbuffer, nullptr, 10)" not in s:
     raise SystemExit("Could not patch candidate service-port conversion")
-candidate.write_text(s)
-
-# Keep the implementation local to this translation unit: PSL1GHT's netdb.h
-# declares gethostbyname(), but does not declare or implement getaddrinfo(),
-# getnameinfo(), or freeaddrinfo(). Resolve IPv4 names through libnet.
-if "PS3 libnet resolver adapter" not in s:
-    needle = "using std::array;"
-    wrapper = r"""
-#if defined(__Userspace__) || defined(__PS3__)
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
-
-#ifndef EAI_FAIL
-#define EAI_FAIL (-4)
-#endif
-#ifndef EAI_NONAME
-#define EAI_NONAME (-2)
-#endif
-#ifndef EAI_SERVICE
-#define EAI_SERVICE (-8)
-#endif
-#ifndef EAI_FAMILY
-#define EAI_FAMILY (-6)
-#endif
-
-/* PS3 libnet resolver adapter; IPv4 only (PSL1GHT networking is IPv4 here). */
-static int getaddrinfo(const char *node, const char *service,
-                       const struct addrinfo *hints, struct addrinfo **result) {
-    if (!node || !service || !result)
-        return EAI_FAIL;
-    *result = nullptr;
-    if (hints && hints->ai_family != AF_UNSPEC && hints->ai_family != AF_INET)
-        return EAI_FAMILY;
-
-    char *end = nullptr;
-    unsigned long port = strtoul(service, &end, 10);
-    if (end == service || *end != '\0' || port > 65535)
-        return EAI_SERVICE;
-
-    struct in_addr address;
-    if (inet_pton(AF_INET, node, &address) != 1) {
-        if (hints && (hints->ai_flags & AI_NUMERICHOST))
-            return EAI_NONAME;
-        struct hostent *host = gethostbyname(node);
-        if (!host || host->h_addrtype != AF_INET ||
-            host->h_length != (int)sizeof(address) ||
-            !host->h_addr_list || !host->h_addr_list[0])
-            return EAI_NONAME;
-        memcpy(&address, host->h_addr_list[0], sizeof(address));
-    }
-
-    struct addrinfo *ai = (struct addrinfo *)calloc(1, sizeof(*ai));
-    struct sockaddr_in *sin = (struct sockaddr_in *)calloc(1, sizeof(*sin));
-    if (!ai || !sin) {
-        free(ai);
-        free(sin);
-        return EAI_FAIL;
-    }
-    sin->sin_family = AF_INET;
-    sin->sin_port = htons((uint16_t)port);
-    sin->sin_addr = address;
-    ai->ai_family = AF_INET;
-    ai->ai_socktype = hints ? hints->ai_socktype : 0;
-    ai->ai_protocol = hints ? hints->ai_protocol : 0;
-    ai->ai_addrlen = sizeof(*sin);
-    ai->ai_addr = (struct sockaddr *)sin;
-    *result = ai;
-    return 0;
-}
-
-static int getnameinfo(const struct sockaddr *address, socklen_t address_len,
-                       char *host, socklen_t host_len,
-                       char *service, socklen_t service_len, int flags) {
-    (void)flags;
-    if (!address || address->sa_family != AF_INET ||
-        address_len < sizeof(struct sockaddr_in))
-        return EAI_FAMILY;
-    const struct sockaddr_in *sin = (const struct sockaddr_in *)address;
-    if (host && (!inet_ntop(AF_INET, &sin->sin_addr, host, host_len)))
-        return EAI_FAIL;
-    if (service) {
-        int n = snprintf(service, service_len, "%u", (unsigned)ntohs(sin->sin_port));
-        if (n < 0 || (socklen_t)n >= service_len)
-            return EAI_FAIL;
-    }
-    return 0;
-}
-
-static void freeaddrinfo(struct addrinfo *ai) {
-    while (ai) {
-        struct addrinfo *next = ai->ai_next;
-        free(ai->ai_addr);
-        free(ai->ai_canonname);
-        free(ai);
-        ai = next;
-    }
-}
-#endif
-"""
-    if needle not in s:
-        raise SystemExit("Could not locate candidate.cpp using declarations")
-    s = s.replace(needle, wrapper + "\n" + needle, 1)
-    s = s.replace("PS3 libnet getaddrinfo compatibility", "PS3 libnet getaddrinfo compatibility", 1)
 candidate.write_text(s)
 PY
 
@@ -355,7 +245,6 @@ if grep -q 'std::stoul(servbuffer)' "$RTC_CANDIDATE"; then
   echo "Unsupported std::stoul remains in candidate.cpp" >&2
   exit 1
 fi
-grep -q 'PS3 libnet resolver adapter' "$RTC_CANDIDATE"
 
 # configuration.cpp also uses std::stoul, which is unavailable in the PS3 libstdc++.
 # Convert every std::string port value through the C runtime instead.
