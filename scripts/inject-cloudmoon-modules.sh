@@ -103,7 +103,7 @@ if ! grep -q 'src/cloudmoon_webrtc.c' "$PS3_BASE/Makefile"; then
     sed -i 's#COMMON_INCLUDES[[:space:]]*:=[[:space:]]*#COMMON_INCLUDES := -I'"$ROOT_DIR"'/build/ps3deps/include #' "$PS3_BASE/Makefile"
     sed -i 's#-I./src -I./src/spu/include#-I./src -I./src/spu/include -DCM_ENABLE_WEBRTC -DRTC_STATIC#' "$PS3_BASE/Makefile"
     # Only the Mbed TLS entropy object opts out of the legacy PolarSSL aliases.
-    sed -i '/$(BUILD)\\/obj\\/%.o: src\\/%.c/i $(BUILD)/obj/cloudmoon_mbedtls_entropy.o: CFLAGS += -DCLOUDMOON_MBEDTLS_ENTROPY' "$PS3_BASE/Makefile"
+    sed -i '/$(BUILD)\/obj\/%.o: src\/%.c/i $(BUILD)/obj/cloudmoon_mbedtls_entropy.o: CFLAGS += -DCLOUDMOON_MBEDTLS_ENTROPY' "$PS3_BASE/Makefile"
     sed -i 's#-lpolarssl#-lpolarssl -L'"$ROOT_DIR"'/build/ps3deps/lib -ldatachannel -lsrtp2 -lusrsctp -ljuice -lmbedtls -lmbedx509 -lmbedcrypto -lpthread -lstdc++#g' "$PS3_BASE/Makefile"
   fi
   if ! grep -q 'cloudmoon_autostart' "$DST/main.c"; then
