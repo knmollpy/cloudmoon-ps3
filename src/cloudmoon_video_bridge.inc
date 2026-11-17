@@ -1,4 +1,4 @@
 /* CloudMoon bridge: WebRTC depacketized H.264 access units -> cellVdec. */
-int ps3video_cloudmoon_start(int width,int height){int rc;if(width<=0||height<=0)return -1;rc=ps3_video_setup(0,width,height,60,NULL,0);if(rc==0)ps3video_start();return rc;}
+int ps3video_cloudmoon_start(int width,int height){int rc;if(width<=0||height<=0)return -1;rc=ps3_video_setup(0,width,height,60,NULL,0);return rc;}
 void ps3video_cloudmoon_stop(void){ps3_video_cleanup();}
 int ps3video_submit_h264(const uint8_t*data,size_t length,uint32_t timestamp){LENTRY entry;DECODE_UNIT unit;const uint8_t*p;int idr=0;if(!data||!length||length>VDEC_DECODE_BUF_MAX||!ps3video_is_active())return -1;for(p=data;(size_t)(p-data)+5<length;++p){if(p[0]==0&&p[1]==0&&((p[2]==1&&(p[3]&0x1f)==5)||(p[2]==0&&p[3]==1&&(p[4]&0x1f)==5))){idr=1;break;}}memset(&entry,0,sizeof(entry));entry.data=(char*)data;entry.length=(int)length;entry.bufferType=BUFFER_TYPE_PICDATA;memset(&unit,0,sizeof(unit));unit.frameNumber=(int)timestamp;unit.frameType=idr?FRAME_TYPE_IDR:FRAME_TYPE_PFRAME;unit.rtpTimestamp=timestamp;unit.fullLength=(int)length;unit.bufferList=&entry;return ps3_video_submit_decode_unit(&unit)==DR_OK?0:-1;}
