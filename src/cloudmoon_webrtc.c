@@ -125,7 +125,7 @@ static void cm_rtc_data_channel(int pc,int dc,void*ptr) {
     cm_cloudmoon_webrtc_t*rtc=(cm_cloudmoon_webrtc_t*)ptr;
     (void)pc;
     if(!rtc||dc<0)return;
-    rtc->data_channel=dc;
+    CM_ATOMIC_STORE(&rtc->data_channel,dc);
     rtcSetUserPointer(dc,rtc);
     rtcSetOpenCallback(dc,cm_rtc_channel_open);
     rtcSetMessageCallback(dc,cm_rtc_channel_message);
