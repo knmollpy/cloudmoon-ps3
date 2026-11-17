@@ -57,15 +57,43 @@ python3 - "$PS3_BASE/src/openssl_compat.h" <<'PY'
 import pathlib, sys
 p = pathlib.Path(sys.argv[1])
 s = p.read_text()
-if "CLOUDMOON_MBEDTLS_ENTROPY" not in s:
+guard = "#ifndef CLOUDMOON_MBEDTLS_ENTROPY"
+if guard not in s:
     first = "#define OPENSSL_COMPAT_H"
     if first not in s:
         raise SystemExit("Cannot guard the legacy OpenSSL compatibility header")
-    s = s.replace(first, first + "\n#ifndef CLOUDMOON_MBEDTLS_ENTROPY", 1)
+    s = s.replace(first, first + "\\n" + guard, 1)
     pos = s.rfind("#endif")
     if pos < 0:
         raise SystemExit("Cannot close legacy OpenSSL compatibility guard")
-    s = s[:pos] + "#endif /* CLOUDMOON_MBEDTLS_ENTROPY */\n" + s[pos:]
+    s = s[:pos] + "#endif /* CLOUDMOON_MBEDTLS_ENTROPY */\\n" + s[pos:]
+
+# The compatibility wrappers must not export real Mbed TLS 3.x symbol names:
+# libdatachannel links the actual Mbed TLS implementation in the same PKG.
+renames = """/* PolarSSL-backed compatibility functions are deliberately namespaced. */
+#define mbedtls_entropy_init cm_polarssl_entropy_init
+#define mbedtls_ctr_drbg_init cm_polarssl_ctr_drbg_init
+#define mbedtls_ctr_drbg_seed cm_polarssl_ctr_drbg_seed
+#define mbedtls_ctr_drbg_random cm_polarssl_ctr_drbg_random
+#define mbedtls_entropy_func cm_polarssl_entropy_func
+#define mbedtls_cipher_init cm_polarssl_cipher_init
+#define mbedtls_cipher_free cm_polarssl_cipher_free
+#define mbedtls_cipher_setup cm_polarssl_cipher_setup
+#define mbedtls_cipher_setkey cm_polarssl_cipher_setkey
+#define mbedtls_cipher_set_iv cm_polarssl_cipher_set_iv
+#define mbedtls_cipher_reset cm_polarssl_cipher_reset
+#define mbedtls_cipher_update cm_polarssl_cipher_update
+#define mbedtls_cipher_finish cm_polarssl_cipher_finish
+#define mbedtls_cipher_auth_encrypt cm_polarssl_cipher_auth_encrypt
+#define mbedtls_cipher_auth_decrypt cm_polarssl_cipher_auth_decrypt
+#define mbedtls_cipher_auth_encrypt_ext cm_polarssl_cipher_auth_encrypt_ext
+#define mbedtls_cipher_auth_decrypt_ext cm_polarssl_cipher_auth_decrypt_ext
+#define mbedtls_cipher_info_from_values cm_polarssl_cipher_info_from_values
+"""
+if "cm_polarssl_entropy_init" not in s:
+    if guard not in s:
+        raise SystemExit("Legacy Mbed TLS compatibility guard missing")
+    s = s.replace(guard, guard + "\\n" + renames, 1)
 p.write_text(s)
 PY
 
