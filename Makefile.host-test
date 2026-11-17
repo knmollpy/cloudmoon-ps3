@@ -1,15 +1,18 @@
 CC ?= cc
 CFLAGS ?= -std=c99 -Wall -Wextra -Werror -O2
 .PHONY: test clean
-test: tests/test_cloudmoon tests/test_cloudmoon_ws_tls tests/test_cloudmoon_client
+test: tests/test_cloudmoon tests/test_cloudmoon_ws_tls tests/test_cloudmoon_client tests/test_cloudmoon_discovery
 	./tests/test_cloudmoon
 	./tests/test_cloudmoon_ws_tls
 	./tests/test_cloudmoon_client
+	./tests/test_cloudmoon_discovery
 tests/test_cloudmoon: tests/test_cloudmoon.c src/cloudmoon_input.c src/cloudmoon_protocol.c src/cloudmoon_session.c src/cloudmoon_ws.c src/cloudmoon_upgrade.c src/cloudmoon_random.c
 	$(CC) $(CFLAGS) -Isrc -o $@ $^
 tests/test_cloudmoon_ws_tls: tests/test_cloudmoon_ws_tls.c src/cloudmoon_ws_tls.c src/cloudmoon_ws.c src/cloudmoon_upgrade.c src/cloudmoon_random.c
 	$(CC) $(CFLAGS) -Isrc -o $@ $^
-tests/test_cloudmoon_client: tests/test_cloudmoon_client.c src/cloudmoon_client.c src/cloudmoon_session.c src/cloudmoon_protocol.c
+tests/test_cloudmoon_client: tests/test_cloudmoon_client.c src/cloudmoon_client.c src/cloudmoon_discovery.c src/cloudmoon_session.c src/cloudmoon_protocol.c
+	$(CC) $(CFLAGS) -Isrc -o $@ $^
+tests/test_cloudmoon_discovery: tests/test_cloudmoon_discovery.c src/cloudmoon_discovery.c src/cloudmoon_session.c
 	$(CC) $(CFLAGS) -Isrc -o $@ $^
 clean:
-	rm -f tests/test_cloudmoon tests/test_cloudmoon_ws_tls tests/test_cloudmoon_client
+	rm -f tests/test_cloudmoon tests/test_cloudmoon_ws_tls tests/test_cloudmoon_client tests/test_cloudmoon_discovery

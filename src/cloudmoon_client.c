@@ -1,5 +1,6 @@
 #include "cloudmoon_client.h"
 #include "cloudmoon_protocol.h"
+#include "cloudmoon_discovery.h"
 #include "cloudmoon_ws.h"
 #include <stdio.h>
 #include <string.h>
@@ -16,3 +17,5 @@ if(copy[0]=='1'){c->session.state=CM_SESSION_CLOSED;return CM_CLIENT_PACKET_STOP
 typedef struct{cm_ws_tls_transport*transport;cm_random_source_fn rng;void*rng_ctx;} cm_client_transport_context;
 static int cm_client_transport_send(void*ctx,const char*p,size_t n){cm_client_transport_context*t=(cm_client_transport_context*)ctx;return cm_ws_tls_send(t->transport,CM_WS_TEXT,1,p,n,t->rng,t->rng_ctx);}
 int cm_cloudmoon_client_run(const char*host,uint16_t port,const char*path,const char*ca,unsigned timeout,const cm_cloudmoon_registration_t*r,cm_random_source_fn rng,void*rng_ctx,cm_cloudmoon_signal_fn signal,void*signal_ctx){cm_ws_tls_transport*t=NULL;cm_cloudmoon_client_t c;cm_client_transport_context tx;cm_ws_frame_info_t info;uint8_t payload[CM_CLIENT_PACKET_MAX];int rc=-1;if(!r||!rng)return -1;if(cm_ws_tls_connect(&t,host,port,path,ca,timeout,rng,rng_ctx)!=0)return -1;tx.transport=t;tx.rng=rng;tx.rng_ctx=rng_ctx;cm_cloudmoon_client_init(&c,r,cm_client_transport_send,signal,&tx,signal_ctx);for(;;){int n=cm_ws_tls_read_frame(t,&info,payload,sizeof(payload));if(n<0)break;if(info.opcode==CM_WS_CLOSE){rc=0;break;}if(info.opcode==CM_WS_PING){if(cm_ws_tls_send(t,CM_WS_PONG,1,payload,info.payload_len,rng,rng_ctx)<0)break;continue;}if(info.opcode==CM_WS_PONG)continue;if(info.opcode!=CM_WS_TEXT||!info.fin)continue;{cm_client_packet_result_t pr=cm_cloudmoon_client_handle_packet(&c,(const char*)payload,info.payload_len);if(pr==CM_CLIENT_PACKET_ERROR)break;if(pr==CM_CLIENT_PACKET_STOP){rc=0;break;}}}cm_ws_tls_close(t);return rc;}
+
+int cm_cloudmoon_client_run_from_instance_id(const char*instance,const char*ca,unsigned timeout,const cm_cloudmoon_registration_t*r,cm_random_source_fn rng,void*rng_ctx,cm_cloudmoon_signal_fn signal,void*signal_ctx){char host[256],path[1024];uint16_t port;if(cm_cloudmoon_get_coordinator(instance,host,sizeof(host),&port,path,sizeof(path))!=0)return -1;return cm_cloudmoon_client_run(host,port,path,ca,timeout,r,rng,rng_ctx,signal,signal_ctx);}
