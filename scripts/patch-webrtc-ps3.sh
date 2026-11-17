@@ -569,15 +569,17 @@ for p in root.rglob("*"):
 
 utils = root / "impl" / "utils.cpp"
 s = utils.read_text()
-if "std::hash<std::thread::id>" in s:
-    s = s.replace("static_cast<unsigned int>(std::hash<std::thread::id>{}(std::this_thread::get_id()))",
+if "std::this_thread::get_id()" in s:
+    s = s.replace("static_cast<unsigned int>(std::hash<rtc::impl::Ps3Thread::id>{}(std::this_thread::get_id()))",
                   "static_cast<unsigned int>((uintptr_t)pthread_self())")
+    if "#include <stdint.h>" not in s:
+        s = s.replace("#include <pthread.h>", "#include <pthread.h>\\n#include <stdint.h>", 1)
     if "#include <pthread.h>" not in s:
         lines = s.splitlines(True)
         i = max((i for i, line in enumerate(lines) if line.startswith("#include ")), default=-1)
         if i < 0:
             raise SystemExit("Cannot add pthread include to libdatachannel utils.cpp")
-        lines.insert(i + 1, "#include <pthread.h>\\n")
+        lines.insert(i + 1, "#include <pthread.h>\n")
         s = "".join(lines)
     if "std::hash<std::thread::id>" in s:
         raise SystemExit("std::thread::id usage remains in utils.cpp")
