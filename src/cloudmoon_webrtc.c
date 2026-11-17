@@ -271,6 +271,7 @@ int cm_cloudmoon_webrtc_send_input(cm_cloudmoon_webrtc_t*rtc,const char*message,
     if(!rtc||rtc->data_channel<0||!message||!length||length>0x7fffffffU||!rtcIsOpen(rtc->data_channel))return -1;
     return rtcSendMessage(rtc->data_channel,message,(int)length);
 }
+void cm_cloudmoon_webrtc_detach_signaling(cm_cloudmoon_webrtc_t*rtc){if(rtc)rtc->client=NULL;}
 int cm_cloudmoon_webrtc_is_connected(const cm_cloudmoon_webrtc_t*rtc){return rtc?rtc->connected:0;}
 void cm_cloudmoon_webrtc_close(cm_cloudmoon_webrtc_t*rtc) {
     if(!rtc)return;
