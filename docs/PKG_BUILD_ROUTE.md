@@ -1,10 +1,8 @@
 # Build route and current boundary
 
-## Fastest path to a bootable PS3 package
+## Fastest bootable PS3 package route
 
-The repository pins the upstream [PS3-Moonlight](https://github.com/Cruslan/PS3-Moonlight) application as a Git submodule at `vendor/PS3-Moonlight`. It contains the established PSL1GHT build pipeline, PS3 UI, hardware H.264 decoder, Opus audio path, and package-generation rules.
-
-On a Linux x86_64 build host with Git, Make, curl, and a working network:
+The repository pins [PS3-Moonlight](https://github.com/Cruslan/PS3-Moonlight) as a Git submodule at `vendor/PS3-Moonlight`. It supplies a known PSL1GHT package pipeline and the PS3 hardware H.264 / Opus playback path.
 
 ```sh
 git clone --recurse-submodules https://github.com/knmollpy/cloudmoon-ps3.git
@@ -13,19 +11,34 @@ make prepare
 make baseline-pkg
 ```
 
-The submodule's `make prepare` downloads its pinned PSL1GHT toolchain. The resulting baseline package is **Moonlight for Sunshine/GameStream**, not a CloudMoon client. This route is useful for checking that the console build environment and package installation pipeline work before changing the application.
+This generates the upstream Moonlight/Sunshine baseline package. It is a build and hardware-validation milestone, **not** a CloudMoon streaming client.
 
-## CloudMoon integration status
+## CloudMoon transport progress
 
-The project's Engine.IO / Socket.IO / WebSocket protocol code and a preliminary TLS adapter are separate from the upstream streaming application. They are not yet wired into its UI or media pipeline. CloudMoon's signaling transport is not itself a video transport: a complete direct client still needs compatible ICE, DTLS, SRTP, RTP, SCTP/DataChannel and media handling.
+The code now has:
+- Engine.IO v3 / Socket.IO parsing and event-state groundwork.
+- WebSocket RFC 6455 framing and HTTP Upgrade validation.
+- An initial PolarSSL TLS 1.2 adapter that requires a CA bundle and hostname verification.
+- TLS/WebSocket integration with a bounded HTTP-header parser and preservation of bytes that arrive after the Upgrade headers.
+- Client frame masking with cryptographic random bytes.
+- Host-side simulated tests for Upgrade, first-frame spillover, and client masking.
 
-The preliminary `cloudmoon_tls_polarssl.c` has not been compiled against the pinned SDK's exact PolarSSL headers. Its API names and signatures must be checked before enabling it. It is deliberately not included in the baseline package build.
+The PolarSSL adapter remains unverified against the exact PS3 SDK headers and libraries. Host tests use a fake TLS transport and do not validate TLS handshakes, DNS, certificates, or PS3 sockets.
 
-## Do not confuse milestones
+## Remaining blockers for a functional CloudMoon PKG
 
-1. Host protocol tests pass — portable C code only.
-2. Baseline Moonlight PKG builds — proves PSL1GHT packaging, not CloudMoon support.
-3. CloudMoon handshake succeeds — proves only signaling/authentication.
-4. Video and audio stream decode on real PS3 HEN — required for a functional CloudMoon client.
+1. Confirm the exact CloudMoon authentication and coordinator-discovery flow.
+2. Complete the actual CloudMoon Socket.IO event exchange.
+3. Implement or port ICE, DTLS, SRTP, RTP and SCTP/DataChannel to PS3.
+4. Bridge decoded H.264 and Opus into the upstream PS3 media callbacks.
+5. Connect the session to the native UI and DualShock 3.
+6. Build with PSL1GHT and verify a complete session on real PS3 HEN hardware.
 
-No step is claimed complete unless its own test has passed.
+A WebSocket connection only handles signaling. It does not provide the media stream.
+
+## Milestones are kept separate
+
+- Host tests: portable logic and simulated transport only.
+- Baseline PKG: proves the upstream PS3 packaging route.
+- CloudMoon signaling: proves authentication and session negotiation.
+- Real stream: proves H.264 video and Opus audio decode on PS3.
