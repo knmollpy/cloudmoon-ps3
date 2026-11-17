@@ -1,7 +1,4 @@
-/* PSL1GHT + PolarSSL 1.3.x TLS transport.
- * This file is intentionally excluded from host tests; it needs the PS3 SDK
- * and the PolarSSL headers/libraries shipped with the target toolchain.
- */
+/* PSL1GHT + PolarSSL 1.3.x TLS transport with bounded I/O. */
 #include "cloudmoon_tls_polarssl.h"
 #include "cloudmoon_ps3_random.h"
 
@@ -16,7 +13,9 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <errno.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -27,7 +26,38 @@ struct cm_tls_connection {
     entropy_context entropy;
     ctr_drbg_context drbg;
     int ssl_ready;
+    unsigned io_timeout_ms;
 };
+
+static uint64_t cm_now_ms(void) {
+    struct timeval tv;
+    if (gettimeofday(&tv, NULL) != 0) return 0;
+    return (uint64_t)tv.tv_sec * 1000ULL + (uint64_t)tv.tv_usec / 1000ULL;
+}
+
+static int cm_wait_socket(int fd, int writing, unsigned timeout_ms) {
+    fd_set fds;
+    struct timeval tv;
+    int rc;
+    if (fd < 0) return -1;
+    FD_ZERO(&fds);
+    FD_SET(fd, &fds);
+    tv.tv_sec = (long)(timeout_ms / 1000U);
+    tv.tv_usec = (long)((timeout_ms % 1000U) * 1000U);
+    do {
+        rc = select(fd + 1, writing ? NULL : &fds,
+                    writing ? &fds : NULL, NULL, &tv);
+    } while (rc < 0 && errno == EINTR);
+    return rc;
+}
+
+static unsigned cm_remaining_ms(uint64_t deadline) {
+    uint64_t now = cm_now_ms();
+    uint64_t remaining;
+    if (!now || now >= deadline) return 0;
+    remaining = deadline - now;
+    return remaining > 0xffffffffULL ? 0xffffffffU : (unsigned)remaining;
+}
 
 static int cm_entropy(void *ctx, unsigned char *out, size_t len) {
     return cm_ps3_random_source(ctx, out, len);
@@ -61,6 +91,37 @@ static void cm_tls_release(cm_tls_connection *c) {
     free(c);
 }
 
+static int cm_connect_with_timeout(int fd, const struct sockaddr *address,
+                                   socklen_t address_len, unsigned timeout_ms) {
+    int flags, error = 0;
+    socklen_t error_len = (socklen_t)sizeof(error);
+    fd_set writefds;
+    struct timeval tv;
+    int rc;
+    flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) return -1;
+    rc = connect(fd, address, address_len);
+    if (rc < 0 && errno != EINPROGRESS && errno != EWOULDBLOCK && errno != EAGAIN) {
+        (void)fcntl(fd, F_SETFL, flags);
+        return -1;
+    }
+    if (rc < 0) {
+        FD_ZERO(&writefds);
+        FD_SET(fd, &writefds);
+        tv.tv_sec = (long)(timeout_ms / 1000U);
+        tv.tv_usec = (long)((timeout_ms % 1000U) * 1000U);
+        do {
+            rc = select(fd + 1, NULL, &writefds, NULL, &tv);
+        } while (rc < 0 && errno == EINTR);
+        if (rc <= 0 || getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &error_len) < 0 || error) {
+            (void)fcntl(fd, F_SETFL, flags);
+            return -1;
+        }
+    }
+    if (fcntl(fd, F_SETFL, flags) < 0) return -1;
+    return 0;
+}
+
 int cm_tls_connect_polarssl(cm_tls_connection **out, const char *hostname,
                             uint16_t port, const char *ca_bundle_path,
                             unsigned timeout_seconds) {
@@ -68,51 +129,55 @@ int cm_tls_connect_polarssl(cm_tls_connection **out, const char *hostname,
     struct hostent *host;
     struct sockaddr_in address;
     struct timeval timeout;
+    uint64_t deadline;
+    unsigned timeout_ms;
     int ret;
 
     if (!out || !hostname || !*hostname || !port || !ca_bundle_path ||
-        !*ca_bundle_path || timeout_seconds == 0) return -1;
+        !*ca_bundle_path || timeout_seconds == 0 ||
+        timeout_seconds > 86400U) return -1;
     *out = NULL;
+    timeout_ms = timeout_seconds * 1000U;
 
     c = (cm_tls_connection *)calloc(1, sizeof(*c));
     if (!c) return -1;
     c->socket_fd = -1;
+    c->io_timeout_ms = timeout_ms;
     x509_crt_init(&c->trusted_cas);
     entropy_init(&c->entropy);
     memset(&c->drbg, 0, sizeof(c->drbg));
     memset(&c->ssl, 0, sizeof(c->ssl));
 
-    /* Trust store is mandatory. An absent/invalid CA bundle is fatal. */
     ret = x509_crt_parse_file(&c->trusted_cas, ca_bundle_path);
     if (ret < 0) { cm_tls_release(c); return -1; }
-
     ret = ctr_drbg_init(&c->drbg, cm_entropy, NULL,
                         (const unsigned char *)"CloudMoon-PS3", 13);
     if (ret != 0) { cm_tls_release(c); return -1; }
 
+    /* The system resolver is synchronous; all socket operations below are bounded. */
     host = gethostbyname(hostname);
-    if (!host || host->h_addrtype != AF_INET || !host->h_addr_list[0]) {
+    if (!host || host->h_addrtype != AF_INET || !host->h_addr_list[0] ||
+        host->h_length < (int)sizeof(address.sin_addr)) {
         cm_tls_release(c);
         return -1;
     }
-
     c->socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (c->socket_fd < 0) { cm_tls_release(c); return -1; }
-    timeout.tv_sec = (long)timeout_seconds;
-    timeout.tv_usec = 0;
-    (void)setsockopt(c->socket_fd, SOL_SOCKET, SO_RCVTIMEO,
-                     &timeout, sizeof(timeout));
-    (void)setsockopt(c->socket_fd, SOL_SOCKET, SO_SNDTIMEO,
-                     &timeout, sizeof(timeout));
 
     memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;
     address.sin_port = htons(port);
     memcpy(&address.sin_addr, host->h_addr_list[0], sizeof(address.sin_addr));
-    if (connect(c->socket_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+    if (cm_connect_with_timeout(c->socket_fd, (struct sockaddr *)&address,
+                                (socklen_t)sizeof(address), timeout_ms) != 0) {
         cm_tls_release(c);
         return -1;
     }
+
+    timeout.tv_sec = (long)timeout_seconds;
+    timeout.tv_usec = 0;
+    (void)setsockopt(c->socket_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    (void)setsockopt(c->socket_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 
     ret = ssl_init(&c->ssl);
     if (ret != 0) { cm_tls_release(c); return -1; }
@@ -123,8 +188,6 @@ int cm_tls_connect_polarssl(cm_tls_connection **out, const char *hostname,
     ssl_set_rng(&c->ssl, ctr_drbg_random, &c->drbg);
     ssl_set_bio(&c->ssl, cm_socket_recv, &c->socket_fd,
                 cm_socket_send, &c->socket_fd);
-
-    /* SNI and peer-name verification use the same requested DNS hostname. */
     if (ssl_set_hostname(&c->ssl, hostname) != 0) {
         cm_tls_release(c);
         return -1;
@@ -132,16 +195,25 @@ int cm_tls_connect_polarssl(cm_tls_connection **out, const char *hostname,
     ssl_set_min_version(&c->ssl, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_3);
     ssl_set_max_version(&c->ssl, SSL_MAJOR_VERSION_3, SSL_MINOR_VERSION_3);
 
-    do {
+    deadline = cm_now_ms() + timeout_ms;
+    for (;;) {
         ret = ssl_handshake(&c->ssl);
-    } while (ret == POLARSSL_ERR_NET_WANT_READ ||
-             ret == POLARSSL_ERR_NET_WANT_WRITE);
+        if (ret != POLARSSL_ERR_NET_WANT_READ &&
+            ret != POLARSSL_ERR_NET_WANT_WRITE) break;
+        {
+            unsigned remaining = cm_remaining_ms(deadline);
+            if (!remaining || cm_wait_socket(c->socket_fd,
+                    ret == POLARSSL_ERR_NET_WANT_WRITE, remaining) <= 0) {
+                ret = -1;
+                break;
+            }
+        }
+    }
     if (ret != 0 || c->ssl.state != SSL_HANDSHAKE_OVER ||
         ssl_get_verify_result(&c->ssl) != 0) {
         cm_tls_release(c);
         return -1;
     }
-
     *out = c;
     return 0;
 }
@@ -150,11 +222,18 @@ int cm_tls_write_polarssl(cm_tls_connection *c,
                           const void *data, size_t length) {
     const unsigned char *p = (const unsigned char *)data;
     size_t sent = 0;
-    if (!c || (!data && length)) return -1;
+    uint64_t deadline;
+    if (!c || (!data && length) || length > 0x7fffffffU) return -1;
+    deadline = cm_now_ms() + c->io_timeout_ms;
     while (sent < length) {
         int n = ssl_write(&c->ssl, p + sent, length - sent);
         if (n == POLARSSL_ERR_NET_WANT_READ ||
-            n == POLARSSL_ERR_NET_WANT_WRITE) continue;
+            n == POLARSSL_ERR_NET_WANT_WRITE) {
+            unsigned remaining = cm_remaining_ms(deadline);
+            if (!remaining || cm_wait_socket(c->socket_fd,
+                    n == POLARSSL_ERR_NET_WANT_WRITE, remaining) <= 0) return -1;
+            continue;
+        }
         if (n <= 0) return -1;
         sent += (size_t)n;
     }
@@ -162,29 +241,26 @@ int cm_tls_write_polarssl(cm_tls_connection *c,
 }
 
 int cm_tls_read_polarssl(cm_tls_connection *c, void *data, size_t capacity) {
+    uint64_t deadline;
     int n;
     if (!c || !data || capacity == 0 || capacity > 0x7fffffffU) return -1;
-    do {
+    deadline = cm_now_ms() + c->io_timeout_ms;
+    for (;;) {
         n = ssl_read(&c->ssl, (unsigned char *)data, capacity);
-    } while (n == POLARSSL_ERR_NET_WANT_READ ||
-             n == POLARSSL_ERR_NET_WANT_WRITE);
-    return n;
+        if (n != POLARSSL_ERR_NET_WANT_READ &&
+            n != POLARSSL_ERR_NET_WANT_WRITE) return n;
+        {
+            unsigned remaining = cm_remaining_ms(deadline);
+            if (!remaining || cm_wait_socket(c->socket_fd,
+                    n == POLARSSL_ERR_NET_WANT_WRITE, remaining) <= 0) return -1;
+        }
+    }
 }
 
-
 int cm_tls_wait_readable(cm_tls_connection *c, unsigned timeout_ms) {
-    fd_set readfds;
-    struct timeval timeout;
-    int rc;
     if (!c || c->socket_fd < 0) return -1;
     if (ssl_get_bytes_avail(&c->ssl) > 0) return 1;
-    FD_ZERO(&readfds);
-    FD_SET(c->socket_fd, &readfds);
-    timeout.tv_sec = (long)(timeout_ms / 1000U);
-    timeout.tv_usec = (long)((timeout_ms % 1000U) * 1000U);
-    rc = select(c->socket_fd + 1, &readfds, NULL, NULL, &timeout);
-    if (rc < 0 && errno == EINTR) return 0;
-    return rc < 0 ? -1 : rc;
+    return cm_wait_socket(c->socket_fd, 0, timeout_ms);
 }
 
 void cm_tls_close_polarssl(cm_tls_connection *c) {
