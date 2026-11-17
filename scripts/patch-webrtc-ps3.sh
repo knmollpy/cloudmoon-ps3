@@ -827,7 +827,7 @@ static ssize_t cm_ps3_recvmsg_compat(int fd, struct msghdr *msg, int flags) {
 """
     if anchor not in s:
         raise SystemExit("usrsctp user_recv_thread.c include anchor missing")
-    s = s.replace(anchor, anchor + "\n" + helper, 1)
+    s = s.replace(anchor, anchor + "\n#include <stdlib.h>\n#include <string.h>\n" + helper, 1)
     s = s.replace("recvmsg(", "cm_ps3_recvmsg_compat(")
     p.write_text(s)
 
