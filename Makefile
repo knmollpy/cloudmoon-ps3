@@ -1,6 +1,6 @@
 # CloudMoon PS3 direct WebRTC build.
 PS3_BASE := vendor/PS3-Moonlight
-PS3DEV ?= $(PS3_BASE)/ps3dev
+PS3DEV ?= $(abspath $(PS3_BASE)/ps3dev)
 PS3DEPS := $(CURDIR)/build/ps3deps
 CLOUDMOON_WEBRTC ?= 0
 export PS3DEV CLOUDMOON_WEBRTC
