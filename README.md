@@ -2,13 +2,12 @@
 
 Cliente nativo experimental para PlayStation 3 con HEN. La arquitectura objetivo es PS3 conectada directamente a CloudMoon, sin PC, teléfono ni servidor puente.
 
-> **Estado:** transporte TCP/TLS + WebSocket en desarrollo; todavía no es un cliente de streaming funcional. No se ha compilado con PSL1GHT ni probado en una PS3.
+> **Estado:** transporte TCP/TLS + WebSocket y flujo inicial de señalización en desarrollo; todavía no es un cliente de streaming funcional.
 
 ## Incluido
 
 - Parser Engine.IO v3 y eventos Socket.IO.
-- Construcción de registros `client_register` y `register`.
-- Máquina de estados de señalización.
+- Bucle de señalización: Engine.IO open/ping, Socket.IO connect, `hello_server`, `client_register`, `action_done2`, `register`, `msg` y `getout`.
 - Frames WebSocket RFC 6455 y HTTP Upgrade.
 - Interfaz RNG y adaptador PS3 `sysGetRandomNumber`.
 - Traducción inicial de DualShock 3 a eventos touch.
@@ -34,18 +33,17 @@ cd cloudmoon-ps3
 make prototype-pkg
 ```
 
-El objetivo descarga/prepara el SDK, copia los módulos CloudMoon al árbol PS3 y los compila junto con el ejecutable base.
+El objetivo prepara el SDK, copia los módulos CloudMoon al árbol PS3 y los compila junto con el ejecutable base.
 
-**Importante:** el PKG resultante todavía ejecuta la aplicación Moonlight upstream para Sunshine/GameStream. Los módulos CloudMoon quedan enlazados, pero aún no están conectados al UI ni al protocolo de streaming. No es un cliente CloudMoon funcional.
+**Importante:** el PKG resultante todavía ejecuta la aplicación Moonlight upstream para Sunshine/GameStream. Los módulos CloudMoon quedan enlazados, pero aún no están conectados al UI ni al protocolo de vídeo/audio. No es un cliente CloudMoon funcional.
 
 ## Pendiente para streaming CloudMoon
 
-- Verificar la compilación real de PolarSSL en el SDK y resolver cualquier incompatibilidad.
+- Verificar la compilación real de PolarSSL en el SDK.
 - Integrar autenticación y descubrimiento del coordinator.
-- Completar el intercambio Socket.IO real.
 - Implementar o adaptar ICE, DTLS, SRTP, RTP y SCTP/DataChannel.
 - Conectar vídeo H.264 y audio Opus al decodificador de hardware de PS3.
-- Integrar DualShock 3 y gestión de sesión con el UI.
+- Integrar la sesión con el UI y DualShock 3.
 - Probar conexión, vídeo y audio en PS3 HEN real.
 
 La PS3 no ofrece una API WebRTC de navegador. WebSocket solo resuelve señalización; no transporta por sí mismo el vídeo del juego.
