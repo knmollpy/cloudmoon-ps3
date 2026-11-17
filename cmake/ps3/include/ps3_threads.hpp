@@ -397,17 +397,6 @@ public:
     static unsigned int hardware_concurrency() noexcept { return 2; }
 
 private:
-    static void *trampoline(void *arg) {
-        std::unique_ptr<std::function<void()>> task(
-            static_cast<std::function<void()> *>(arg));
-        try {
-            (*task)();
-        } catch (...) {
-            std::terminate();
-        }
-        return nullptr;
-    }
-
     pthread_t thread_;
     bool joinable_;
 };
