@@ -119,6 +119,10 @@ private:
 };
 
 
+} // namespace std
+#include <future> // supplies std::future_status; gthreads-dependent classes stay disabled
+namespace std {
+
 template <class T>
 struct ps3_future_state {
     mutex m;
@@ -353,8 +357,6 @@ private:
 };
 
 }  // namespace std
-
-#include <future> // supplies std::future_status; gthreads-dependent classes stay disabled
 
 /*
  * libstdc++ in the PSL1GHT SDK is built without gthreads. Its std::thread
