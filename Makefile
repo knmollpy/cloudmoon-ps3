@@ -26,7 +26,7 @@ webrtc-stack: prepare
 	cmake --install build/libdatachannel
 compile-cloudmoon-modules: prepare
 	./scripts/inject-cloudmoon-modules.sh "$(PS3_BASE)"
-	$(MAKE) -C $(PS3_BASE) moonlight-ps3.elf
+	$(MAKE) -C $(PS3_BASE) cloudmoon-ps3.elf
 prototype-pkg: compile-cloudmoon-modules
 	$(MAKE) -C $(PS3_BASE) pkg
 	@echo "PS3 PKG generated."
