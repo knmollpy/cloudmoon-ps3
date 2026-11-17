@@ -58,7 +58,7 @@ static int cm_rtc_send_signal(cm_cloudmoon_webrtc_t*rtc,const char*type,
         __sync_sub_and_fetch(&rtc->signaling_users,1);
         return -1;
     }
-    client=__sync_val_compare_and_swap(&rtc->client,NULL,NULL);
+    client=__sync_val_compare_and_swap(&rtc->client,(cm_cloudmoon_client_t*)0,(cm_cloudmoon_client_t*)0);
     if(!client||cm_json_quote(qvalue,sizeof(qvalue),value)<0) {
         __sync_sub_and_fetch(&rtc->signaling_users,1);
         return -1;
@@ -286,7 +286,7 @@ void cm_cloudmoon_webrtc_detach_signaling(cm_cloudmoon_webrtc_t*rtc){
     if(!rtc)return;
     __sync_lock_test_and_set(&rtc->signaling_detached,1);
     while(__sync_val_compare_and_swap(&rtc->signaling_users,0,0)!=0)usleep(1000);
-    __sync_lock_test_and_set(&rtc->client,NULL);
+    __sync_lock_test_and_set(&rtc->client,(cm_cloudmoon_client_t*)0);
 }
 int cm_cloudmoon_webrtc_is_connected(const cm_cloudmoon_webrtc_t*rtc){return rtc?rtc->connected:0;}
 void cm_cloudmoon_webrtc_close(cm_cloudmoon_webrtc_t*rtc) {
