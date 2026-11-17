@@ -208,9 +208,7 @@ int cm_cloudmoon_webrtc_create(cm_cloudmoon_webrtc_t**out,
                                cm_cloudmoon_client_t*client,int width,int height) {
     static const char*ice_servers[]={"stun:stun.nenly.cn:53006","stun:stun.l.google.com:19302"};
     rtcConfiguration config;
-    rtcDataChannelInit channel_config;
     cm_cloudmoon_webrtc_t*rtc;
-    int dc;
     if(!out||!client||width<=0||height<=0)return -1;
     *out=NULL;
     rtc=(cm_cloudmoon_webrtc_t*)calloc(1,sizeof(*rtc));
@@ -228,12 +226,10 @@ int cm_cloudmoon_webrtc_create(cm_cloudmoon_webrtc_t**out,
     rtcSetStateChangeCallback(rtc->pc,cm_rtc_state);
     rtcSetDataChannelCallback(rtc->pc,cm_rtc_data_channel);
     rtcSetTrackCallback(rtc->pc,cm_rtc_track);
-    memset(&channel_config,0,sizeof(channel_config)); /* ordered + reliable, as in CloudMoon web client */
-    dc=rtcCreateDataChannelEx(rtc->pc,"config",&channel_config);
-    if(dc<0)goto fail;
-    rtc->data_channel=dc;rtcSetUserPointer(dc,rtc);
-    rtcSetOpenCallback(dc,cm_rtc_channel_open);rtcSetMessageCallback(dc,cm_rtc_channel_message);
-    rtcSetClosedCallback(dc,cm_rtc_channel_closed);
+    /* CloudMoon's browser creates the ordered/reliable "config" channel
+       before its offer. Accept that negotiated remote channel; do not create
+       a second local channel with the same purpose. */
+    rtcSetDataChannelCallback(rtc->pc,cm_rtc_data_channel);
     rtc->input_running=1;
     if(sysThreadCreate(&rtc->input_thread,cm_rtc_input_loop,rtc,150,0x4000,
                        THREAD_JOINABLE,"CloudMoonInput")!=0)goto fail;
