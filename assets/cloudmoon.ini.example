@@ -1,0 +1,5 @@
+# CloudMoon session parameters copied from the active browser URL.
+# Keep this file private. android_instance_id identifies your active session.
+game=PACKAGE_NAME
+user_id=CLOUDMOON_USER_ID
+android_instance_id=BASE64_ANDROID_INSTANCE_ID

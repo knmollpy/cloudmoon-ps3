@@ -1,41 +1,50 @@
 # CloudMoon PS3
 
-Cliente nativo experimental para PlayStation 3 con HEN. La arquitectura objetivo es PS3 conectada directamente a CloudMoon, sin PC, teléfono ni servidor puente.
+Cliente nativo experimental para PS3 HEN, con conexión directa al coordinator de CloudMoon. No utiliza PC, móvil ni servidor puente.
 
-> **Estado:** transporte TCP/TLS + WebSocket, descubrimiento del coordinator y señalización inicial en desarrollo. Todavía no es un cliente de streaming funcional.
+## Implementación incluida
 
-## Incluido
+- Descubrimiento del coordinator desde `android_instance_id` (Base64 JSON).
+- Socket.IO 2.4 / Engine.IO v3 por WebSocket TLS.
+- Registro `client_register` y unión a sala con `signalingRoomId`.
+- Motor WebRTC integrado mediante libdatachannel: ICE/STUN, DTLS, SRTP, SCTP/DataChannel y negociación SDP.
+- DataChannel fiable `config`, envío de resolución y controles.
+- DualShock 3 traducido a eventos touch CloudMoon.
+- H.264 depacketizado hacia el decodificador hardware cellVdec.
+- Opus estéreo 48 kHz hacia el reproductor de audio PS3.
+- CA bundle incluido en el PKG para validar TLS.
 
-- Decodificación Base64 de `android_instance_id` y extracción de `coorUrl` HTTPS.
-- Parser Engine.IO v3 y Socket.IO.
-- Flujo `hello_server` → `client_register` y `action_done2.signalingRoomId` → `register`.
-- Lectura de `msg` y envío de respuestas/candidatos mediante `msg`.
-- Interpretación de `getout.errorCode`.
-- WebSocket RFC 6455 sobre TLS PolarSSL, validación de certificados y preservación de datos posteriores al Upgrade.
-- Adaptador inicial de DualShock 3 a eventos touch.
-- Pruebas host C99, incluida simulación de TLS/WebSocket.
-
-## Pruebas host
-
-```sh
-make host-test
-```
-
-## Compilar el prototipo PS3
+## Compilar el PKG CloudMoon
 
 ```sh
 git clone --recurse-submodules https://github.com/knmollpy/cloudmoon-ps3.git
 cd cloudmoon-ps3
-make prototype-pkg
+make cloudmoon-pkg
 ```
 
-El objetivo compila los módulos con PSL1GHT y genera un PKG basado en el ejecutable de PS3-Moonlight.
+El objetivo cruza Mbed TLS y libdatachannel para PPU/PSL1GHT y luego genera el PKG. La primera compilación puede tardar por las dependencias.
 
-**Importante:** el paquete actual sigue ejecutando la interfaz y el protocolo Moonlight/Sunshine. Los módulos CloudMoon están enlazados, pero todavía falta conectar WebRTC y los medios al ejecutable. No es un cliente CloudMoon funcional.
+## Configuración de sesión
 
-## Bloqueos restantes
+El primer arranque crea:
 
-- Obtener los parámetros reales de autenticación y sesión de CloudMoon.
-- Implementar ICE, DTLS, SRTP, RTP y SCTP/DataChannel.
-- Conectar el vídeo H.264 y audio Opus al decodificador de hardware de PS3.
-- Integrar la sesión en el UI y verificar todo en una PS3 HEN real.
+`/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon.ini`
+
+Editar con FTP/gestor de archivos y reiniciar:
+
+```ini
+game=PACKAGE_NAME
+user_id=CLOUDMOON_USER_ID
+android_instance_id=BASE64_ANDROID_INSTANCE_ID
+```
+
+Los valores se copian de la URL de la sesión activa de CloudMoon:
+- `game`: paquete del juego.
+- `user_id`: parámetro `userid`.
+- `android_instance_id`: parámetro completo `android_instance_id`, sin decodificar.
+
+No compartir ese archivo: identifica una sesión privada.
+
+## Estado y límites
+
+La ruta de conexión y los puentes a vídeo/audio/input ya están escritos. La compatibilidad real de libdatachannel y sus dependencias con PSL1GHT/Cell debe confirmarse en la compilación cruzada y después en hardware PS3 HEN. No se declara funcional hasta verificar una sesión CloudMoon real con imagen, sonido y controles.

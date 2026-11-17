@@ -1,35 +1,29 @@
-# Build route and implementation boundary
+# CloudMoon PS3 package build
 
-## Build
+The direct CloudMoon package target is:
 
 ```sh
 git clone --recurse-submodules https://github.com/knmollpy/cloudmoon-ps3.git
 cd cloudmoon-ps3
-make host-test
-make prototype-pkg
+make cloudmoon-pkg
 ```
 
-The prototype package is built from the PS3-Moonlight base and links the CloudMoon C modules. It is not yet a CloudMoon streaming client.
+The target initializes PSL1GHT, downloads the Mozilla CA bundle, cross-builds Mbed TLS and libdatachannel for PPU, injects the CloudMoon signaling/WebRTC runtime and creates the PS3 PKG.
 
-## Verified protocol observations
+## Runtime configuration
 
-The public CloudMoon teardown describes:
-- Socket.IO path `/client/socket.io`, WebSocket-only transport.
-- `hello_server` followed by `client_register`.
-- `action_done2` provides `signalingRoomId`; the client emits `register` with `clientid: "1111111"`.
-- `msg` carries WebRTC offer/candidate signaling.
-- `getout` carries a JSON string with an `errorCode`; code 10 indicates the web client considers the stream established.
-- `android_instance_id` is Base64 JSON containing `coorUrl`.
+On first launch the app creates `/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon.ini`. Fill these values from an active CloudMoon browser session URL:
 
-## Implemented in this repository
+- `game`: game package name
+- `user_id`: `userid` query value
+- `android_instance_id`: full Base64 `android_instance_id` query value
 
-- Base64 decoder and HTTPS coordinator URL parser.
-- Engine.IO open/ping and Socket.IO connect handling.
-- Registration and room-join message builders.
-- Signaling message receive callback and outbound `msg` helper.
-- `getout.errorCode` handling.
-- TLS/WebSocket Upgrade transport with post-header spillover preservation.
+The PKG carries `cacert.pem` for coordinator TLS verification.
 
-## Still required
+## Media integration
 
-CloudMoon's browser client relies on native WebRTC. A PS3 implementation still needs ICE, DTLS, SRTP, RTP and SCTP/DataChannel, plus H.264/VP8 video and audio playback integration. The current PKG is a cross-compile prototype using the upstream Moonlight shell; it does not yet stream CloudMoon.
+The WebRTC adapter negotiates the server offer and local answer, exchanges trickled ICE candidates, creates the reliable `config` DataChannel, forwards DualShock 3 touch events, depacketizes H.264 and Opus, and routes them into the existing PS3 cellVdec/audio paths.
+
+## Validation boundary
+
+A successful PPU link and PKG creation do not prove CloudMoon service compatibility. The remaining validation is an actual active-session run on PS3 HEN. This repository does not claim that a live CloudMoon session has already been tested.

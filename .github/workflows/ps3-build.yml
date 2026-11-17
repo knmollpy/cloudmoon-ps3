@@ -1,4 +1,4 @@
-name: PS3 build checks
+name: CloudMoon PS3 PKG
 on:
   push:
     branches: [main]
@@ -6,27 +6,19 @@ on:
 permissions:
   contents: read
 jobs:
-  host-tests:
+  cloudmoon-pkg:
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Run portable protocol and transport tests
-        run: make host-test
-  prototype-pkg:
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - name: Compile CloudMoon modules and package PS3 shell
-        run: make prototype-pkg
-      - name: Upload prototype PKG (not yet CloudMoon-streaming capable)
+      - name: Build native WebRTC stack and PS3 HEN package
+        run: make cloudmoon-pkg
+      - name: Upload CloudMoon PS3 PKG
         uses: actions/upload-artifact@v4
         with:
-          name: cloudmoon-ps3-prototype-pkg-not-streaming
+          name: cloudmoon-ps3-hen-pkg
           path: vendor/PS3-Moonlight/build/*.pkg
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 14

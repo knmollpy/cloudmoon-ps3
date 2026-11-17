@@ -1,3 +1,9 @@
 [submodule "vendor/PS3-Moonlight"]
 	path = vendor/PS3-Moonlight
 	url = https://github.com/Cruslan/PS3-Moonlight.git
+[submodule "vendor/libdatachannel"]
+	path = vendor/libdatachannel
+	url = https://github.com/paullouisageneau/libdatachannel.git
+[submodule "vendor/mbedtls"]
+	path = vendor/mbedtls
+	url = https://github.com/Mbed-TLS/mbedtls.git
