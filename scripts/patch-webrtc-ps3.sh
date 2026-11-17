@@ -230,42 +230,7 @@ PY
 python3 - "$RTC_UTILS" "$RTC_CANDIDATE" <<'PY'
 import pathlib, sys
 
-utils = pathlib.Path(sys.argv[1])
-s = utils.read_text()
-# PS3's libstdc++ does not provide std::recursive_mutex. Keep the BasicLockable
-# interface so std::lock_guard and std::scoped_lock continue to work.
-if "class ps3_recursive_mutex" not in s:
-    s = s.replace("#define RTC_UTILS_H", "#define RTC_UTILS_H\n\n#include <pthread.h>", 1)
-    mutex_class = r"""
-namespace rtc {
-
-class ps3_recursive_mutex {
-public:
-    ps3_recursive_mutex() {
-        pthread_mutexattr_t attr;
-        pthread_mutexattr_init(&attr);
-        pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-        pthread_mutex_init(&mutex_, &attr);
-        pthread_mutexattr_destroy(&attr);
-    }
-    ~ps3_recursive_mutex() { pthread_mutex_destroy(&mutex_); }
-    ps3_recursive_mutex(const ps3_recursive_mutex &) = delete;
-    ps3_recursive_mutex &operator=(const ps3_recursive_mutex &) = delete;
-    void lock() { pthread_mutex_lock(&mutex_); }
-    void unlock() { pthread_mutex_unlock(&mutex_); }
-    bool try_lock() { return pthread_mutex_trylock(&mutex_) == 0; }
-private:
-    pthread_mutex_t mutex_;
-};
-"""
-    if "namespace rtc {" not in s:
-        raise SystemExit("Could not locate rtc namespace in rtc/utils.hpp")
-    s = s.replace("namespace rtc {", mutex_class, 1)
-s = s.replace("mutable std::recursive_mutex mutex;", "mutable ps3_recursive_mutex mutex;")
-if "mutable ps3_recursive_mutex mutex;" not in s:
-    raise SystemExit("Could not replace recursive mutex member in rtc/utils.hpp")
-utils.write_text(s)
-
+# The target-wide ps3_threads.hpp shim supplies std::recursive_mutex.
 candidate = pathlib.Path(sys.argv[2])
 s = candidate.read_text()
 # Use the C runtime conversion already available in PSL1GHT newlib.
@@ -384,8 +349,6 @@ static void freeaddrinfo(struct addrinfo *ai) {
 candidate.write_text(s)
 PY
 
-grep -q 'class ps3_recursive_mutex' "$RTC_UTILS"
-grep -q 'mutable ps3_recursive_mutex mutex;' "$RTC_UTILS"
 grep -q 'strtoul(servbuffer, nullptr, 10)' "$RTC_CANDIDATE"
 if grep -q 'std::stoul(servbuffer)' "$RTC_CANDIDATE"; then
   echo "Unsupported std::stoul remains in candidate.cpp" >&2
