@@ -786,7 +786,7 @@ static ssize_t cm_ps3_sendmsg_compat(int fd, const struct msghdr *msg, int flags
 p = recv_path
 s = p.read_text()
 if "PS3 native usrsctp recvmsg adapter" not in s:
-    anchor = "#include <arpa/inet.h>"
+    anchor = "#include <sys/uio.h>"
     helper = r"""
 /* PS3 native usrsctp recvmsg adapter */
 static ssize_t cm_ps3_recvmsg_compat(int fd, struct msghdr *msg, int flags) {
