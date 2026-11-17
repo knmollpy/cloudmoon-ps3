@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdlib.h>
+#include <sys/thread.h>
 #define CM_CONFIG_PATH "/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon.ini"
 #define CM_CA_PATH "/dev_hdd0/game/MNLT00001/USRDIR/cacert.pem"
 typedef struct { cm_cloudmoon_webrtc_t *rtc; } cm_launch_rtc_context;
@@ -28,17 +30,48 @@ static int cm_read_config(char*game,size_t gc,char*user,size_t uc,char*instance,
  }
  fclose(f);return game[0]&&user[0]&&instance[0]?1:-1;
 }
+typedef struct { char game[192],user[192],instance[3072]; } cm_launch_config;
+static sys_ppu_thread_t cm_cloudmoon_thread;
+static volatile int cm_cloudmoon_thread_running=0;
+static void cm_cloudmoon_worker(void *arg){
+ cm_launch_config *cfg=(cm_launch_config*)arg;
+ char normalized[3072]={0};
+ cm_cloudmoon_registration_t registration;
+ cm_launch_rtc_context rtc_state={0};
+ int rc;
+ if(!cfg)sysThreadExit(0);
+ if(cm_cloudmoon_decode_instance_id(cfg->instance,normalized,sizeof(normalized))<0){
+  ui_push_log("CloudMoon: invalid android_instance_id encoding.");
+  free(cfg);cm_cloudmoon_thread_running=0;sysThreadExit(0);
+ }
+ registration.width=1280;registration.height=720;
+ registration.game=cfg->game;registration.user_id=cfg->user;registration.instance_id=normalized;
+ ui_push_log("CloudMoon: connecting directly to coordinator...");
+ NLOG("CloudMoon: coordinator session starting for package %s",cfg->game);
+ rc=cm_cloudmoon_client_run_from_instance_id(normalized,CM_CA_PATH,20,&registration,
+      cm_ps3_random_source,NULL,cm_launch_signal,&rtc_state);
+ if(rtc_state.rtc){cm_cloudmoon_webrtc_close(rtc_state.rtc);rtc_state.rtc=NULL;}
+ NLOG("CloudMoon: session ended with status %d",rc);
+ if(rc!=0)ui_push_log("CloudMoon: connection failed. Check session data and CA bundle.");
+ else ui_push_log("CloudMoon: stream disconnected.");
+ free(cfg);cm_cloudmoon_thread_running=0;sysThreadExit(0);
+}
 int cm_cloudmoon_autostart(void){
- char game[192]={0},user[192]={0},instance[3072]={0},normalized[3072]={0};cm_cloudmoon_registration_t registration;cm_launch_rtc_context rtc_state={0};
+ char game[192]={0},user[192]={0},instance[3072]={0};
+ cm_launch_config *cfg;
  int rc=cm_read_config(game,sizeof(game),user,sizeof(user),instance,sizeof(instance));
  if(rc==0){ui_push_log("CloudMoon: edit USRDIR/cloudmoon.ini and restart.");return 0;}
  if(rc<0){ui_push_log("CloudMoon: cloudmoon.ini is incomplete or invalid.");return -1;}
- if(cm_cloudmoon_decode_instance_id(instance,normalized,sizeof(normalized))<0){ui_push_log("CloudMoon: invalid android_instance_id encoding.");return -1;}
- registration.width=1280;registration.height=720;registration.game=game;registration.user_id=user;registration.instance_id=normalized;
- ui_push_log("CloudMoon: connecting directly to coordinator...");NLOG("CloudMoon: coordinator session starting for package %s",game);
- rc=cm_cloudmoon_client_run_from_instance_id(normalized,CM_CA_PATH,20,&registration,cm_ps3_random_source,NULL,cm_launch_signal,&rtc_state);
- if(rtc_state.rtc){cm_cloudmoon_webrtc_close(rtc_state.rtc);rtc_state.rtc=NULL;}
- NLOG("CloudMoon: session ended with status %d",rc);
- if(rc!=0)ui_push_log("CloudMoon: connection failed. Check session data and CA bundle.");else ui_push_log("CloudMoon: stream disconnected.");
- return rc;
+ if(cm_cloudmoon_thread_running)return 0;
+ cfg=(cm_launch_config*)calloc(1,sizeof(*cfg));
+ if(!cfg)return -1;
+ strcpy(cfg->game,game);strcpy(cfg->user,user);strcpy(cfg->instance,instance);
+ cm_cloudmoon_thread_running=1;
+ if(sysThreadCreate(&cm_cloudmoon_thread,cm_cloudmoon_worker,cfg,200,0x8000,
+                    THREAD_JOINABLE,"CloudMoonNet")!=0){
+  cm_cloudmoon_thread_running=0;free(cfg);
+  ui_push_log("CloudMoon: could not start network worker.");
+  return -1;
+ }
+ return 0;
 }
