@@ -84,8 +84,6 @@ template<class M> class unique_lock {
 public:
     unique_lock() noexcept : m_(nullptr), owns_(false) {}
     explicit unique_lock(M &m) : m_(&m), owns_(false) { lock(); }
-    unique_lock(M &m, defer_lock_t) noexcept : m_(&m), owns_(false) {}
-    unique_lock(M &m, adopt_lock_t) noexcept : m_(&m), owns_(true) {}
     ~unique_lock() { if (owns_) unlock(); }
     unique_lock(const unique_lock &) = delete;
     unique_lock &operator=(const unique_lock &) = delete;
@@ -119,8 +117,16 @@ private:
 
 template<class M> class scoped_lock {
 public:
-    explicit scoped_lock(M &m) : a_(&m), b_(nullptr) { a_->lock(); }
-    scoped_lock(M &a, M &b) : a_(&a), b_(&b) {
+    explicit scoped_lock(M &m) : a_(&m) { a_->lock(); }
+    ~scoped_lock() { a_->unlock(); }
+    scoped_lock(const scoped_lock &) = delete;
+    scoped_lock &operator=(const scoped_lock &) = delete;
+private:
+    M *a_;
+};
+template<class M1, class M2> class scoped_lock {
+public:
+    scoped_lock(M1 &a, M2 &b) : a_(&a), b_(&b) {
         for (;;) {
             a_->lock();
             if (b_->try_lock()) break;
@@ -128,12 +134,12 @@ public:
             sched_yield();
         }
     }
-    ~scoped_lock() { if (b_) b_->unlock(); if (a_) a_->unlock(); }
+    ~scoped_lock() { b_->unlock(); a_->unlock(); }
     scoped_lock(const scoped_lock &) = delete;
     scoped_lock &operator=(const scoped_lock &) = delete;
 private:
-    M *a_;
-    M *b_;
+    M1 *a_;
+    M2 *b_;
 };
 
 class condition_variable {
