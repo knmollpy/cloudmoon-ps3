@@ -198,6 +198,59 @@ if "define timercmp(a, b, op)" not in s:
     os_header.write_text(s)
 PY
 
+# usrsctp has no RNG backend selected for the PSL1GHT/newlib target.
+# Use the OS entropy device (never a deterministic/fuzzing RNG).
+python3 - "$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/user_environment.c" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+s = p.read_text()
+needle = '#elif defined(__linux__)'
+branch = r"""
+#elif defined(__PS3__) || defined(__Userspace__)
+#include <fcntl.h>
+#include <unistd.h>
+
+static int ps3_random_fd = -1;
+
+void
+init_random(void)
+{
+    ps3_random_fd = open("/dev/urandom", O_RDONLY);
+}
+
+void
+read_random(void *buf, size_t size)
+{
+    size_t done = 0;
+    while (done < size) {
+        ssize_t n;
+        if (ps3_random_fd < 0)
+            abort();
+        n = read(ps3_random_fd, (char *)buf + done, size - done);
+        if (n > 0)
+            done += (size_t)n;
+        else if (errno != EINTR)
+            abort();
+    }
+}
+
+void
+finish_random(void)
+{
+    if (ps3_random_fd >= 0) {
+        close(ps3_random_fd);
+        ps3_random_fd = -1;
+    }
+}
+"""
+if "ps3_random_fd" not in s:
+    if needle not in s:
+        raise SystemExit("Could not locate usrsctp Linux RNG branch")
+    s = s.replace(needle, branch + "\n" + needle, 1)
+p.write_text(s)
+PY
+grep -q 'ps3_random_fd' "$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/user_environment.c"
+
 # PSL1GHT lacks the BSD/Linux interface-query API used by usrsctp.
 # Use the PS3 GameOS Ethernet/WLAN MTU rather than emulating ifreq/ioctl.
 python3 - "$SCTP_USERSPACE" <<'PY'
