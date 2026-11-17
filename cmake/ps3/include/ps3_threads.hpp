@@ -199,6 +199,7 @@ template <class T>
 class shared_future {
 public:
     shared_future() = default;
+    shared_future(future<T> &&other);
     explicit shared_future(shared_ptr<ps3_future_state<T>> s) : s_(move(s)) {}
     void wait() const {
         unique_lock<mutex> l(s_->m);
@@ -229,6 +230,7 @@ template <>
 class shared_future<void> {
 public:
     shared_future() = default;
+    shared_future(future<void> &&other);
     explicit shared_future(shared_ptr<ps3_future_state<void>> s) : s_(move(s)) {}
     void wait() const {
         unique_lock<mutex> l(s_->m);
@@ -322,6 +324,11 @@ private:
     shared_ptr<ps3_future_state<void>> s_;
     friend class shared_future<void>;
 };
+
+template <class T>
+shared_future<T>::shared_future(future<T> &&other) : s_(move(other.s_)) {}
+
+inline shared_future<void>::shared_future(future<void> &&other) : s_(move(other.s_)) {}
 
 template <class T>
 future<T> promise<T>::get_future() {
