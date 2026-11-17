@@ -9,3 +9,5 @@ if ! grep -q '^#define MBEDTLS_ENTROPY_HARDWARE_ALT$' "$CONFIG"; then
 fi
 # libdatachannel supplies DTLS retransmission timers via std::chrono callbacks.
 sed -i '/^#define MBEDTLS_TIMING_C$/d' "$CONFIG"
+# libdatachannel uses its own socket layer; Mbed TLS must not compile POSIX net_sockets.
+sed -i '/^#define MBEDTLS_NET_C$/d' "$CONFIG"
