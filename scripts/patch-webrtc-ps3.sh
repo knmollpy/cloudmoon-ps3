@@ -180,6 +180,25 @@ if "PSL1GHT's socket headers do not expose" not in s:
         raise SystemExit("Could not locate sctp_os_userspace.h socket include")
     s = s.replace(needle, needle + "\n" + compat, 1)
     os_header.write_text(s)
+
+# sctp_timer.c and the rest of usrsctp include sctp_os.h, which imports
+# this userspace header. Define timercmp centrally so every translation unit
+# (not only sctp_indata.c / sctp_input.c) gets the BSD timeval helper.
+s = os_header.read_text()
+needle = "#include <sys/time.h>"
+compat = r"""
+#ifndef timercmp
+#define timercmp(a, b, op) \\
+    (((a)->tv_sec == (b)->tv_sec) ? \\
+     ((a)->tv_usec op (b)->tv_usec) : \\
+     ((a)->tv_sec op (b)->tv_sec))
+#endif
+"""
+if "define timercmp(a, b, op)" not in s:
+    if needle not in s:
+        raise SystemExit("Could not locate sys/time.h in sctp_os_userspace.h")
+    s = s.replace(needle, needle + "\\n" + compat, 1)
+    os_header.write_text(s)
 PY
 
 grep -q 'FNONBIO' "$JUICE"
