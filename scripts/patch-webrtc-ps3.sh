@@ -474,3 +474,94 @@ if grep -R -n 'std::thread\\|std::this_thread::sleep_for' "$ROOT_DIR/vendor/libd
   echo "Unsupported std::thread usage remains in libdatachannel sources" >&2
   exit 1
 fi
+
+
+# Ensure every POSIX/BSD socket and time helper is present independently.
+# Do not gate unrelated constants on whether one CMSG macro happens to exist.
+python3 - "$SCTP_OS" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+s = p.read_text()
+marker = "/* CloudMoon PS3 complete POSIX socket/time fallbacks */"
+if marker not in s:
+    anchor = "#include <sys/socket.h>"
+    if anchor not in s:
+        raise SystemExit("Cannot install PS3 socket/time fallbacks")
+    compat = r"""
+/* CloudMoon PS3 complete POSIX socket/time fallbacks */
+#include <stddef.h>
+#include <stdint.h>
+#include <time.h>
+#ifndef SOCK_SEQPACKET
+#define SOCK_SEQPACKET 5
+#endif
+#ifndef IPPORT_RESERVED
+#define IPPORT_RESERVED 1024
+#endif
+#ifndef CMSG_ALIGN
+#define CMSG_ALIGN(len) (((len) + sizeof(size_t) - 1) & ~(sizeof(size_t) - 1))
+#endif
+#ifndef CMSG_DATA
+#define CMSG_DATA(cmsg) ((unsigned char *)(cmsg) + CMSG_ALIGN(sizeof(struct cmsghdr)))
+#endif
+#ifndef CMSG_LEN
+#define CMSG_LEN(len) (CMSG_ALIGN(sizeof(struct cmsghdr)) + (len))
+#endif
+#ifndef CMSG_SPACE
+#define CMSG_SPACE(len) (CMSG_ALIGN(sizeof(struct cmsghdr)) + CMSG_ALIGN(len))
+#endif
+#ifndef CMSG_FIRSTHDR
+#define CMSG_FIRSTHDR(m) \
+    ((m)->msg_controllen >= sizeof(struct cmsghdr) ? \
+     (struct cmsghdr *)(m)->msg_control : (struct cmsghdr *)0)
+#endif
+#ifndef CMSG_NXTHDR
+#define CMSG_NXTHDR(m, c) \
+    (((char *)(c) + CMSG_ALIGN((c)->cmsg_len) + sizeof(struct cmsghdr) <= \
+      (char *)(m)->msg_control + (m)->msg_controllen) ? \
+     (struct cmsghdr *)((char *)(c) + CMSG_ALIGN((c)->cmsg_len)) : \
+     (struct cmsghdr *)0)
+#endif
+#ifndef timercmp
+#define timercmp(a, b, op) \
+    (((a)->tv_sec == (b)->tv_sec) ? \
+     ((a)->tv_usec op (b)->tv_usec) : ((a)->tv_sec op (b)->tv_sec))
+#endif
+#ifndef timeradd
+#define timeradd(a, b, result) do { \
+    (result)->tv_sec = (a)->tv_sec + (b)->tv_sec; \
+    (result)->tv_usec = (a)->tv_usec + (b)->tv_usec; \
+    if ((result)->tv_usec >= 1000000) { \
+        ++(result)->tv_sec; \
+        (result)->tv_usec -= 1000000; \
+    } \
+} while (0)
+#endif
+#ifndef timersub
+#define timersub(a, b, result) do { \
+    (result)->tv_sec = (a)->tv_sec - (b)->tv_sec; \
+    (result)->tv_usec = (a)->tv_usec - (b)->tv_usec; \
+    if ((result)->tv_usec < 0) { \
+        --(result)->tv_sec; \
+        (result)->tv_usec += 1000000; \
+    } \
+} while (0)
+#endif
+static inline int cm_ps3_timingsafe_bcmp(const void *a, const void *b, size_t n) {
+    const unsigned char *x = (const unsigned char *)a;
+    const unsigned char *y = (const unsigned char *)b;
+    unsigned char diff = 0;
+    size_t i;
+    for (i = 0; i < n; ++i)
+        diff |= (unsigned char)(x[i] ^ y[i]);
+    return diff != 0;
+}
+#ifndef timingsafe_bcmp
+#define timingsafe_bcmp cm_ps3_timingsafe_bcmp
+#endif
+extern int nanosleep(const struct timespec *, struct timespec *);
+"""
+    s = s.replace(anchor, anchor + "\n" + compat, 1)
+    p.write_text(s)
+PY
+grep -q 'CloudMoon PS3 complete POSIX socket/time fallbacks' "$SCTP_OS"
