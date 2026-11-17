@@ -694,6 +694,14 @@ static int ps3_make_interrupt_pair(int fds[2]) {
         connect(rx, (struct sockaddr *)&b, sizeof(b)) < 0 ||
         connect(tx, (struct sockaddr *)&a, sizeof(a)) < 0)
         goto fail;
+    {
+        int rf = fcntl(rx, F_GETFL, 0);
+        int wf = fcntl(tx, F_GETFL, 0);
+        if (rf < 0 || wf < 0 ||
+            fcntl(rx, F_SETFL, rf | O_NONBLOCK) < 0 ||
+            fcntl(tx, F_SETFL, wf | O_NONBLOCK) < 0)
+            goto fail;
+    }
     fds[0] = rx; /* poll/read endpoint */
     fds[1] = tx; /* write endpoint */
     return 0;
