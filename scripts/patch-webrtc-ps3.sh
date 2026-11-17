@@ -10,8 +10,9 @@ SCTP_OUTPUT="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sct
 SCTP_PCB="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_pcb.c"
 SCTP_BSD_ADDR="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_bsd_addr.c"
 SCTP_OS="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_os_userspace.h"
+SCTP_USERSPACE="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_userspace.c"
 
-for file in "$JUICE" "$UDP" "$SCTP_IND" "$SCTP_INPUT" "$SCTP_OUTPUT" "$SCTP_PCB" "$SCTP_BSD_ADDR" "$SCTP_OS"; do
+for file in "$JUICE" "$UDP" "$SCTP_IND" "$SCTP_INPUT" "$SCTP_OUTPUT" "$SCTP_PCB" "$SCTP_BSD_ADDR" "$SCTP_OS" "$SCTP_USERSPACE"; do
   [ -f "$file" ] || { echo "WebRTC source not found: $file" >&2; exit 1; }
 done
 
@@ -196,6 +197,26 @@ if "define timercmp(a, b, op)" not in s:
     s = s.replace(needle, needle + "\n" + compat, 1)
     os_header.write_text(s)
 PY
+
+# PSL1GHT lacks the BSD/Linux interface-query API used by usrsctp.
+# Use the PS3 GameOS Ethernet/WLAN MTU rather than emulating ifreq/ioctl.
+python3 - "$SCTP_USERSPACE" <<'PY'
+import pathlib, re, sys
+p = pathlib.Path(sys.argv[1])
+s = p.read_text()
+pattern = r'int\s+sctp_userspace_get_mtu_from_ifn\(uint32_t if_index\)\s*\{.*?\n\}'
+replacement = """int
+sctp_userspace_get_mtu_from_ifn(uint32_t if_index)
+{
+    /* PSL1GHT has no ifreq/if_indextoname/SIOCGIFMTU interface query. */
+    return (if_index == 0xffffffff) ? 1280 : 1500;
+}"""
+updated, count = re.subn(pattern, replacement, s, count=1, flags=re.S)
+if count != 1:
+    raise SystemExit("Could not replace usrsctp MTU interface-query function")
+p.write_text(updated)
+PY
+grep -q 'return (if_index == 0xffffffff) ? 1280 : 1500;' "$SCTP_USERSPACE"
 
 grep -q 'FNONBIO' "$JUICE"
 grep -q 'FNONBIO' "$UDP"
