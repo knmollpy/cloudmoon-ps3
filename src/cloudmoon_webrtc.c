@@ -77,7 +77,17 @@ static void cm_rtc_state(int pc,rtcState state,void*ptr) {
 }
 
 static void cm_rtc_channel_message(int id,const char*message,int size,void*ptr) {
-    (void)id;(void)message;(void)size;(void)ptr;
+    cm_cloudmoon_webrtc_t*rtc=(cm_cloudmoon_webrtc_t*)ptr;
+    (void)id;
+    if(!rtc||!message||size<=0)return;
+    if(size>=8&&!memcmp(message,"kickout>",8)){
+        rtc->connected=0;
+        ui_set_state(UI_STATE_ERROR);
+    }
+}
+static void cm_rtc_channel_closed(int id,void*ptr) {
+    cm_cloudmoon_webrtc_t*rtc=(cm_cloudmoon_webrtc_t*)ptr;
+    if(rtc&&rtc->data_channel==id)rtc->data_channel=-1;
 }
 
 static void cm_rtc_channel_open(int id,void*ptr) {
@@ -98,6 +108,7 @@ static void cm_rtc_data_channel(int pc,int dc,void*ptr) {
     rtcSetUserPointer(dc,rtc);
     rtcSetOpenCallback(dc,cm_rtc_channel_open);
     rtcSetMessageCallback(dc,cm_rtc_channel_message);
+    rtcSetClosedCallback(dc,cm_rtc_channel_closed);
 }
 
 static void cm_rtc_video_frame(int track,const char*data,int size,
@@ -186,6 +197,8 @@ static void cm_rtc_input_loop(void*arg) {
         } else {
             cm_input_reset(&rtc->input_state);
         }
+        if(rtc->data_channel>=0&&rtcIsOpen(rtc->data_channel)&&rtc->input_state.frame%60==0)
+            (void)rtcSendMessage(rtc->data_channel,"stats>",6);
         usleep(16000);
     }
     sysThreadExit(0);
@@ -218,6 +231,7 @@ int cm_cloudmoon_webrtc_create(cm_cloudmoon_webrtc_t**out,
     if(dc<0)goto fail;
     rtc->data_channel=dc;rtcSetUserPointer(dc,rtc);
     rtcSetOpenCallback(dc,cm_rtc_channel_open);rtcSetMessageCallback(dc,cm_rtc_channel_message);
+    rtcSetClosedCallback(dc,cm_rtc_channel_closed);
     rtc->input_running=1;
     if(sysThreadCreate(&rtc->input_thread,cm_rtc_input_loop,rtc,150,0x4000,
                        THREAD_JOINABLE,"CloudMoonInput")!=0)goto fail;
