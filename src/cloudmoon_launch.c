@@ -67,7 +67,7 @@ int cm_cloudmoon_autostart(void){
  if(!cfg)return -1;
  strcpy(cfg->game,game);strcpy(cfg->user,user);strcpy(cfg->instance,instance);
  cm_cloudmoon_thread_running=1;
- if(sysThreadCreate(&cm_cloudmoon_thread,cm_cloudmoon_worker,cfg,200,0x8000,
+ if(sysThreadCreate(&cm_cloudmoon_thread,cm_cloudmoon_worker,cfg,200,0x40000,
                     THREAD_JOINABLE,"CloudMoonNet")!=0){
   cm_cloudmoon_thread_running=0;free(cfg);
   ui_push_log("CloudMoon: could not start network worker.");
