@@ -19,7 +19,7 @@ static void cm_launch_signal(void *context,cm_cloudmoon_client_t *client,const c
  if(!state)return;
  if(!json&&!length){if(state->rtc)cm_cloudmoon_webrtc_detach_signaling(state->rtc);return;}
  if(!client||!json||!length)return;
- if(!state->rtc){if(cm_cloudmoon_webrtc_create(&state->rtc,client,720,1280)!=0){ui_push_log("CloudMoon: WebRTC peer initialization failed.");return;}}
+ if(!state->rtc){if(cm_cloudmoon_webrtc_create(&state->rtc,client,1280,720)!=0){ui_push_log("CloudMoon: WebRTC peer initialization failed.");return;}}
  cm_cloudmoon_webrtc_signal(state->rtc,json,length);
 }
 static void cm_trim(char*s){size_t n;while(*s&&isspace((unsigned char)*s))memmove(s,s+1,strlen(s));n=strlen(s);while(n&&isspace((unsigned char)s[n-1]))s[--n]=0;}
@@ -47,7 +47,7 @@ static void cm_cloudmoon_worker(void *arg){
   ui_push_log("CloudMoon: invalid android_instance_id encoding.");
   free(cfg);cm_cloudmoon_thread_running=0;sysThreadExit(0);
  }
- registration.width=720;registration.height=1280;
+ registration.width=1280;registration.height=720;
  registration.game=cfg->game;registration.user_id=cfg->user;registration.instance_id=normalized;
  ui_push_log("CloudMoon: connecting directly to coordinator...");
  NLOG("CloudMoon: coordinator session starting for package %s",cfg->game);
