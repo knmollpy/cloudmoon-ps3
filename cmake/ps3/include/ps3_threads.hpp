@@ -115,7 +115,8 @@ private:
     bool owns_;
 };
 
-template<class M> class scoped_lock {
+template<class... M> class scoped_lock;
+template<class M> class scoped_lock<M> {
 public:
     explicit scoped_lock(M &m) : a_(&m) { a_->lock(); }
     ~scoped_lock() { a_->unlock(); }
@@ -124,7 +125,7 @@ public:
 private:
     M *a_;
 };
-template<class M1, class M2> class scoped_lock {
+template<class M1, class M2> class scoped_lock<M1, M2> {
 public:
     scoped_lock(M1 &a, M2 &b) : a_(&a), b_(&b) {
         for (;;) {
