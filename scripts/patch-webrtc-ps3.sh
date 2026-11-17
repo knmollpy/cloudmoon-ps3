@@ -11,6 +11,7 @@ SCTP_PCB="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_p
 SCTP_BSD_ADDR="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_bsd_addr.c"
 SCTP_OS="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_os_userspace.h"
 SCTP_USERSPACE="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_userspace.c"
+SCTP_USER_SOCKET="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/user_socket.c"
 RTC_UTILS="$ROOT_DIR/vendor/libdatachannel/include/rtc/utils.hpp"
 RTC_CANDIDATE="$ROOT_DIR/vendor/libdatachannel/src/candidate.cpp"
 RTC_CONFIGURATION="$ROOT_DIR/vendor/libdatachannel/src/configuration.cpp"
