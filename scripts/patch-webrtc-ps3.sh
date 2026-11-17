@@ -253,7 +253,7 @@ if marker not in s:
 # Keep the implementation local to this translation unit: PSL1GHT's netdb.h
 # declares gethostbyname(), but does not declare or implement getaddrinfo(),
 # getnameinfo(), or freeaddrinfo(). Resolve IPv4 names through libnet.
-if "PS3 libnet getaddrinfo compatibility" not in s:
+if "PS3 libnet resolver adapter" not in s:
     needle = "using std::array;"
     wrapper = r"""
 #if defined(__Userspace__) || defined(__PS3__)
@@ -293,6 +293,8 @@ static int getaddrinfo(const char *node, const char *service,
 
     struct in_addr address;
     if (inet_pton(AF_INET, node, &address) != 1) {
+        if (hints && (hints->ai_flags & AI_NUMERICHOST))
+            return EAI_NONAME;
         struct hostent *host = gethostbyname(node);
         if (!host || host->h_addrtype != AF_INET ||
             host->h_length != (int)sizeof(address) ||
