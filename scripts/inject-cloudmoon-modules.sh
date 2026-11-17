@@ -62,11 +62,11 @@ if guard not in s:
     first = "#define OPENSSL_COMPAT_H"
     if first not in s:
         raise SystemExit("Cannot guard the legacy OpenSSL compatibility header")
-    s = s.replace(first, first + "\\n" + guard, 1)
+    s = s.replace(first, first + "\n" + guard, 1)
     pos = s.rfind("#endif")
     if pos < 0:
         raise SystemExit("Cannot close legacy OpenSSL compatibility guard")
-    s = s[:pos] + "#endif /* CLOUDMOON_MBEDTLS_ENTROPY */\\n" + s[pos:]
+    s = s[:pos] + "#endif /* CLOUDMOON_MBEDTLS_ENTROPY */\n" + s[pos:]
 
 # The compatibility wrappers must not export real Mbed TLS 3.x symbol names:
 # libdatachannel links the actual Mbed TLS implementation in the same PKG.
@@ -93,7 +93,7 @@ renames = """/* PolarSSL-backed compatibility functions are deliberately namespa
 if "cm_polarssl_entropy_init" not in s:
     if guard not in s:
         raise SystemExit("Legacy Mbed TLS compatibility guard missing")
-    s = s.replace(guard, guard + "\\n" + renames, 1)
+    s = s.replace(guard, guard + "\n" + renames, 1)
 p.write_text(s)
 PY
 
