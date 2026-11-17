@@ -7,3 +7,5 @@ if ! grep -q '^#define MBEDTLS_ENTROPY_HARDWARE_ALT$' "$CONFIG"; then
 #define MBEDTLS_NO_PLATFORM_ENTROPY\
 #define MBEDTLS_PLATFORM_MS_TIME_ALT' "$CONFIG"
 fi
+# libdatachannel supplies DTLS retransmission timers via std::chrono callbacks.
+sed -i '/^#define MBEDTLS_TIMING_C$/d' "$CONFIG"
