@@ -13,8 +13,9 @@ SCTP_OS="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_os
 SCTP_USERSPACE="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_userspace.c"
 RTC_UTILS="$ROOT_DIR/vendor/libdatachannel/include/rtc/utils.hpp"
 RTC_CANDIDATE="$ROOT_DIR/vendor/libdatachannel/src/candidate.cpp"
+RTC_CONFIGURATION="$ROOT_DIR/vendor/libdatachannel/src/configuration.cpp"
 
-for file in "$JUICE" "$UDP" "$SCTP_IND" "$SCTP_INPUT" "$SCTP_OUTPUT" "$SCTP_PCB" "$SCTP_BSD_ADDR" "$SCTP_OS" "$SCTP_USERSPACE" "$RTC_UTILS" "$RTC_CANDIDATE"; do
+for file in "$JUICE" "$UDP" "$SCTP_IND" "$SCTP_INPUT" "$SCTP_OUTPUT" "$SCTP_PCB" "$SCTP_BSD_ADDR" "$SCTP_OS" "$SCTP_USERSPACE" "$RTC_UTILS" "$RTC_CANDIDATE" "$RTC_CONFIGURATION"; do
   [ -f "$file" ] || { echo "WebRTC source not found: $file" >&2; exit 1; }
 done
 
@@ -355,6 +356,35 @@ if grep -q 'std::stoul(servbuffer)' "$RTC_CANDIDATE"; then
   exit 1
 fi
 grep -q 'PS3 libnet resolver adapter' "$RTC_CANDIDATE"
+
+# configuration.cpp also uses std::stoul, which is unavailable in the PS3 libstdc++.
+# Convert every std::string port value through the C runtime instead.
+python3 - "$RTC_CONFIGURATION" <<'PY'
+import pathlib, re, sys
+p = pathlib.Path(sys.argv[1])
+s = p.read_text()
+pattern = re.compile(r"std::stoul\(([^()]*)\)")
+s, count = pattern.subn(lambda m: "strtoul(" + m.group(1) + ".c_str(), nullptr, 10)", s)
+if count != 4:
+    raise SystemExit("Expected to patch 4 std::stoul calls in configuration.cpp, patched " + str(count))
+if "#include <stdlib.h>" not in s:
+    lines = s.splitlines(True)
+    last_include = max((i for i, line in enumerate(lines) if line.startswith("#include ")), default=-1)
+    if last_include < 0:
+        raise SystemExit("Could not find include section in configuration.cpp")
+    lines.insert(last_include + 1, "#include <stdlib.h>\n")
+    s = "".join(lines)
+if "std::stoul(" in s:
+    raise SystemExit("Unsupported std::stoul remains in configuration.cpp")
+p.write_text(s)
+PY
+grep -q 'strtoul(service.c_str(), nullptr, 10)' "$RTC_CONFIGURATION"
+grep -q 'strtoul(service_.c_str(), nullptr, 10)' "$RTC_CONFIGURATION"
+if grep -q 'std::stoul(' "$RTC_CONFIGURATION"; then
+  echo "Unsupported std::stoul remains in configuration.cpp" >&2
+  exit 1
+fi
+
 
 # usrsctp has no RNG backend selected for the PSL1GHT/newlib target.
 # Use the OS entropy device (never a deterministic/fuzzing RNG).
