@@ -397,7 +397,7 @@ public:
     static unsigned int hardware_concurrency() noexcept { return 2; }
 
 private:
-    pthread_t thread_;
+    pthread_t thread_{};
     bool joinable_;
 };
 
