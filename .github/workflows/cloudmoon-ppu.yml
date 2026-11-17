@@ -53,7 +53,7 @@ jobs:
           name: cloudmoon-ps3-ppu-build-${{ github.run_number }}
           path: |
             vendor/PS3-Moonlight/build/*.pkg
-            vendor/PS3-Moonlight/moonlight-ps3.elf
+            vendor/PS3-Moonlight/cloudmoon-ps3.elf
             build/**/*.a
             cloudmoon-ppu-build.log
           if-no-files-found: warn
