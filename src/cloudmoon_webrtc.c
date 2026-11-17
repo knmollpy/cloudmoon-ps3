@@ -295,7 +295,7 @@ void cm_cloudmoon_webrtc_close(cm_cloudmoon_webrtc_t*rtc) {
     if(rtc->input_started){u64 result;sysThreadJoin(rtc->input_thread,&result);rtc->input_started=0;}
     if(rtc->video_started)ps3video_cloudmoon_stop();
     if(rtc->audio_started)ps3audio_cloudmoon_stop();
-    if(rtc->data_channel>=0){rtcClose(rtc->data_channel);rtcDeleteDataChannel(rtc->data_channel);}
+    if(rtc->data_channel>=0){rtcClose(rtc->data_channel);rtcDelete(rtc->data_channel);}
     if(rtc->pc>=0){rtcClosePeerConnection(rtc->pc);rtcDeletePeerConnection(rtc->pc);}
     free(rtc);
 }
