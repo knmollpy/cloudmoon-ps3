@@ -12,6 +12,7 @@ fi
 
 for file in \
   cloudmoon_input.c cloudmoon_input.h \
+  cloudmoon_client.c cloudmoon_client.h \
   cloudmoon_protocol.c cloudmoon_protocol.h \
   cloudmoon_session.c cloudmoon_session.h \
   cloudmoon_ws.c cloudmoon_ws.h \
@@ -25,7 +26,7 @@ do
 done
 
 if ! grep -q 'src/cloudmoon_ws_tls.c' "$PS3_BASE/Makefile"; then
-  sed -i 's#src/spu_opus_bridge.c#src/spu_opus_bridge.c src/cloudmoon_input.c src/cloudmoon_protocol.c src/cloudmoon_session.c src/cloudmoon_ws.c src/cloudmoon_upgrade.c src/cloudmoon_random.c src/cloudmoon_ps3_random.c src/cloudmoon_tls_polarssl.c src/cloudmoon_ws_tls.c#' "$PS3_BASE/Makefile"
+  sed -i 's#src/spu_opus_bridge.c#src/spu_opus_bridge.c src/cloudmoon_input.c src/cloudmoon_client.c src/cloudmoon_protocol.c src/cloudmoon_session.c src/cloudmoon_ws.c src/cloudmoon_upgrade.c src/cloudmoon_random.c src/cloudmoon_ps3_random.c src/cloudmoon_tls_polarssl.c src/cloudmoon_ws_tls.c#' "$PS3_BASE/Makefile"
 fi
 
 echo "CloudMoon protocol/TLS modules copied into the PS3 build and added to CFILES."

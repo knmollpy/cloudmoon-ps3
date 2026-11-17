@@ -1,0 +1,12 @@
+#include "cloudmoon_client.h"
+#include <assert.h>
+#include <stdio.h>
+#include <string.h>
+int cm_ws_tls_connect(cm_ws_tls_transport**o,const char*h,uint16_t p,const char*path,const char*ca,unsigned t,cm_random_source_fn r,void*c){(void)h;(void)p;(void)path;(void)ca;(void)t;(void)r;(void)c;*o=0;return -1;}
+int cm_ws_tls_send(cm_ws_tls_transport*t,uint8_t op,int f,const void*p,size_t n,cm_random_source_fn r,void*c){(void)t;(void)op;(void)f;(void)p;(void)n;(void)r;(void)c;return -1;}
+int cm_ws_tls_read_frame(cm_ws_tls_transport*t,cm_ws_frame_info_t*i,void*p,size_t n){(void)t;(void)i;(void)p;(void)n;return -1;}
+void cm_ws_tls_close(cm_ws_tls_transport*t){(void)t;}
+static char sent[8][4096],signal_json[256];static int sent_count,signal_count;
+static int send_cb(void*ctx,const char*p,size_t n){(void)ctx;assert(sent_count<8&&n<sizeof(sent[0]));memcpy(sent[sent_count],p,n);sent[sent_count][n]=0;sent_count++;return (int)n;}
+static void signal_cb(void*ctx,const char*p,size_t n){(void)ctx;assert(n<sizeof(signal_json));memcpy(signal_json,p,n);signal_json[n]=0;signal_count++;}
+int main(void){cm_cloudmoon_client_t c;cm_cloudmoon_registration_t r={1280,720,"game.pkg","user-42","instance-data"};cm_client_packet_result_t rc;const char*p;cm_cloudmoon_client_init(&c,&r,send_cb,signal_cb,0);p="0{\"sid\":\"sid-1\"}";rc=cm_cloudmoon_client_handle_packet(&c,p,strlen(p));assert(rc==CM_CLIENT_PACKET_CONTINUE&&sent_count==1&&!strcmp(sent[0],"40"));p="2probe";rc=cm_cloudmoon_client_handle_packet(&c,p,strlen(p));assert(rc==CM_CLIENT_PACKET_CONTINUE&&sent_count==2&&!strcmp(sent[1],"3probe"));rc=cm_cloudmoon_client_handle_packet(&c,"40",2);assert(rc==CM_CLIENT_PACKET_CONTINUE&&c.session.state==CM_SESSION_SOCKET_CONNECTED);p="42[\"hello_server\",{}]";rc=cm_cloudmoon_client_handle_packet(&c,p,strlen(p));assert(rc==CM_CLIENT_PACKET_CONTINUE&&sent_count==3&&strstr(sent[2],"client_register"));p="42[\"action_done2\",{\"roomid\":\"room-x\",\"clientid\":\"client-y\"}]";rc=cm_cloudmoon_client_handle_packet(&c,p,strlen(p));assert(rc==CM_CLIENT_PACKET_CONTINUE&&sent_count==4&&strstr(sent[3],"register"));p="42[\"msg\",{\"type\":\"offer\",\"sdp\":\"v=0\"}]";rc=cm_cloudmoon_client_handle_packet(&c,p,strlen(p));assert(rc==CM_CLIENT_PACKET_CONTINUE&&signal_count==1&&strstr(signal_json,"offer"));p="42[\"getout\",{}]";rc=cm_cloudmoon_client_handle_packet(&c,p,strlen(p));assert(rc==CM_CLIENT_PACKET_STOP&&c.session.state==CM_SESSION_CLOSED);puts("PASS: Engine.IO open/ping, Socket.IO connect/register, signaling dispatch and close");return 0;}
