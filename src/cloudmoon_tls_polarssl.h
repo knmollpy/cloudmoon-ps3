@@ -25,6 +25,7 @@ int cm_tls_write_polarssl(cm_tls_connection *connection,
                           const void *data, size_t length);
 int cm_tls_read_polarssl(cm_tls_connection *connection,
                          void *data, size_t capacity);
+int cm_tls_wait_readable(cm_tls_connection *connection,unsigned timeout_ms);
 void cm_tls_close_polarssl(cm_tls_connection *connection);
 
 #ifdef __cplusplus
