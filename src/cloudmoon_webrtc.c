@@ -28,7 +28,7 @@
 
 struct cm_cloudmoon_webrtc {
     int pc;
-    volatile int data_channel,video_started,audio_started,connected;
+    volatile int data_channel,video_started,audio_started,connected,closing;
     int width,height;
     volatile int input_running;
     int input_started;
@@ -101,13 +101,13 @@ static void cm_rtc_local_candidate(int pc,const char*candidate,const char*mid,vo
 
 static void cm_rtc_state(int pc,rtcState state,void*ptr) {
     cm_cloudmoon_webrtc_t*rtc=(cm_cloudmoon_webrtc_t*)ptr;
-    if(rtc&&pc==rtc->pc){CM_ATOMIC_STORE(&rtc->connected,(state==RTC_CONNECTED));if(state==RTC_CONNECTED)ui_set_state(UI_STATE_STREAMING);else if(state==RTC_DISCONNECTED||state==RTC_FAILED||state==RTC_CLOSED)ui_set_state(UI_STATE_ERROR);}
+    if(rtc&&!CM_ATOMIC_LOAD(&rtc->closing)&&pc==rtc->pc){CM_ATOMIC_STORE(&rtc->connected,(state==RTC_CONNECTED));if(state==RTC_CONNECTED)ui_set_state(UI_STATE_STREAMING);else if(state==RTC_DISCONNECTED||state==RTC_FAILED||state==RTC_CLOSED)ui_set_state(UI_STATE_ERROR);}
 }
 
 static void cm_rtc_channel_message(int id,const char*message,int size,void*ptr) {
     cm_cloudmoon_webrtc_t*rtc=(cm_cloudmoon_webrtc_t*)ptr;
     (void)id;
-    if(!rtc||!message||size<=0)return;
+    if(!rtc||CM_ATOMIC_LOAD(&rtc->closing)||!message||size<=0)return;
     if(size>=8&&!memcmp(message,"kickout>",8)){
         CM_ATOMIC_STORE(&rtc->connected,0);
         ui_set_state(UI_STATE_ERROR);
@@ -121,7 +121,7 @@ static void cm_rtc_channel_closed(int id,void*ptr) {
 static void cm_rtc_channel_open(int id,void*ptr) {
     cm_cloudmoon_webrtc_t*rtc=(cm_cloudmoon_webrtc_t*)ptr;
     char initial[64];int n;
-    if(!rtc)return;
+    if(!rtc||CM_ATOMIC_LOAD(&rtc->closing))return;
     CM_ATOMIC_STORE(&rtc->data_channel,id);
     n=snprintf(initial,sizeof(initial),"res>%dx%d",rtc->width,rtc->height);
     if(n>0&&(size_t)n<sizeof(initial))(void)rtcSendMessage(id,initial,n);
@@ -131,7 +131,7 @@ static void cm_rtc_channel_open(int id,void*ptr) {
 static void cm_rtc_data_channel(int pc,int dc,void*ptr) {
     cm_cloudmoon_webrtc_t*rtc=(cm_cloudmoon_webrtc_t*)ptr;
     (void)pc;
-    if(!rtc||dc<0)return;
+    if(!rtc||CM_ATOMIC_LOAD(&rtc->closing)||dc<0)return;
     CM_ATOMIC_STORE(&rtc->data_channel,dc);
     rtcSetUserPointer(dc,rtc);
     rtcSetOpenCallback(dc,cm_rtc_channel_open);
@@ -143,7 +143,7 @@ static void cm_rtc_video_frame(int track,const char*data,int size,
                                const rtcFrameInfo*info,void*ptr) {
     cm_cloudmoon_webrtc_t*rtc=(cm_cloudmoon_webrtc_t*)ptr;
     (void)track;
-    if(!rtc||!data||size<=0||!info)return;
+    if(!rtc||CM_ATOMIC_LOAD(&rtc->closing)||!data||size<=0||!info)return;
     if(CM_ATOMIC_LOAD(&rtc->video_started)!=2) {
         if(CM_ATOMIC_CAS(&rtc->video_started,0,1)==0) {
             if(ps3video_cloudmoon_start(rtc->width,rtc->height)==0)
@@ -160,7 +160,7 @@ static void cm_rtc_audio_frame(int track,const char*data,int size,
                                const rtcFrameInfo*info,void*ptr) {
     cm_cloudmoon_webrtc_t*rtc=(cm_cloudmoon_webrtc_t*)ptr;
     (void)track;(void)info;
-    if(!rtc||!data||size<=0)return;
+    if(!rtc||CM_ATOMIC_LOAD(&rtc->closing)||!data||size<=0)return;
     if(CM_ATOMIC_LOAD(&rtc->audio_started)!=2) {
         if(CM_ATOMIC_CAS(&rtc->audio_started,0,1)==0) {
             if(ps3audio_cloudmoon_start()==0)
@@ -378,13 +378,19 @@ void cm_cloudmoon_webrtc_detach_signaling(cm_cloudmoon_webrtc_t*rtc){
 }
 int cm_cloudmoon_webrtc_is_connected(const cm_cloudmoon_webrtc_t*rtc){return rtc?CM_ATOMIC_LOAD((volatile int*)&rtc->connected):0;}
 void cm_cloudmoon_webrtc_close(cm_cloudmoon_webrtc_t*rtc) {
+    int pc,dc;
     if(!rtc)return;
+    CM_ATOMIC_STORE(&rtc->closing,1);
     CM_ATOMIC_STORE(&rtc->input_running,0);
     if(rtc->input_started){u64 result;sysThreadJoin(rtc->input_thread,&result);rtc->input_started=0;}
+    pc=rtc->pc;dc=CM_ATOMIC_LOAD(&rtc->data_channel);
+    rtc->pc=-1;
+    CM_ATOMIC_STORE(&rtc->data_channel,-1);
+    /* Stop WebRTC callbacks before tearing down the PS3 decoders they feed. */
+    if(pc>=0)rtcClosePeerConnection(pc);
     if(CM_ATOMIC_LOAD(&rtc->video_started)==2)ps3video_cloudmoon_stop();
     if(CM_ATOMIC_LOAD(&rtc->audio_started)==2)ps3audio_cloudmoon_stop();
-    { int dc=CM_ATOMIC_LOAD(&rtc->data_channel); CM_ATOMIC_STORE(&rtc->data_channel,-1);
-      if(dc>=0){rtcClose(dc);rtcDelete(dc);} }
-    if(rtc->pc>=0){rtcClosePeerConnection(rtc->pc);rtcDeletePeerConnection(rtc->pc);}
+    if(dc>=0){rtcClose(dc);rtcDelete(dc);}
+    if(pc>=0)rtcDeletePeerConnection(pc);
     free(rtc);
 }
