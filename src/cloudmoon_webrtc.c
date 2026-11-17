@@ -28,6 +28,7 @@ struct cm_cloudmoon_webrtc {
     cm_layout_t layout;
     cm_input_state_t input_state;
     cm_cloudmoon_client_t *client;
+    volatile int signaling_detached, signaling_users;
     char remote_mids[CM_RTC_MAX_MIDS][32];
 };
 
@@ -48,14 +49,28 @@ static int cm_json_quote(char*out,size_t cap,const char*s) {
 static int cm_rtc_send_signal(cm_cloudmoon_webrtc_t*rtc,const char*type,
                               const char*value,const char*mid,int label) {
     char qvalue[CM_RTC_SDP_MAX+256],qmid[128],json[CM_RTC_SDP_MAX+512];
-    int n;
-    if(!rtc||!rtc->client||!type||!value||cm_json_quote(qvalue,sizeof(qvalue),value)<0)return -1;
+    int n,result;
+    cm_cloudmoon_client_t *client;
+    if(!rtc||!type||!value)return -1;
+    if(__sync_val_compare_and_swap(&rtc->signaling_detached,0,0))return -1;
+    __sync_add_and_fetch(&rtc->signaling_users,1);
+    if(__sync_val_compare_and_swap(&rtc->signaling_detached,0,0)) {
+        __sync_sub_and_fetch(&rtc->signaling_users,1);
+        return -1;
+    }
+    client=__sync_val_compare_and_swap(&rtc->client,NULL,NULL);
+    if(!client||cm_json_quote(qvalue,sizeof(qvalue),value)<0) {
+        __sync_sub_and_fetch(&rtc->signaling_users,1);
+        return -1;
+    }
     if(mid) {
         if(cm_json_quote(qmid,sizeof(qmid),mid)<0)return -1;
         n=snprintf(json,sizeof(json),"{\"type\":\"%s\",\"candidate\":%s,\"mid\":%s,\"label\":%d,\"sdpMid\":%s,\"sdpMLineIndex\":%d}",type,qvalue,qmid,label,qmid,label);
     } else n=snprintf(json,sizeof(json),"{\"type\":\"%s\",\"sdp\":%s}",type,qvalue);
-    if(n<0||(size_t)n>=sizeof(json))return -1;
-    return cm_cloudmoon_client_send_signal(rtc->client,json,(size_t)n);
+    if(n<0||(size_t)n>=sizeof(json))result=-1;
+    else result=cm_cloudmoon_client_send_signal(client,json,(size_t)n);
+    __sync_sub_and_fetch(&rtc->signaling_users,1);
+    return result;
 }
 
 static void cm_rtc_local_description(int pc,const char*sdp,const char*type,void*ptr) {
@@ -267,7 +282,12 @@ int cm_cloudmoon_webrtc_send_input(cm_cloudmoon_webrtc_t*rtc,const char*message,
     if(!rtc||rtc->data_channel<0||!message||!length||length>0x7fffffffU||!rtcIsOpen(rtc->data_channel))return -1;
     return rtcSendMessage(rtc->data_channel,message,(int)length);
 }
-void cm_cloudmoon_webrtc_detach_signaling(cm_cloudmoon_webrtc_t*rtc){if(rtc)rtc->client=NULL;}
+void cm_cloudmoon_webrtc_detach_signaling(cm_cloudmoon_webrtc_t*rtc){
+    if(!rtc)return;
+    __sync_lock_test_and_set(&rtc->signaling_detached,1);
+    while(__sync_val_compare_and_swap(&rtc->signaling_users,0,0)!=0)usleep(1000);
+    __sync_lock_test_and_set(&rtc->client,NULL);
+}
 int cm_cloudmoon_webrtc_is_connected(const cm_cloudmoon_webrtc_t*rtc){return rtc?rtc->connected:0;}
 void cm_cloudmoon_webrtc_close(cm_cloudmoon_webrtc_t*rtc) {
     if(!rtc)return;
