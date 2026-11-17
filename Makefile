@@ -15,7 +15,7 @@ baseline-pkg: prepare
 	$(MAKE) -C $(PS3_BASE) pkg
 webrtc-stack: prepare
 	./scripts/patch-ps3-sdk.sh
-	./scripts/patch-webrtc-ps3.sh
+	sh ./scripts/patch-webrtc-ps3.sh
 	./scripts/patch-mbedtls-ps3.sh vendor/mbedtls/include/mbedtls/mbedtls_config.h
 	@mkdir -p build
 	cmake -S vendor/mbedtls -B build/mbedtls -DCMAKE_TOOLCHAIN_FILE=$(CURDIR)/cmake/ps3-toolchain.cmake -DCMAKE_INSTALL_PREFIX=$(PS3DEPS) -DENABLE_PROGRAMS=OFF -DENABLE_TESTING=OFF -DMBEDTLS_FATAL_WARNINGS=OFF
