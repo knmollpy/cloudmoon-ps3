@@ -4,7 +4,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-int gettimeofday(struct timeval *tv, void *tz);
+struct timezone;
+int gettimeofday(struct timeval *tv, struct timezone *tz);
 #ifdef __cplusplus
 }
 #endif
