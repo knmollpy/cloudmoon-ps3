@@ -22,7 +22,7 @@ static int cm_client_send_registration(cm_cloudmoon_client_t *client) {
     if (n < 0 || cm_client_send_event(client, out, (size_t)n) < 0)
         return -1;
     /* Match the browser client's metrics event after each registration attempt. */
-    n = cm_socketio_make_event(out, sizeof(out), "metrics", "\"CloudMoon PS3\"");
+    n = cm_socketio_make_event(out, sizeof(out), "metrics", "\"CloudMoon PS3 native client (PS3; PowerPC)\"");
     if (n < 0 || cm_client_send_event(client, out, (size_t)n) < 0)
         return -1;
     return 0;
