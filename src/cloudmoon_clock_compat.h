@@ -1,6 +1,7 @@
 #ifndef CLOUDMOON_CLOCK_COMPAT_H
 #define CLOUDMOON_CLOCK_COMPAT_H
 #include <time.h>
+#include "cloudmoon_time_compat.h"
 #ifndef CLOCK_MONOTONIC
 #define CLOCK_MONOTONIC 1
 #endif
