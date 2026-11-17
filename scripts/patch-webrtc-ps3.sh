@@ -198,6 +198,31 @@ if "define timercmp(a, b, op)" not in s:
     os_header.write_text(s)
 PY
 
+# The pinned usrsctp userspace socket layer assumes BSD kernel constants that
+# patched newlib/PSL1GHT does not publish. Keep these fallbacks target-scoped.
+python3 - "$SCTP_OS" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+s = p.read_text()
+needle = "#include <sys/socket.h>"
+compat = r"""
+#ifndef UIO_MAXIOV
+#define UIO_MAXIOV 16
+#endif
+#ifndef ERESTART
+#define ERESTART EINTR
+#endif
+#ifndef SOMAXCONN
+#define SOMAXCONN 128
+#endif
+"""
+if "#define UIO_MAXIOV 16" not in s:
+    if needle not in s:
+        raise SystemExit("Could not locate socket include for usrsctp socket constants")
+    s = s.replace(needle, needle + "\\n" + compat, 1)
+    p.write_text(s)
+PY
+
 # usrsctp has no RNG backend selected for the PSL1GHT/newlib target.
 # Use the OS entropy device (never a deterministic/fuzzing RNG).
 python3 - "$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/user_environment.c" <<'PY'
