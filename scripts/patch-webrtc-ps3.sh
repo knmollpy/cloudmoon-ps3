@@ -480,6 +480,6 @@ endif()
 cmake_file.write_text(s)
 PY
 grep -q 'CloudMoon PS3 pthread-backed C++ threading shim' "$ROOT_DIR/vendor/libdatachannel/CMakeLists.txt"
-grep -q 'class ps3_future_state' "$ROOT_DIR/cmake/ps3/include/ps3_threads.hpp"
+grep -q 'struct ps3_future_state' "$ROOT_DIR/cmake/ps3/include/ps3_threads.hpp"
 grep -q 'class condition_variable' "$ROOT_DIR/cmake/ps3/include/ps3_threads.hpp"
 grep -q 'class thread' "$ROOT_DIR/cmake/ps3/include/ps3_threads.hpp"
