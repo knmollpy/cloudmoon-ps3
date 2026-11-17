@@ -145,7 +145,7 @@ static void cm_rtc_parse_mids(cm_cloudmoon_webrtc_t*rtc,const char*sdp) {
     const char*p=sdp;int mline=-1;
     memset(rtc->remote_mids,0,sizeof(rtc->remote_mids));
     while(p&&*p) {
-        const char*e=strstr(p,"\n");size_t n=e?(size_t)(e-p):strlen(p);
+        const char*e=strstr(p,"\n");size_t n=e?(size_t)(e-p):strlen(p);if(n&&p[n-1]=='\r')n--;
         if(n>=2&&p[0]=='m'&&p[1]=='='){if(mline<CM_RTC_MAX_MIDS-1)mline++;}
         else if(mline>=0&&mline<CM_RTC_MAX_MIDS&&n>6&&!memcmp(p,"a=mid:",6)) {
             size_t z=n-6;if(z>=sizeof(rtc->remote_mids[mline]))z=sizeof(rtc->remote_mids[mline])-1;

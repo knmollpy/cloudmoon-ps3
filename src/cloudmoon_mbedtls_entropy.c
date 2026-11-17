@@ -1,5 +1,6 @@
 #include "cloudmoon_ps3_random.h"
 #include <mbedtls/entropy.h>
+#include <mbedtls/error.h>
 #include <stddef.h>
 #include <stdint.h>
 
