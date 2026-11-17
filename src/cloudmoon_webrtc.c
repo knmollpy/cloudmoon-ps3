@@ -52,7 +52,7 @@ static int cm_rtc_send_signal(cm_cloudmoon_webrtc_t*rtc,const char*type,
     if(!rtc||!rtc->client||!type||!value||cm_json_quote(qvalue,sizeof(qvalue),value)<0)return -1;
     if(mid) {
         if(cm_json_quote(qmid,sizeof(qmid),mid)<0)return -1;
-        n=snprintf(json,sizeof(json),"{\"type\":\"%s\",\"candidate\":%s,\"mid\":%s,\"label\":%d}",type,qvalue,qmid,label);
+        n=snprintf(json,sizeof(json),"{\"type\":\"%s\",\"candidate\":%s,\"mid\":%s,\"label\":%d,\"sdpMid\":%s,\"sdpMLineIndex\":%d}",type,qvalue,qmid,label,qmid,label);
     } else n=snprintf(json,sizeof(json),"{\"type\":\"%s\",\"sdp\":%s}",type,qvalue);
     if(n<0||(size_t)n>=sizeof(json))return -1;
     return cm_cloudmoon_client_send_signal(rtc->client,json,(size_t)n);
@@ -227,7 +227,7 @@ fail:
 
 void cm_cloudmoon_webrtc_signal(void*context,const char*json,size_t length) {
     cm_cloudmoon_webrtc_t*rtc=(cm_cloudmoon_webrtc_t*)context;
-    char type[32],sdp[CM_RTC_SDP_MAX],candidate[2048];
+    char type[32],sdp[CM_RTC_SDP_MAX],candidate[2048],candidate_mid[64];
     int label=0;
     if(!rtc||!json||!length||cm_json_get_string(json,length,"type",type,sizeof(type))<0)return;
     if(!strcmp(type,"offer")) {
@@ -238,9 +238,15 @@ void cm_cloudmoon_webrtc_signal(void*context,const char*json,size_t length) {
     } else if(!strcmp(type,"candidate")) {
         const char*mid=NULL;
         if(cm_json_get_string(json,length,"candidate",candidate,sizeof(candidate))<0)return;
-        (void)cm_json_get_integer(json,length,"label",&label);
-        if(label>=0&&label<CM_RTC_MAX_MIDS&&rtc->remote_mids[label][0])mid=rtc->remote_mids[label];
-        if(!mid)mid=rtc->remote_mids[0];
+        if(cm_json_get_integer(json,length,"label",&label)<0)
+            (void)cm_json_get_integer(json,length,"sdpMLineIndex",&label);
+        if(cm_json_get_string(json,length,"sdpMid",candidate_mid,sizeof(candidate_mid))==0)
+            mid=candidate_mid;
+        else if(cm_json_get_string(json,length,"mid",candidate_mid,sizeof(candidate_mid))==0)
+            mid=candidate_mid;
+        else if(label>=0&&label<CM_RTC_MAX_MIDS&&rtc->remote_mids[label][0])
+            mid=rtc->remote_mids[label];
+        else mid=rtc->remote_mids[0][0]?rtc->remote_mids[0]:"0";
         (void)rtcAddRemoteCandidate(rtc->pc,candidate,mid);
     }
 }
