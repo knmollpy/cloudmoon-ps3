@@ -29,7 +29,7 @@ if ! grep -q 'src/cloudmoon_client.c' "$PS3_BASE/Makefile"; then
 fi
 
 if [ "${CLOUDMOON_WEBRTC:-0}" = "1" ]; then
-  for file in cloudmoon_webrtc.c cloudmoon_webrtc.h cloudmoon_launch.c cloudmoon_launch.h cloudmoon_clock_compat.c cloudmoon_clock_compat.h; do cp "$SRC/$file" "$DST/$file"; done
+  for file in cloudmoon_webrtc.c cloudmoon_webrtc.h cloudmoon_launch.c cloudmoon_launch.h cloudmoon_clock_compat.c cloudmoon_clock_compat.h cloudmoon_ifaddrs_stub.c; do cp "$SRC/$file" "$DST/$file"; done
   # Expose L2/R2 from the existing PS3 pad poller to CloudMoon.
   if ! grep -q 'l2, r2;' "$DST/input.h"; then
     awk '1; /short ly, lx, ry, rx;/ { print "    unsigned char l2, r2;" }' "$DST/input.h" > "$DST/input.h.tmp"
