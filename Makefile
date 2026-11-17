@@ -19,7 +19,7 @@ webrtc-stack: prepare
 	cmake -S vendor/mbedtls -B build/mbedtls -DCMAKE_TOOLCHAIN_FILE=$(CURDIR)/cmake/ps3-toolchain.cmake -DCMAKE_INSTALL_PREFIX=$(PS3DEPS) -DENABLE_PROGRAMS=OFF -DENABLE_TESTING=OFF -DMBEDTLS_FATAL_WARNINGS=OFF
 	cmake --build build/mbedtls --parallel 2
 	cmake --install build/mbedtls
-	cmake -S vendor/libdatachannel -B build/libdatachannel -DCMAKE_TOOLCHAIN_FILE=$(CURDIR)/cmake/ps3-toolchain.cmake -DCMAKE_PREFIX_PATH=$(PS3DEPS) -DCMAKE_INSTALL_PREFIX=$(PS3DEPS) -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DUSE_MBEDTLS=ON -DENABLE_MBEDTLS=ON -DENABLE_OPENSSL=OFF -DUSE_NETTLE=OFF -DNO_WEBSOCKET=ON -DNO_EXAMPLES=ON -DNO_TESTS=ON
+	cmake -S vendor/libdatachannel -B build/libdatachannel -DCMAKE_TOOLCHAIN_FILE=$(CURDIR)/cmake/ps3-toolchain.cmake -DCMAKE_PREFIX_PATH=$(PS3DEPS) -DCMAKE_INSTALL_PREFIX=$(PS3DEPS) -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DUSE_MBEDTLS=ON -DENABLE_MBEDTLS=ON -DENABLE_OPENSSL=OFF -DUSE_NETTLE=OFF -DNO_WEBSOCKET=ON -DNO_EXAMPLES=ON -DNO_TESTS=ON -Dhave_usrsctp_h=1 -Dsctp_werror=0
 	cmake --build build/libdatachannel --parallel 2
 	cmake --install build/libdatachannel
 compile-cloudmoon-modules: prepare
