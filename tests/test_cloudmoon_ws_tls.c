@@ -9,6 +9,7 @@ static size_t server_length,server_offset,client_length;
 static int closed;
 int cm_tls_connect_polarssl(cm_tls_connection**out,const char*host,uint16_t port,const char*ca,unsigned timeout){assert(host&&!strcmp(host,"cloudmoon.example"));assert(port==443);assert(ca&&!strcmp(ca,"ca.pem"));assert(timeout==10);*out=&fake_tls;return 0;}
 int cm_tls_write_polarssl(cm_tls_connection*c,const void*data,size_t n){assert(c==&fake_tls);if(client_length+n>sizeof(client_bytes))return -1;memcpy(client_bytes+client_length,data,n);client_length+=n;if(client_length>4&&!server_length){const char*r="HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: Bz3qJYTGdOe8gUSpLosEdiLKDrk=\r\n\r\n";const unsigned char f[]={0x81,5,'h','e','l','l','o'};server_length=strlen(r)+sizeof(f);memcpy(server_bytes,r,strlen(r));memcpy(server_bytes+strlen(r),f,sizeof(f));}return (int)n;}
+int cm_tls_wait_readable(cm_tls_connection*c,unsigned ms){(void)c;(void)ms;return 1;}
 int cm_tls_read_polarssl(cm_tls_connection*c,void*out,size_t cap){size_t n;assert(c==&fake_tls);if(server_offset>=server_length)return 0;n=server_length-server_offset;if(n>cap)n=cap;memcpy(out,server_bytes+server_offset,n);server_offset+=n;return (int)n;}
 void cm_tls_close_polarssl(cm_tls_connection*c){assert(c==&fake_tls);closed=1;}
 static int contains(const unsigned char*h,size_t hn,const char*n){size_t i,z=strlen(n);for(i=0;i+z<=hn;i++)if(!memcmp(h+i,n,z))return 1;return 0;}
