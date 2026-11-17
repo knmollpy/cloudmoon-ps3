@@ -20,8 +20,8 @@ l->button_x[7]=l->screen_w*11/12;l->button_y[7]=l->screen_h*2/5;
 for(i=0;i<8;i++){l->button_x[i]=clampi(l->button_x[i],0,l->screen_w-1);l->button_y[i]=clampi(l->button_y[i],0,l->screen_h-1);}}
 void cm_input_reset(cm_input_state_t*s){if(s)memset(s,0,sizeof(*s));}
 int cm_input_translate(const cm_layout_t*l,cm_input_state_t*s,const cm_pad_t*p,char*out,size_t cap){size_t used=0;int lx,ly,rx,ry,b[8],i;int16_t alx=p?p->lx:0,aly=p?p->ly:0;if(!l||!s||!p||!out||!cap||l->screen_w<2||l->screen_h<2)return -1;
-if(p->left)alx=-32767;else if(p->right)alx=32767;if(p->up)aly=-32767;else if(p->down)aly=32767;
-lx=clampi(l->left_x+axis_to_delta(alx,l->stick_radius),0,l->screen_w-1);ly=clampi(l->left_y+axis_to_delta(aly,l->stick_radius),0,l->screen_h-1);rx=clampi(l->right_x+axis_to_delta(p->rx,l->stick_radius),0,l->screen_w-1);ry=clampi(l->right_y+axis_to_delta(p->ry,l->stick_radius),0,l->screen_h-1);
+if(p->left)alx=-32767;else if(p->right)alx=32767;if(p->up)aly=32767;else if(p->down)aly=-32767;
+lx=clampi(l->left_x+axis_to_delta(alx,l->stick_radius),0,l->screen_w-1);ly=clampi(l->left_y-axis_to_delta(aly,l->stick_radius),0,l->screen_h-1);rx=clampi(l->right_x+axis_to_delta(p->rx,l->stick_radius),0,l->screen_w-1);ry=clampi(l->right_y-axis_to_delta(p->ry,l->stick_radius),0,l->screen_h-1);
 if(axis_to_delta(alx,l->stick_radius)||axis_to_delta(aly,l->stick_radius)){if(emit(out,cap,&used,s->left_active?"move":"start",CM_LEFT_ID,lx,ly))return -1;s->left_active=1;s->left_x=lx;s->left_y=ly;}else if(s->left_active){if(emit(out,cap,&used,"end",CM_LEFT_ID,s->left_x,s->left_y))return -1;s->left_active=0;}
 if(axis_to_delta(p->rx,l->stick_radius)||axis_to_delta(p->ry,l->stick_radius)){if(emit(out,cap,&used,s->right_active?"move":"start",CM_RIGHT_ID,rx,ry))return -1;s->right_active=1;s->right_x=rx;s->right_y=ry;}else if(s->right_active){if(emit(out,cap,&used,"end",CM_RIGHT_ID,s->right_x,s->right_y))return -1;s->right_active=0;}
 b[0]=!!p->cross;b[1]=!!p->circle;b[2]=!!p->square;b[3]=!!p->triangle;b[4]=!!p->l1;b[5]=!!p->r1;b[6]=!!p->l2;b[7]=!!p->r2;
