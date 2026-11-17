@@ -17,3 +17,27 @@ int clock_gettime(int clock_id, struct timespec *value) {
     }
     return 0;
 }
+
+/* PSL1GHT's newlib declares nanosleep but does not provide it. */
+#include <errno.h>
+int nanosleep(const struct timespec *request, struct timespec *remaining) {
+    u64 usec;
+    if (!request || request->tv_sec < 0 ||
+        request->tv_nsec < 0 || request->tv_nsec >= 1000000000L) {
+        errno = EINVAL;
+        return -1;
+    }
+    usec = (u64)request->tv_sec * 1000000ULL +
+           (u64)request->tv_nsec / 1000ULL;
+    if (remaining) {
+        remaining->tv_sec = 0;
+        remaining->tv_nsec = 0;
+    }
+    while (usec > 0xFFFFFFFFULL) {
+        sysUsleep(0xFFFFFFFFU);
+        usec -= 0xFFFFFFFFULL;
+    }
+    if (usec)
+        sysUsleep((u32)usec);
+    return 0;
+}
