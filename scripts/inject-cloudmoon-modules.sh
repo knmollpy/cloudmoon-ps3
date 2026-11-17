@@ -97,6 +97,36 @@ if "cm_polarssl_entropy_init" not in s:
 p.write_text(s)
 PY
 
+# Keep the Moonlight-common-C compatibility crypto on PolarSSL, while
+# libdatachannel uses the real Mbed TLS 3.x symbols from build/ps3deps.
+python3 - "$PS3_BASE/third_party/moonlight-common-c/src/PlatformCrypto.h" "$PS3_BASE/third_party/moonlight-common-c/src/PlatformCrypto.c" <<'PY'
+import pathlib, sys
+header = pathlib.Path(sys.argv[1])
+source = pathlib.Path(sys.argv[2])
+
+h = header.read_text()
+h = h.replace("#include <mbedtls/cipher.h>", "#include <polarssl/cipher.h>")
+h = h.replace("mbedtls_cipher_context_t ctx;", "cipher_context_t ctx;")
+if "#include <polarssl/cipher.h>" not in h or "mbedtls_cipher_context_t ctx;" in h:
+    raise SystemExit("Could not isolate Moonlight crypto context from Mbed TLS")
+header.write_text(h)
+
+c = source.read_text()
+if '#include "../../../src/openssl_compat.h"' not in c:
+    c = c.replace('#include "Limelight-internal.h"',
+                  '#include "Limelight-internal.h"\n#include "../../../src/openssl_compat.h"', 1)
+for inc in ('#include <mbedtls/entropy.h>\n',
+            '#include <mbedtls/ctr_drbg.h>\n',
+            '#include <mbedtls/version.h>\n'):
+    c = c.replace(inc, '')
+if "#define MBEDTLS_VERSION_MAJOR 3" not in c:
+    c = c.replace("#ifdef USE_MBEDTLS",
+                  "#ifdef USE_MBEDTLS\n#define MBEDTLS_VERSION_MAJOR 3\n#define MBEDTLS_VERSION_MINOR 0", 1)
+if '#include "../../../src/openssl_compat.h"' not in c or "MBEDTLS_VERSION_MAJOR 3" not in c:
+    raise SystemExit("Could not route Moonlight crypto through PolarSSL wrappers")
+source.write_text(c)
+PY
+
 if ! grep -q 'src/cloudmoon_webrtc.c' "$PS3_BASE/Makefile"; then
     sed -i 's#src/cloudmoon_ws_tls.c#src/cloudmoon_ws_tls.c src/cloudmoon_mbedtls_entropy.c src/cloudmoon_clock_compat.c src/cloudmoon_time_compat.c src/cloudmoon_webrtc.c src/cloudmoon_launch.c#' "$PS3_BASE/Makefile"
     # Put the freshly built Mbed TLS headers before PSL1GHT's older bundled headers.
