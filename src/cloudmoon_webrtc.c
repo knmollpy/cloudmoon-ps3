@@ -226,10 +226,6 @@ int cm_cloudmoon_webrtc_create(cm_cloudmoon_webrtc_t**out,
     rtcSetStateChangeCallback(rtc->pc,cm_rtc_state);
     rtcSetDataChannelCallback(rtc->pc,cm_rtc_data_channel);
     rtcSetTrackCallback(rtc->pc,cm_rtc_track);
-    /* CloudMoon's browser creates the ordered/reliable "config" channel
-       before its offer. Accept that negotiated remote channel; do not create
-       a second local channel with the same purpose. */
-    rtcSetDataChannelCallback(rtc->pc,cm_rtc_data_channel);
     rtc->input_running=1;
     if(sysThreadCreate(&rtc->input_thread,cm_rtc_input_loop,rtc,150,0x4000,
                        THREAD_JOINABLE,"CloudMoonInput")!=0)goto fail;
