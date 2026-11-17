@@ -660,3 +660,75 @@ extern int nanosleep(const struct timespec *, struct timespec *);
     p.write_text(s)
 PY
 grep -q 'CloudMoon PS3 complete POSIX socket/time fallbacks' "$SCTP_OS"
+
+
+# PSL1GHT has no POSIX pipe(2); use a connected IPv4 UDP pair for libjuice wakeups.
+python3 - "$ROOT_DIR/vendor/libdatachannel/deps/libjuice/src/conn_poll.c" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+s = p.read_text()
+if "PS3 native UDP wakeup socket pair" not in s:
+    s = s.replace('#include <assert.h>', '#include <assert.h>\n#include <arpa/inet.h>\n#include <netinet/in.h>\n#include <fcntl.h>', 1)
+    anchor = "#define BUFFER_SIZE 4096"
+    helper = r"""
+/* PS3 native UDP wakeup socket pair */
+static int ps3_make_interrupt_pair(int fds[2]) {
+    struct sockaddr_in a, b;
+    socklen_t alen = sizeof(a), blen = sizeof(b);
+    int rx = -1, tx = -1;
+    rx = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (rx < 0) goto fail;
+    tx = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (tx < 0) goto fail;
+    memset(&a, 0, sizeof(a));
+    memset(&b, 0, sizeof(b));
+    a.sin_family = AF_INET;
+    b.sin_family = AF_INET;
+    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    b.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (bind(rx, (struct sockaddr *)&a, sizeof(a)) < 0 ||
+        bind(tx, (struct sockaddr *)&b, sizeof(b)) < 0 ||
+        getsockname(rx, (struct sockaddr *)&a, &alen) < 0 ||
+        getsockname(tx, (struct sockaddr *)&b, &blen) < 0 ||
+        connect(rx, (struct sockaddr *)&b, sizeof(b)) < 0 ||
+        connect(tx, (struct sockaddr *)&a, sizeof(a)) < 0)
+        goto fail;
+    fds[0] = rx; /* poll/read endpoint */
+    fds[1] = tx; /* write endpoint */
+    return 0;
+fail:
+    if (rx >= 0) close(rx);
+    if (tx >= 0) close(tx);
+    return -1;
+}
+"""
+    if anchor not in s:
+        raise SystemExit("libjuice conn_poll BUFFER_SIZE anchor not found")
+    s = s.replace(anchor, helper + "\n" + anchor, 1)
+    s = s.replace("if (pipe(pipefds))", "if (ps3_make_interrupt_pair(pipefds))")
+    s = s.replace("while (read(interrupt_pfd->fd, &dummy, 1) > 0)", "while (recv(interrupt_pfd->fd, &dummy, 1, 0) > 0)")
+    s = s.replace("if (write(registry_impl->interrupt_pipe_out, &dummy, 1) < 0", "if (send(registry_impl->interrupt_pipe_out, &dummy, 1, 0) < 0")
+    if "pipe(pipefds)" in s or "read(interrupt_pfd->fd" in s or "write(registry_impl->interrupt_pipe_out" in s:
+        raise SystemExit("libjuice POSIX pipe calls remain after patch")
+    p.write_text(s)
+PY
+
+# libjuice's POSIX ioctlsocket macro expands to ioctl, which PSL1GHT lacks.
+# Use fcntl's nonblocking descriptor flag instead.
+python3 - "$JUICE" "$UDP" <<'PY'
+import pathlib, re, sys
+for name in sys.argv[1:]:
+    p = pathlib.Path(name)
+    s = p.read_text()
+    if "ioctlsocket(sock, FNONBIO, &nbio)" in s:
+        s = s.replace("#include <string.h>", "#include <string.h>\n#include <fcntl.h>", 1)
+        s, n = re.subn(
+            r"ctl_t nbio = 1;\\s*if \\(ioctlsocket\\(sock, FNONBIO, &nbio\\)\\)",
+            "int old_flags = fcntl(sock, F_GETFL, 0);\\n\\tif (old_flags < 0 || fcntl(sock, F_SETFL, old_flags | O_NONBLOCK) < 0)",
+            s, count=1)
+        if n != 1:
+            raise SystemExit("Could not replace libjuice nonblocking ioctl in " + str(p))
+    if "ioctlsocket(sock, FNONBIO, &nbio)" in s:
+        raise SystemExit("Unsupported ioctlsocket call remains in " + str(p))
+    p.write_text(s)
+PY
