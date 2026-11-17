@@ -31,8 +31,8 @@ fi
 if [ "${CLOUDMOON_WEBRTC:-0}" = "1" ]; then
   for file in cloudmoon_webrtc.c cloudmoon_webrtc.h cloudmoon_launch.c cloudmoon_launch.h cloudmoon_clock_compat.c cloudmoon_clock_compat.h; do cp "$SRC/$file" "$DST/$file"; done
   # Expose L2/R2 from the existing PS3 pad poller to CloudMoon.
-  if ! grep -q 'uint8_t l2, r2;' "$DST/input.h"; then
-    awk '1; /short ly, lx, ry, rx;/ { print "    uint8_t l2, r2;" }' "$DST/input.h" > "$DST/input.h.tmp"
+  if ! grep -q 'unsigned char l2, r2;' "$DST/input.h"; then
+    awk '1; /short ly, lx, ry, rx;/ { print "    unsigned char l2, r2;" }' "$DST/input.h" > "$DST/input.h.tmp"
     mv "$DST/input.h.tmp" "$DST/input.h"
   fi
   if ! grep -q 'g_pad_state.l2' "$DST/input.c"; then
