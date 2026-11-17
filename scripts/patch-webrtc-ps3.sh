@@ -179,7 +179,7 @@ compat = r"""
 #define CMSG_SPACE(len) (CMSG_ALIGN(sizeof(struct cmsghdr)) + CMSG_ALIGN(len))
 #endif
 """
-if "PSL1GHT's socket headers do not expose" not in s:
+if "define CMSG_DATA" not in s:
     if needle not in s:
         raise SystemExit("Could not locate sctp_os_userspace.h socket include")
     s = s.replace(needle, needle + "\n" + compat, 1)
