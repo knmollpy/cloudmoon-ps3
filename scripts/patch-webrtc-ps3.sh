@@ -6,9 +6,10 @@ JUICE="$ROOT_DIR/vendor/libdatachannel/deps/libjuice/src/tcp.c"
 UDP="$ROOT_DIR/vendor/libdatachannel/deps/libjuice/src/udp.c"
 SCTP="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_bsd_addr.c"
 SCTP_IND="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_indata.c"
+SCTP_INPUT="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_input.c"
 SCTP_OS="$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/netinet/sctp_os_userspace.h"
 
-for file in "$JUICE" "$UDP" "$SCTP" "$SCTP_IND" "$SCTP_OS"; do
+for file in "$JUICE" "$UDP" "$SCTP" "$SCTP_IND" "$SCTP_INPUT" "$SCTP_OS"; do
   [ -f "$file" ] || { echo "WebRTC source not found: $file" >&2; exit 1; }
 done
 
@@ -85,10 +86,11 @@ p.write_text(s)
 PY
 
 # PSL1GHT's newlib headers omit BSD timeval and ancillary-data macros used by usrsctp.
-python3 - "$SCTP_IND" "$SCTP_OS" <<'PY'
+python3 - "$SCTP_IND" "$SCTP_INPUT" "$SCTP_OS" <<'PY'
 import pathlib, sys
 
 indata = pathlib.Path(sys.argv[1])
+sctp_input = pathlib.Path(sys.argv[2])
 s = indata.read_text()
 needle = "#include <netinet/sctp_os.h>"
 compat = r"""
@@ -105,7 +107,34 @@ if "define timercmp(a, b, op)" not in s:
     s = s.replace(needle, needle + "\n" + compat, 1)
     indata.write_text(s)
 
-os_header = pathlib.Path(sys.argv[2])
+# sctp_input.c also uses BSD timeval helpers.
+s = sctp_input.read_text()
+needle = "#include <netinet/sctp_os.h>"
+compat = r"""
+#ifndef timercmp
+#define timercmp(a, b, op) \
+    (((a)->tv_sec == (b)->tv_sec) ? \
+     ((a)->tv_usec op (b)->tv_usec) : \
+     ((a)->tv_sec op (b)->tv_sec))
+#endif
+#ifndef timersub
+#define timersub(a, b, result) do { \
+    (result)->tv_sec = (a)->tv_sec - (b)->tv_sec; \
+    (result)->tv_usec = (a)->tv_usec - (b)->tv_usec; \
+    if ((result)->tv_usec < 0) { \
+        --(result)->tv_sec; \
+        (result)->tv_usec += 1000000; \
+    } \
+} while (0)
+#endif
+"""
+if "define timercmp(a, b, op)" not in s:
+    if needle not in s:
+        raise SystemExit("Could not locate sctp_input.c OS include")
+    s = s.replace(needle, needle + "\n" + compat, 1)
+    sctp_input.write_text(s)
+
+os_header = pathlib.Path(sys.argv[3])
 s = os_header.read_text()
 needle = "#include <sys/socket.h>"
 compat = r"""
