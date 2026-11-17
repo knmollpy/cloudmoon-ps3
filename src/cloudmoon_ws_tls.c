@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #define CM_WS_HTTP_HEADER_MAX 16384U
-#define CM_WS_FRAME_MAX 16384U
+#define CM_WS_FRAME_MAX 32768U
 #define CM_WS_PENDING_MAX 1024U
 struct cm_ws_tls_transport { cm_tls_connection *tls; uint8_t pending[CM_WS_PENDING_MAX]; size_t pending_length; };
 static int cm_find_header_end(const uint8_t*d,size_t n,size_t*end){size_t i;if(!d||!end||n<4)return 0;for(i=0;i+3<n;i++)if(d[i]=='\r'&&d[i+1]=='\n'&&d[i+2]=='\r'&&d[i+3]=='\n'){*end=i+4;return 1;}return 0;}
