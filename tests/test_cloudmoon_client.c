@@ -4,6 +4,7 @@
 #include <string.h>
 int cm_ws_tls_connect(cm_ws_tls_transport**o,const char*h,uint16_t p,const char*path,const char*ca,unsigned t,cm_random_source_fn r,void*c){(void)h;(void)p;(void)path;(void)ca;(void)t;(void)r;(void)c;*o=0;return -1;}
 int cm_ws_tls_send(cm_ws_tls_transport*t,uint8_t op,int f,const void*p,size_t n,cm_random_source_fn r,void*c){(void)t;(void)op;(void)f;(void)p;(void)n;(void)r;(void)c;return -1;}
+int cm_ws_tls_wait_readable(cm_ws_tls_transport*t,unsigned ms){(void)t;(void)ms;return 0;}
 int cm_ws_tls_read_frame(cm_ws_tls_transport*t,cm_ws_frame_info_t*i,void*p,size_t n){(void)t;(void)i;(void)p;(void)n;return -1;}
 void cm_ws_tls_close(cm_ws_tls_transport*t){(void)t;}
 static char sent[8][32768],signal_json[256];static int sent_count,signal_count;
