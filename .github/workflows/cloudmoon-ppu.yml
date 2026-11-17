@@ -35,6 +35,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential cmake ninja-build curl git pkg-config python3
 
+      - name: Run host-side protocol regression tests
+        run: make host-test
+
       - name: Build CloudMoon PPU libraries and PS3 PKG
         run: |
           set -o pipefail
