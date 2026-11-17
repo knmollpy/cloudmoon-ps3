@@ -199,8 +199,8 @@ new_shutdown = """static void ps3_net_shutdown(void) {
 if old_shutdown not in s:
     raise SystemExit("Could not locate legacy network shutdown block")
 s = s.replace(old_shutdown, new_shutdown, 1)
-s = s.replace("  // Ağı başlat (Genişletilmiş yüksek verimli bellek havuzu ile)\\n  ps3_net_init();\\n\\n", "")
-needle = "  ui_init(width, height, is_4_3);\\n  ps3input_start();\\n"
+s = s.replace("  // Ağı başlat (Genişletilmiş yüksek verimli bellek havuzu ile)\n  ps3_net_init();\n\n", "")
+needle = "  ui_init(width, height, is_4_3);\n  ps3input_start();\n"
 if needle not in s:
     raise SystemExit("Could not locate UI startup sequence")
 s = s.replace(needle, needle + """  NLOG("CloudMoon PS3 UI initialized; starting network stack...");
