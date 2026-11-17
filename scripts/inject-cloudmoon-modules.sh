@@ -127,73 +127,6 @@ if '#include "../../../src/openssl_compat.h"' not in c or "MBEDTLS_VERSION_MAJOR
 source.write_text(c)
 PY
 
-# Give the generated package CloudMoon identity instead of the upstream Moonlight label.
-python3 - "$PS3_BASE/Makefile" "$PS3_BASE/sfo.xml" "$PS3_BASE/sfo_debug.xml" <<'PY'
-import pathlib, re, sys
-makefile, *sfo_files = map(pathlib.Path, sys.argv[1:])
-m = makefile.read_text()
-m, n1 = re.subn(r'(?m)^TITLE\\s*:=\\s*Moonlight PS3\\s*
-    sed -i 's#src/cloudmoon_ws_tls.c#src/cloudmoon_ws_tls.c src/cloudmoon_mbedtls_entropy.c src/cloudmoon_clock_compat.c src/cloudmoon_time_compat.c src/cloudmoon_webrtc.c src/cloudmoon_launch.c#' "$PS3_BASE/Makefile"
-    # Put the freshly built Mbed TLS headers before PSL1GHT's older bundled headers.
-    sed -i 's#COMMON_INCLUDES[[:space:]]*:=[[:space:]]*#COMMON_INCLUDES := -I'"$ROOT_DIR"'/build/ps3deps/include #' "$PS3_BASE/Makefile"
-    sed -i 's#-I./src -I./src/spu/include#-I./src -I./src/spu/include -DCM_ENABLE_WEBRTC -DRTC_STATIC#' "$PS3_BASE/Makefile"
-    # Prefer the just-built Mbed TLS 3.x archives over older SDK portlibs.
-    sed -i 's#-L./third_party/moonlight-common-c#-L'"$ROOT_DIR"'/build/ps3deps/lib -L./third_party/moonlight-common-c#' "$PS3_BASE/Makefile"
-    # Only the Mbed TLS entropy object opts out of the legacy PolarSSL aliases.
-    sed -i '/$(BUILD)\/obj\/%.o: src\/%.c/i $(BUILD)/obj/cloudmoon_mbedtls_entropy.o: CFLAGS += -DCLOUDMOON_MBEDTLS_ENTROPY' "$PS3_BASE/Makefile"
-    sed -i 's#-lpolarssl#-lpolarssl -L'"$ROOT_DIR"'/build/ps3deps/lib -ldatachannel -lsrtp2 -lusrsctp -ljuice -lmbedtls -lmbedx509 -lmbedcrypto -lpthread -lstdc++#g' "$PS3_BASE/Makefile"
-  fi
-  if ! grep -q 'cloudmoon_autostart' "$DST/main.c"; then
-    sed -i '/#include "input.h"/a #include "cloudmoon_launch.h"' "$DST/main.c"
-    sed -i '/ps3input_start();/a\  cm_cloudmoon_autostart();' "$DST/main.c"
-  fi
-  # Ship a real CA bundle inside the PKG so TLS certificate verification works.
-  if ! grep -q 'cacert.pem' "$PS3_BASE/Makefile"; then
-    sed -i '/mkdir -p $(BUILD)\/pkg\/USRDIR/a\	cp '"$ROOT_DIR"'/assets/cacert.pem $(BUILD)/pkg/USRDIR/cacert.pem' "$PS3_BASE/Makefile"
-  fi
-fi
-echo "CloudMoon transport modules integrated."
-if [ "${CLOUDMOON_WEBRTC:-0}" = "1" ]; then
-  echo "WebRTC, DualShock input and H.264/Opus PS3 decoder bridges integrated."
-fi
-, 'TITLE := CloudMoon PS3', m)
-m, n2 = re.subn(r'(?m)^TARGET\\s*:=\\s*moonlight-ps3\\s*
-    sed -i 's#src/cloudmoon_ws_tls.c#src/cloudmoon_ws_tls.c src/cloudmoon_mbedtls_entropy.c src/cloudmoon_clock_compat.c src/cloudmoon_time_compat.c src/cloudmoon_webrtc.c src/cloudmoon_launch.c#' "$PS3_BASE/Makefile"
-    # Put the freshly built Mbed TLS headers before PSL1GHT's older bundled headers.
-    sed -i 's#COMMON_INCLUDES[[:space:]]*:=[[:space:]]*#COMMON_INCLUDES := -I'"$ROOT_DIR"'/build/ps3deps/include #' "$PS3_BASE/Makefile"
-    sed -i 's#-I./src -I./src/spu/include#-I./src -I./src/spu/include -DCM_ENABLE_WEBRTC -DRTC_STATIC#' "$PS3_BASE/Makefile"
-    # Prefer the just-built Mbed TLS 3.x archives over older SDK portlibs.
-    sed -i 's#-L./third_party/moonlight-common-c#-L'"$ROOT_DIR"'/build/ps3deps/lib -L./third_party/moonlight-common-c#' "$PS3_BASE/Makefile"
-    # Only the Mbed TLS entropy object opts out of the legacy PolarSSL aliases.
-    sed -i '/$(BUILD)\/obj\/%.o: src\/%.c/i $(BUILD)/obj/cloudmoon_mbedtls_entropy.o: CFLAGS += -DCLOUDMOON_MBEDTLS_ENTROPY' "$PS3_BASE/Makefile"
-    sed -i 's#-lpolarssl#-lpolarssl -L'"$ROOT_DIR"'/build/ps3deps/lib -ldatachannel -lsrtp2 -lusrsctp -ljuice -lmbedtls -lmbedx509 -lmbedcrypto -lpthread -lstdc++#g' "$PS3_BASE/Makefile"
-  fi
-  if ! grep -q 'cloudmoon_autostart' "$DST/main.c"; then
-    sed -i '/#include "input.h"/a #include "cloudmoon_launch.h"' "$DST/main.c"
-    sed -i '/ps3input_start();/a\  cm_cloudmoon_autostart();' "$DST/main.c"
-  fi
-  # Ship a real CA bundle inside the PKG so TLS certificate verification works.
-  if ! grep -q 'cacert.pem' "$PS3_BASE/Makefile"; then
-    sed -i '/mkdir -p $(BUILD)\/pkg\/USRDIR/a\	cp '"$ROOT_DIR"'/assets/cacert.pem $(BUILD)/pkg/USRDIR/cacert.pem' "$PS3_BASE/Makefile"
-  fi
-fi
-echo "CloudMoon transport modules integrated."
-if [ "${CLOUDMOON_WEBRTC:-0}" = "1" ]; then
-  echo "WebRTC, DualShock input and H.264/Opus PS3 decoder bridges integrated."
-fi
-, 'TARGET := cloudmoon-ps3', m)
-if n1 != 1 or n2 != 1:
-    raise SystemExit("Could not set CloudMoon package title and executable name")
-makefile.write_text(m)
-for p in sfo_files:
-    x = p.read_text()
-    x = x.replace('Moonlight PS3 Port.', 'CloudMoon PS3 native WebRTC client')
-    x = x.replace('\\n\\t\\tMoonlight PS3\\n', '\\n\\t\\tCloudMoon PS3\\n')
-    if 'CloudMoon PS3' not in x:
-        raise SystemExit("Could not update package title in " + str(p))
-    p.write_text(x)
-PY
-
 if ! grep -q 'src/cloudmoon_webrtc.c' "$PS3_BASE/Makefile"; then
     sed -i 's#src/cloudmoon_ws_tls.c#src/cloudmoon_ws_tls.c src/cloudmoon_mbedtls_entropy.c src/cloudmoon_clock_compat.c src/cloudmoon_time_compat.c src/cloudmoon_webrtc.c src/cloudmoon_launch.c#' "$PS3_BASE/Makefile"
     # Put the freshly built Mbed TLS headers before PSL1GHT's older bundled headers.
@@ -214,6 +147,25 @@ if ! grep -q 'src/cloudmoon_webrtc.c' "$PS3_BASE/Makefile"; then
     sed -i '/mkdir -p $(BUILD)\/pkg\/USRDIR/a\	cp '"$ROOT_DIR"'/assets/cacert.pem $(BUILD)/pkg/USRDIR/cacert.pem' "$PS3_BASE/Makefile"
   fi
 fi
+# Give the generated package CloudMoon identity instead of the upstream Moonlight label.
+python3 - "$PS3_BASE/Makefile" "$PS3_BASE/sfo.xml" "$PS3_BASE/sfo_debug.xml" <<'PY'
+import pathlib, sys
+makefile, *sfo_files = map(pathlib.Path, sys.argv[1:])
+m = makefile.read_text()
+m = m.replace("Moonlight PS3", "CloudMoon PS3")
+m = m.replace("moonlight-ps3", "cloudmoon-ps3")
+if "TITLE" not in m or "TARGET" not in m or "cloudmoon-ps3" not in m:
+    raise SystemExit("Could not set CloudMoon package title and executable name")
+makefile.write_text(m)
+for p in sfo_files:
+    x = p.read_text()
+    x = x.replace("Moonlight PS3 Port.", "CloudMoon PS3 native WebRTC client")
+    x = x.replace("Moonlight PS3", "CloudMoon PS3")
+    if "CloudMoon PS3" not in x:
+        raise SystemExit("Could not update package title in " + str(p))
+    p.write_text(x)
+PY
+
 echo "CloudMoon transport modules integrated."
 if [ "${CLOUDMOON_WEBRTC:-0}" = "1" ]; then
   echo "WebRTC, DualShock input and H.264/Opus PS3 decoder bridges integrated."
