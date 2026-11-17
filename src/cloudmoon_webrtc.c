@@ -260,6 +260,32 @@ int cm_cloudmoon_webrtc_create(cm_cloudmoon_webrtc_t**out,
     rtcSetStateChangeCallback(rtc->pc,cm_rtc_state);
     rtcSetDataChannelCallback(rtc->pc,cm_rtc_data_channel);
     rtcSetTrackCallback(rtc->pc,cm_rtc_track);
+
+    /* Match the browser player: recv-only H.264 + Opus transceivers and a
+       locally-created ordered "config" data channel before the server offer. */
+    {
+        rtcTrackInit video_init, audio_init;
+        memset(&video_init,0,sizeof(video_init));
+        video_init.direction=RTC_DIRECTION_RECVONLY;
+        video_init.codec=RTC_CODEC_H264;
+        video_init.payloadType=100;
+        video_init.mid="0";
+        if(rtcAddTrackEx(rtc->pc,&video_init)<0)goto fail;
+
+        memset(&audio_init,0,sizeof(audio_init));
+        audio_init.direction=RTC_DIRECTION_RECVONLY;
+        audio_init.codec=RTC_CODEC_OPUS;
+        audio_init.payloadType=111;
+        audio_init.mid="1";
+        if(rtcAddTrackEx(rtc->pc,&audio_init)<0)goto fail;
+    }
+    rtc->data_channel=rtcCreateDataChannel(rtc->pc,"config");
+    if(rtc->data_channel<0)goto fail;
+    rtcSetUserPointer(rtc->data_channel,rtc);
+    rtcSetOpenCallback(rtc->data_channel,cm_rtc_channel_open);
+    rtcSetMessageCallback(rtc->data_channel,cm_rtc_channel_message);
+    rtcSetClosedCallback(rtc->data_channel,cm_rtc_channel_closed);
+
     CM_ATOMIC_STORE(&rtc->input_running,1);
     if(sysThreadCreate(&rtc->input_thread,cm_rtc_input_loop,rtc,150,0x4000,
                        THREAD_JOINABLE,"CloudMoonInput")!=0)goto fail;
