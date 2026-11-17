@@ -14,9 +14,9 @@ if grep -q 'ioctlsocket(sock, FIONBIO, &nbio)' "$JUICE"; then
   sed -i 's/ioctlsocket(sock, FIONBIO, \&nbio)/ioctlsocket(sock, FNONBIO, \&nbio)/' "$JUICE"
 fi
 
-# The PS3 socket API has no MSG_NOSIGNAL; it does not need this POSIX flag.
-# Retain the original behavior on every other target.
-sed -i 's/defined(__APPLE__) || defined(_WIN32)/defined(__APPLE__) || defined(_WIN32) || defined(__CELLOS_LV2__)/g' "$JUICE"
+# The PS3 socket API has no MSG_NOSIGNAL. This script only runs in the
+# PS3 PPU build, so use zero flags for the two TCP send/recv calls.
+sed -i 's/int flags = MSG_NOSIGNAL;/int flags = 0;/g' "$JUICE"
 
 # pthread_t is a structure in the PSL1GHT pthread implementation. The
 # upstream code already maintains an integer started flag for this thread;
