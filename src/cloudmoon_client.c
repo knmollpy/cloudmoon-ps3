@@ -77,6 +77,8 @@ int cm_cloudmoon_client_run(const char *hostname,uint16_t port,const char *path,
         if(info.opcode>=8)continue;
         if(!info.fin)break;
     }
+    /* Notify the media peer while signal_context and the stack client are still valid. */
+    if(signal)signal(signal_context,&client,NULL,0);
     cm_ws_tls_close(transport);
     return result;
 }
