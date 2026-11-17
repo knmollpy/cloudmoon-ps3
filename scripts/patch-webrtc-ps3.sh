@@ -14,8 +14,10 @@ done
 sed -i 's/ioctlsocket(sock, FIONBIO, \&nbio)/ioctlsocket(sock, FNONBIO, \&nbio)/g' "$JUICE" "$UDP"
 sed -i 's/int flags = MSG_NOSIGNAL;/int flags = 0;/g' "$JUICE"
 
-# PS3 networking is IPv4-only here. Avoid compiling unsupported IPv6 socket options.
-sed -i '/setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY,/d' "$UDP"
+# PS3 networking is IPv4-only here. Remove IPv6-only socket-option statements
+# together with their guarding if-lines; otherwise an empty if is left behind.
+sed -i '/if (ai->ai_family == AF_INET6)/d' "$UDP"
+sed -i '/setsockopt(sock, IPPROTO_IPV6,/d' "$UDP"
 sed -i 's/hints.ai_family = AF_UNSPEC;/hints.ai_family = AF_INET;/' "$UDP"
 sed -i 's/const int families\[2\] = {AF_INET6, AF_INET};.*/const int families[1] = {AF_INET};/' "$UDP"
 sed -i 's/const char \*names\[2\] = {"IPv6", "IPv4"};/const char *names[1] = {"IPv4"};/' "$UDP"
