@@ -723,7 +723,7 @@ for name in sys.argv[1:]:
     if "ioctlsocket(sock, FNONBIO, &nbio)" in s:
         s = s.replace("#include <string.h>", "#include <string.h>\n#include <fcntl.h>", 1)
         s, n = re.subn(
-            r"ctl_t nbio = 1;\\s*if \\(ioctlsocket\\(sock, FNONBIO, &nbio\\)\\)",
+            r"ctl_t nbio = 1;\s*if \(ioctlsocket\(sock, FNONBIO, &nbio\)\)",
             "int old_flags = fcntl(sock, F_GETFL, 0);\\n\\tif (old_flags < 0 || fcntl(sock, F_SETFL, old_flags | O_NONBLOCK) < 0)",
             s, count=1)
         if n != 1:
@@ -732,3 +732,161 @@ for name in sys.argv[1:]:
         raise SystemExit("Unsupported ioctlsocket call remains in " + str(p))
     p.write_text(s)
 PY
+
+
+# PSL1GHT lacks sendmsg/recvmsg. SCTP's IPv4 userspace socket path only
+# needs a datagram scatter/gather adapter; preserve one UDP datagram per call.
+python3 - "$SCTP_USER_SOCKET" "$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/user_recv_thread.c" "$SCTP_BSD_ADDR" <<'PY'
+import pathlib, re, sys
+send_path, recv_path, addr_path = map(pathlib.Path, sys.argv[1:4])
+
+p = send_path
+s = p.read_text()
+if "PS3 native usrsctp sendmsg adapter" not in s:
+    anchor = "#include <arpa/inet.h>"
+    helper = r"""
+/* PS3 native usrsctp sendmsg adapter */
+static ssize_t cm_ps3_sendmsg_compat(int fd, const struct msghdr *msg, int flags) {
+    size_t total = 0, off = 0;
+    char *buffer;
+    ssize_t result;
+    size_t i;
+    for (i = 0; i < msg->msg_iovlen; ++i) {
+        if (msg->msg_iov[i].iov_len > (size_t)-1 - total) {
+            errno = EMSGSIZE;
+            return -1;
+        }
+        total += msg->msg_iov[i].iov_len;
+    }
+    buffer = (char *)malloc(total ? total : 1);
+    if (!buffer)
+        return -1;
+    for (i = 0; i < msg->msg_iovlen; ++i) {
+        memcpy(buffer + off, msg->msg_iov[i].iov_base, msg->msg_iov[i].iov_len);
+        off += msg->msg_iov[i].iov_len;
+    }
+    result = sendto(fd, buffer, total, flags,
+                    (const struct sockaddr *)msg->msg_name,
+                    (socklen_t)msg->msg_namelen);
+    free(buffer);
+    return result;
+}
+"""
+    if anchor not in s:
+        raise SystemExit("usrsctp user_socket.c include anchor missing")
+    s = s.replace(anchor, anchor + "\n" + helper, 1)
+    s = s.replace("sendmsg(SCTP_BASE_VAR(userspace_rawsctp), &msg_hdr, MSG_DONTWAIT)",
+                  "cm_ps3_sendmsg_compat(SCTP_BASE_VAR(userspace_rawsctp), &msg_hdr, MSG_DONTWAIT)")
+    s = s.replace("sendmsg(SCTP_BASE_VAR(userspace_udpsctp), &msg_hdr, MSG_DONTWAIT)",
+                  "cm_ps3_sendmsg_compat(SCTP_BASE_VAR(userspace_udpsctp), &msg_hdr, MSG_DONTWAIT)")
+    if "sendmsg(SCTP_BASE_VAR(userspace_" in s:
+        raise SystemExit("usrsctp sendmsg calls remain in user_socket.c")
+    p.write_text(s)
+
+p = recv_path
+s = p.read_text()
+if "PS3 native usrsctp recvmsg adapter" not in s:
+    anchor = "#include <arpa/inet.h>"
+    helper = r"""
+/* PS3 native usrsctp recvmsg adapter */
+static ssize_t cm_ps3_recvmsg_compat(int fd, struct msghdr *msg, int flags) {
+    size_t total = 0, off = 0, left;
+    char *buffer;
+    ssize_t result;
+    socklen_t name_len = (socklen_t)msg->msg_namelen;
+    size_t i;
+    for (i = 0; i < msg->msg_iovlen; ++i) {
+        if (msg->msg_iov[i].iov_len > (size_t)-1 - total) {
+            errno = EMSGSIZE;
+            return -1;
+        }
+        total += msg->msg_iov[i].iov_len;
+    }
+    buffer = (char *)malloc(total ? total : 1);
+    if (!buffer)
+        return -1;
+    result = recvfrom(fd, buffer, total, flags,
+                      (struct sockaddr *)msg->msg_name,
+                      msg->msg_name ? &name_len : NULL);
+    if (result >= 0) {
+        left = (size_t)result;
+        for (i = 0; i < msg->msg_iovlen && left; ++i) {
+            size_t chunk = msg->msg_iov[i].iov_len < left ?
+                           msg->msg_iov[i].iov_len : left;
+            memcpy(msg->msg_iov[i].iov_base, buffer + off, chunk);
+            off += chunk;
+            left -= chunk;
+        }
+        msg->msg_namelen = name_len;
+        msg->msg_controllen = 0;
+        msg->msg_flags = 0;
+    }
+    free(buffer);
+    return result;
+}
+"""
+    if anchor not in s:
+        raise SystemExit("usrsctp user_recv_thread.c include anchor missing")
+    s = s.replace(anchor, anchor + "\n" + helper, 1)
+    s = s.replace("recvmsg(", "cm_ps3_recvmsg_compat(")
+    p.write_text(s)
+
+p = addr_path
+s = p.read_text()
+start = s.find("#elif defined(__Userspace__)\nstatic void\nsctp_init_ifns_for_vrf")
+end = s.find("\n#endif\n#if defined(__APPLE__) && !defined(__Userspace__)", start)
+if start < 0 or end < 0:
+    raise SystemExit("Could not locate usrsctp userspace interface enumeration")
+replacement = """#elif defined(__Userspace__)
+static void
+sctp_init_ifns_for_vrf(int vrfid)
+{
+#if !defined(NO_IFADDRS) && (defined(INET) || defined(INET6))
+    int rc;
+    struct ifaddrs *ifa, *ifas;
+    struct sctp_ifa *sctp_ifa;
+    uint32_t ifa_flags;
+    rc = getifaddrs(&ifas);
+    if (rc != 0)
+        return;
+    for (ifa = ifas; ifa; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == NULL)
+            continue;
+#if !defined(INET)
+        if (ifa->ifa_addr->sa_family != AF_INET6)
+            continue;
+#elif !defined(INET6)
+        if (ifa->ifa_addr->sa_family != AF_INET)
+            continue;
+#else
+        if (ifa->ifa_addr->sa_family != AF_INET &&
+            ifa->ifa_addr->sa_family != AF_INET6)
+            continue;
+#endif
+#if defined(INET6)
+        if (ifa->ifa_addr->sa_family == AF_INET6 &&
+            IN6_IS_ADDR_UNSPECIFIED(&((struct sockaddr_in6 *)ifa->ifa_addr)->sin6_addr))
+            continue;
+#endif
+#if defined(INET)
+        if (ifa->ifa_addr->sa_family == AF_INET &&
+            ((struct sockaddr_in *)ifa->ifa_addr)->sin_addr.s_addr == 0)
+            continue;
+#endif
+        ifa_flags = 0;
+        sctp_ifa = sctp_add_addr_to_vrf(vrfid, NULL,
+                                        if_nametoindex(ifa->ifa_name), 0,
+                                        ifa->ifa_name, NULL, ifa->ifa_addr,
+                                        ifa_flags, 0);
+        if (sctp_ifa)
+            sctp_ifa->localifa_flags &= ~SCTP_ADDR_DEFER_USE;
+    }
+    freeifaddrs(ifas);
+#else
+    (void)vrfid;
+#endif
+}"""
+s = s[:start] + replacement + s[end:]
+p.write_text(s)
+PY
+
