@@ -512,3 +512,81 @@ PY
 grep -q 'CloudMoon PS3 pthread-backed C++ threading shim' "$ROOT_DIR/vendor/libdatachannel/CMakeLists.txt"
 grep -q 'struct ps3_future_state' "$ROOT_DIR/cmake/ps3/include/ps3_threads.hpp"
 grep -q 'class condition_variable' "$ROOT_DIR/cmake/ps3/include/ps3_threads.hpp"
+
+
+# Repair legacy malformed newline insertion in the usrsctp compatibility header.
+python3 - "$SCTP_OS" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+s = p.read_text()
+s = s.replace(r'\n', '\n')
+p.write_text(s)
+PY
+
+# Define the complete ancillary-data API required by usrsctp on PSL1GHT.
+python3 - "$SCTP_OS" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+s = p.read_text()
+anchor = "#include <sys/socket.h>"
+if anchor not in s:
+    raise SystemExit("Cannot add ancillary-data compatibility: socket include missing")
+block = r"""
+#ifndef CMSG_FIRSTHDR
+#define CMSG_FIRSTHDR(m) \
+    ((m)->msg_controllen >= sizeof(struct cmsghdr) ? \
+     (struct cmsghdr *)(m)->msg_control : (struct cmsghdr *)0)
+#endif
+#ifndef CMSG_NXTHDR
+#define CMSG_NXTHDR(m, c) \
+    (((char *)(c) + CMSG_ALIGN((c)->cmsg_len) + sizeof(struct cmsghdr) <= \
+      (char *)(m)->msg_control + (m)->msg_controllen) ? \
+     (struct cmsghdr *)((char *)(c) + CMSG_ALIGN((c)->cmsg_len)) : \
+     (struct cmsghdr *)0)
+#endif
+"""
+if "define CMSG_FIRSTHDR" not in s:
+    s = s.replace(anchor, anchor + "\n" + block, 1)
+p.write_text(s)
+PY
+grep -q 'define CMSG_FIRSTHDR' "$SCTP_OS"
+grep -q 'define CMSG_NXTHDR' "$SCTP_OS"
+
+# Use the PS3 dependency prefix before SDK headers so Mbed TLS 3.x headers
+# cannot be shadowed by an older mbedtls copy bundled with PSL1GHT.
+python3 - "$ROOT_DIR/vendor/libdatachannel/src" <<'PY'
+import pathlib, sys
+root = pathlib.Path(sys.argv[1])
+for p in root.rglob("*"):
+    if p.suffix not in (".cpp", ".hpp", ".h"):
+        continue
+    s = p.read_text(errors="ignore")
+    old = "std::thread"
+    if old in s:
+        s = s.replace(old, "rtc::impl::Ps3Thread")
+    s = s.replace("std::this_thread::sleep_for(", "rtc::impl::ps3_sleep_for(")
+    p.write_text(s)
+
+utils = root / "impl" / "utils.cpp"
+s = utils.read_text()
+if "std::hash<std::thread::id>" in s:
+    s = s.replace("static_cast<unsigned int>(std::hash<std::thread::id>{}(std::this_thread::get_id()))",
+                  "static_cast<unsigned int>((uintptr_t)pthread_self())")
+    if "#include <pthread.h>" not in s:
+        lines = s.splitlines(True)
+        i = max((i for i, line in enumerate(lines) if line.startswith("#include ")), default=-1)
+        if i < 0:
+            raise SystemExit("Cannot add pthread include to libdatachannel utils.cpp")
+        lines.insert(i + 1, "#include <pthread.h>\\n")
+        s = "".join(lines)
+    if "std::hash<std::thread::id>" in s:
+        raise SystemExit("std::thread::id usage remains in utils.cpp")
+utils.write_text(s)
+PY
+
+# Fail early if any compiled libdatachannel source still uses the unsupported
+# std::thread constructor or std::this_thread sleep implementation.
+if grep -R -n 'std::thread\\|std::this_thread::sleep_for' "$ROOT_DIR/vendor/libdatachannel/src"; then
+  echo "Unsupported std::thread usage remains in libdatachannel sources" >&2
+  exit 1
+fi
