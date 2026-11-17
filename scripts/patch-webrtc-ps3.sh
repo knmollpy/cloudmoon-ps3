@@ -784,10 +784,7 @@ static ssize_t cm_ps3_sendmsg_compat(int fd, const struct msghdr *msg, int flags
     if anchor not in s:
         raise SystemExit("usrsctp user_socket.c include anchor missing")
     s = s.replace(anchor, anchor + "\n" + helper, 1)
-    s = s.replace("sendmsg(SCTP_BASE_VAR(userspace_rawsctp), &msg_hdr, MSG_DONTWAIT)",
-                  "cm_ps3_sendmsg_compat(SCTP_BASE_VAR(userspace_rawsctp), &msg_hdr, MSG_DONTWAIT)")
-    s = s.replace("sendmsg(SCTP_BASE_VAR(userspace_udpsctp), &msg_hdr, MSG_DONTWAIT)",
-                  "cm_ps3_sendmsg_compat(SCTP_BASE_VAR(userspace_udpsctp), &msg_hdr, MSG_DONTWAIT)")
+    s = re.sub(r"(?<![A-Za-z0-9_])sendmsg\\(", "cm_ps3_sendmsg_compat(", s)
     if "sendmsg(SCTP_BASE_VAR(userspace_" in s:
         raise SystemExit("usrsctp sendmsg calls remain in user_socket.c")
     p.write_text(s)
@@ -837,7 +834,7 @@ static ssize_t cm_ps3_recvmsg_compat(int fd, struct msghdr *msg, int flags) {
     if anchor not in s:
         raise SystemExit("usrsctp user_recv_thread.c include anchor missing")
     s = s.replace(anchor, anchor + "\n#include <stdlib.h>\n#include <string.h>\n" + helper, 1)
-    s = s.replace("recvmsg(", "cm_ps3_recvmsg_compat(")
+    s = re.sub(r"(?<![A-Za-z0-9_])recvmsg\\(", "cm_ps3_recvmsg_compat(", s)
     p.write_text(s)
 
 p = addr_path
