@@ -544,7 +544,7 @@ import re
 s = utils.read_text()
 s, count = re.subn(
     r"static_cast<unsigned int>\(\s*std::hash<rtc::impl::Ps3Thread::id>\{\}\(std::this_thread::get_id\(\)\)\)",
-    "static_cast<unsigned int>((uintptr_t)pthread_self())",
+    "static_cast<unsigned int>((uintptr_t)pthread_self().p)",
     s
 )
 if count != 1:
