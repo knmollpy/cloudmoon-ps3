@@ -487,3 +487,36 @@ fi
 
 grep -q 'memset(\&sctp_it_ctl.thread_proc' "$SCTP_PCB"
 echo "Applied PS3 libjuice/usrsctp compatibility patches."
+
+
+# Apply one target-wide pthread-backed C++ threading compatibility layer.
+# This patches libdatachannel's own CMake target after submodule checkout, so
+# every datachannel translation unit sees the same declarations.
+python3 - "$ROOT_DIR/vendor/libdatachannel/CMakeLists.txt" "$ROOT_DIR/cmake/ps3/include/ps3_threads.hpp" <<'PY'
+import pathlib, sys
+cmake_file = pathlib.Path(sys.argv[1])
+shim_file = pathlib.Path(sys.argv[2])
+if not shim_file.is_file():
+    raise SystemExit("PS3 C++ threading shim is missing: " + str(shim_file))
+s = cmake_file.read_text()
+marker = "# CloudMoon PS3 pthread-backed C++ threading shim"
+if marker not in s:
+    needle = "target_compile_definitions(datachannel PRIVATE RTC_EXPORTS)"
+    if needle not in s:
+        raise SystemExit("Could not locate datachannel target in libdatachannel CMakeLists.txt")
+    block = marker + r"""
+if(CMAKE_SYSTEM_NAME STREQUAL "Generic")
+    target_compile_options(datachannel PRIVATE -include "\${CMAKE_SOURCE_DIR}/../cmake/ps3/include/ps3_threads.hpp")
+    target_link_libraries(datachannel PRIVATE -lpthread)
+    target_compile_options(datachannel-static PRIVATE -include "\${CMAKE_SOURCE_DIR}/../cmake/ps3/include/ps3_threads.hpp")
+    target_link_libraries(datachannel-static PRIVATE -lpthread)
+endif()
+
+"""
+    s = s.replace(needle, block + needle, 1)
+cmake_file.write_text(s)
+PY
+grep -q 'CloudMoon PS3 pthread-backed C++ threading shim' "$ROOT_DIR/vendor/libdatachannel/CMakeLists.txt"
+grep -q 'class ps3_future_state' "$ROOT_DIR/cmake/ps3/include/ps3_threads.hpp"
+grep -q 'class condition_variable' "$ROOT_DIR/cmake/ps3/include/ps3_threads.hpp"
+grep -q 'class thread' "$ROOT_DIR/cmake/ps3/include/ps3_threads.hpp"
