@@ -154,7 +154,13 @@ os_header = pathlib.Path(sys.argv[4])
 s = os_header.read_text()
 needle = "#include <sys/socket.h>"
 compat = r"""
-/* PSL1GHT's socket headers do not expose the POSIX ancillary-data macros. */
+/* PSL1GHT's socket headers omit these POSIX/BSD constants and helpers. */
+#ifndef SOCK_SEQPACKET
+#define SOCK_SEQPACKET 5
+#endif
+#ifndef IPPORT_RESERVED
+#define IPPORT_RESERVED 1024
+#endif
 #ifndef CMSG_ALIGN
 #define CMSG_ALIGN(len) (((len) + sizeof(size_t) - 1) & ~(sizeof(size_t) - 1))
 #endif
