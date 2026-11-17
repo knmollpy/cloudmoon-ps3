@@ -7,7 +7,13 @@
  * Do not include <condition_variable>, <future> or <thread> here and do
  * not redefine those types: this header is injected with -include.
  */
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <pthread.h>
+#ifdef __cplusplus
+}
+#endif
 #include <time.h>
 extern "C" int nanosleep(const struct timespec *, struct timespec *);
 #include <errno.h>
