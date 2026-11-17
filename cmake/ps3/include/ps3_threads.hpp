@@ -200,6 +200,16 @@ public:
         unique_lock<mutex> l(s_->m);
         s_->cv.wait(l, [&] { return s_->ready; });
     }
+    template <class Rep, class Period>
+    future_status wait_for(const chrono::duration<Rep, Period> &duration) const {
+        auto deadline = chrono::steady_clock::now() + duration;
+        unique_lock<mutex> l(s_->m);
+        while (!s_->ready) {
+            if (s_->cv.wait_until(l, deadline) == cv_status::timeout && !s_->ready)
+                return future_status::timeout;
+        }
+        return future_status::ready;
+    }
     const T &get() const {
         wait();
         if (s_->error)
@@ -219,6 +229,16 @@ public:
     void wait() const {
         unique_lock<mutex> l(s_->m);
         s_->cv.wait(l, [&] { return s_->ready; });
+    }
+    template <class Rep, class Period>
+    future_status wait_for(const chrono::duration<Rep, Period> &duration) const {
+        auto deadline = chrono::steady_clock::now() + duration;
+        unique_lock<mutex> l(s_->m);
+        while (!s_->ready) {
+            if (s_->cv.wait_until(l, deadline) == cv_status::timeout && !s_->ready)
+                return future_status::timeout;
+        }
+        return future_status::ready;
     }
     void get() const {
         wait();
@@ -242,6 +262,16 @@ public:
     void wait() const {
         unique_lock<mutex> l(s_->m);
         s_->cv.wait(l, [&] { return s_->ready; });
+    }
+    template <class Rep, class Period>
+    future_status wait_for(const chrono::duration<Rep, Period> &duration) const {
+        auto deadline = chrono::steady_clock::now() + duration;
+        unique_lock<mutex> l(s_->m);
+        while (!s_->ready) {
+            if (s_->cv.wait_until(l, deadline) == cv_status::timeout && !s_->ready)
+                return future_status::timeout;
+        }
+        return future_status::ready;
     }
     T get() {
         wait();
@@ -267,6 +297,16 @@ public:
     void wait() const {
         unique_lock<mutex> l(s_->m);
         s_->cv.wait(l, [&] { return s_->ready; });
+    }
+    template <class Rep, class Period>
+    future_status wait_for(const chrono::duration<Rep, Period> &duration) const {
+        auto deadline = chrono::steady_clock::now() + duration;
+        unique_lock<mutex> l(s_->m);
+        while (!s_->ready) {
+            if (s_->cv.wait_until(l, deadline) == cv_status::timeout && !s_->ready)
+                return future_status::timeout;
+        }
+        return future_status::ready;
     }
     void get() {
         wait();
@@ -314,6 +354,7 @@ private:
 
 }  // namespace std
 
+#include <future> // supplies std::future_status; gthreads-dependent classes stay disabled
 
 /*
  * libstdc++ in the PSL1GHT SDK is built without gthreads. Its std::thread
