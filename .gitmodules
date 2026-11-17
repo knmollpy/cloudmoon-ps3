@@ -1,0 +1,3 @@
+[submodule "vendor/PS3-Moonlight"]
+	path = vendor/PS3-Moonlight
+	url = https://github.com/Cruslan/PS3-Moonlight.git
