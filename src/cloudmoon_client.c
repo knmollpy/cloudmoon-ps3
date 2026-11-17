@@ -4,8 +4,29 @@
 #include "cloudmoon_ws.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <sys/time.h>
 #define CM_CLIENT_PACKET_MAX 32768
 static int cm_client_send_event(cm_cloudmoon_client_t *client,const char *packet,size_t length){return client->send?client->send(client->send_context,packet,length):-1;}
+static uint64_t cm_client_now_ms(void) {
+    struct timeval tv;
+    if (gettimeofday(&tv, NULL) != 0) return 0;
+    return (uint64_t)tv.tv_sec * 1000ULL + (uint64_t)tv.tv_usec / 1000ULL;
+}
+static int cm_client_send_registration(cm_cloudmoon_client_t *client) {
+    char out[4096];
+    int n = cm_socketio_make_client_register(out, sizeof(out),
+        client->registration.width, client->registration.height,
+        client->registration.game, client->registration.user_id,
+        client->registration.instance_id);
+    if (n < 0 || cm_client_send_event(client, out, (size_t)n) < 0)
+        return -1;
+    /* Match the browser client's metrics event after each registration attempt. */
+    n = cm_socketio_make_event(out, sizeof(out), "metrics", "\\"CloudMoon PS3\\"");
+    if (n < 0 || cm_client_send_event(client, out, (size_t)n) < 0)
+        return -1;
+    return 0;
+}
 void cm_cloudmoon_client_init(cm_cloudmoon_client_t *client,const cm_cloudmoon_registration_t *registration,cm_cloudmoon_send_fn send,cm_cloudmoon_signal_fn signal,void *send_context,void *signal_context){if(!client)return;memset(client,0,sizeof(*client));cm_session_init(&client->session);if(registration)client->registration=*registration;client->send=send;client->signal=signal;client->send_context=send_context;client->signal_context=signal_context;}
 cm_client_packet_result_t cm_cloudmoon_client_handle_packet(cm_cloudmoon_client_t *client,const char *packet,size_t length){char out[4096],copy[CM_CLIENT_PACKET_MAX+1];int n;cm_sio_event_t event;cm_session_action_t action;if(!client||!packet||!length||length>CM_CLIENT_PACKET_MAX)return CM_CLIENT_PACKET_ERROR;memcpy(copy,packet,length);copy[length]=0;
 if(copy[0]=='0'){if(length>1&&copy[1]=='{')return cm_client_send_event(client,"40",2)<0?CM_CLIENT_PACKET_ERROR:CM_CLIENT_PACKET_CONTINUE;return CM_CLIENT_PACKET_ERROR;}
@@ -14,7 +35,7 @@ if(length>=2&&copy[0]=='4'&&copy[1]=='0'){client->session.state=CM_SESSION_SOCKE
 if(length>=2&&copy[0]=='4'&&copy[1]=='1'){client->session.state=CM_SESSION_CLOSED;return CM_CLIENT_PACKET_STOP;}
 if(length>=2&&copy[0]=='4'&&copy[1]=='2'){if(cm_socketio_parse_event(copy,&event)!=0)return CM_CLIENT_PACKET_ERROR;
 if(event.type==CM_SIO_EVENT_GETOUT){char decoded[512];const char *json=event.payload;size_t json_length=event.payload_len;int error_code;if(json_length&&json[0]=='"'){int decoded_length=cm_json_decode_string(json,json_length,decoded,sizeof(decoded));if(decoded_length<0)return CM_CLIENT_PACKET_ERROR;json=decoded;json_length=(size_t)decoded_length;}if(cm_json_get_integer(json,json_length,"errorCode",&error_code)!=0)return CM_CLIENT_PACKET_ERROR;if(error_code==10){client->stream_ready=1;client->session.state=CM_SESSION_CLOSED;return CM_CLIENT_PACKET_STOP;}client->session.state=CM_SESSION_ERROR;return CM_CLIENT_PACKET_ERROR;}
-action=cm_session_on_event(&client->session,&event);switch(action){case CM_SESSION_ACTION_SEND_CLIENT_REGISTER:n=cm_socketio_make_client_register(out,sizeof(out),client->registration.width,client->registration.height,client->registration.game,client->registration.user_id,client->registration.instance_id);if(n<0)return CM_CLIENT_PACKET_ERROR;return cm_client_send_event(client,out,(size_t)n)<0?CM_CLIENT_PACKET_ERROR:CM_CLIENT_PACKET_CONTINUE;case CM_SESSION_ACTION_SEND_REGISTER:n=cm_socketio_make_register(out,sizeof(out),client->session.room_id,client->session.client_id);if(n<0)return CM_CLIENT_PACKET_ERROR;return cm_client_send_event(client,out,(size_t)n)<0?CM_CLIENT_PACKET_ERROR:CM_CLIENT_PACKET_CONTINUE;case CM_SESSION_ACTION_HANDLE_SIGNAL:if(client->signal)client->signal(client->signal_context,client,event.payload,event.payload_len);return CM_CLIENT_PACKET_CONTINUE;case CM_SESSION_ACTION_STOP:return CM_CLIENT_PACKET_STOP;default:return client->session.state==CM_SESSION_ERROR?CM_CLIENT_PACKET_ERROR:CM_CLIENT_PACKET_IGNORED;}}
+action=cm_session_on_event(&client->session,&event);switch(action){case CM_SESSION_ACTION_SEND_CLIENT_REGISTER:return cm_client_send_registration(client)<0?CM_CLIENT_PACKET_ERROR:CM_CLIENT_PACKET_CONTINUE;case CM_SESSION_ACTION_SEND_REGISTER:n=cm_socketio_make_register(out,sizeof(out),client->session.room_id,client->session.client_id);if(n<0)return CM_CLIENT_PACKET_ERROR;return cm_client_send_event(client,out,(size_t)n)<0?CM_CLIENT_PACKET_ERROR:CM_CLIENT_PACKET_CONTINUE;case CM_SESSION_ACTION_HANDLE_SIGNAL:if(client->signal)client->signal(client->signal_context,client,event.payload,event.payload_len);return CM_CLIENT_PACKET_CONTINUE;case CM_SESSION_ACTION_STOP:return CM_CLIENT_PACKET_STOP;default:return client->session.state==CM_SESSION_ERROR?CM_CLIENT_PACKET_ERROR:CM_CLIENT_PACKET_IGNORED;}}
 if(copy[0]=='1'){client->session.state=CM_SESSION_CLOSED;return CM_CLIENT_PACKET_STOP;}return CM_CLIENT_PACKET_IGNORED;}
 int cm_cloudmoon_client_send_signal(cm_cloudmoon_client_t *client,const char *json,size_t length){char packet[CM_CLIENT_PACKET_MAX],body[CM_CLIENT_PACKET_MAX];int n;if(!client||!json||!length||length>=sizeof(body))return -1;memcpy(body,json,length);body[length]=0;n=cm_socketio_make_event(packet,sizeof(packet),"msg",body);if(n<0)return -1;return cm_client_send_event(client,packet,(size_t)n);}
 #define CM_CLIENT_TX_QUEUE_COUNT 8
@@ -62,6 +83,8 @@ int cm_cloudmoon_client_run(const char *hostname,uint16_t port,const char *path,
     uint8_t message[CM_CLIENT_PACKET_MAX];
     size_t message_length=0;
     int fragmented_opcode=0,result=-1;
+    unsigned register_attempts=0;
+    uint64_t register_retry_at=0;
     if(!registration||!random_source)return -1;
     if(cm_ws_tls_connect(&transport,hostname,port,path,ca_bundle_path,timeout_seconds,random_source,random_context)!=0)return -1;
     queue=(cm_client_tx_queue*)calloc(1,sizeof(*queue)+(size_t)CM_CLIENT_TX_QUEUE_COUNT*CM_CLIENT_PACKET_MAX);
@@ -71,6 +94,20 @@ int cm_cloudmoon_client_run(const char *hostname,uint16_t port,const char *path,
     cm_cloudmoon_client_init(&client,registration,cm_client_transport_send,signal,&tx,signal_context);
     for(;;) {
         int ready,n;
+        if(client.session.state==CM_SESSION_CLIENT_REGISTER_SENT) {
+            uint64_t now=cm_client_now_ms();
+            if(register_attempts==0) {
+                register_attempts=1;
+                register_retry_at=now+3000ULL;
+            } else if(register_attempts<3 && now>=register_retry_at) {
+                if(cm_client_send_registration(&client)<0)break;
+                register_attempts++;
+                register_retry_at=now+3000ULL;
+            }
+        } else if(client.session.state==CM_SESSION_ROOM_REGISTER_SENT ||
+                  client.session.state==CM_SESSION_SIGNALING) {
+            register_attempts=3;
+        }
         if(cm_client_transport_flush(&tx)<0)break;
         ready=cm_ws_tls_wait_readable(transport,100);
         if(ready<0)break;
