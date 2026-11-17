@@ -32,7 +32,8 @@ int cm_cloudmoon_autostart(void){
  char game[192]={0},user[192]={0},instance[3072]={0},normalized[3072]={0};cm_cloudmoon_registration_t registration;cm_launch_rtc_context rtc_state={0};
  int rc=cm_read_config(game,sizeof(game),user,sizeof(user),instance,sizeof(instance));
  if(rc==0){ui_push_log("CloudMoon: edit USRDIR/cloudmoon.ini and restart.");return 0;}
- if(rc<0){ui_push_log("CloudMoon: cloudmoon.ini is incomplete or invalid.");return -1;}\n if(cm_cloudmoon_decode_instance_id(instance,normalized,sizeof(normalized))<0){ui_push_log("CloudMoon: invalid android_instance_id encoding.");return -1;}
+ if(rc<0){ui_push_log("CloudMoon: cloudmoon.ini is incomplete or invalid.");return -1;}
+ if(cm_cloudmoon_decode_instance_id(instance,normalized,sizeof(normalized))<0){ui_push_log("CloudMoon: invalid android_instance_id encoding.");return -1;}
  registration.width=1280;registration.height=720;registration.game=game;registration.user_id=user;registration.instance_id=normalized;
  ui_push_log("CloudMoon: connecting directly to coordinator...");NLOG("CloudMoon: coordinator session starting for package %s",game);
  rc=cm_cloudmoon_client_run_from_instance_id(normalized,CM_CA_PATH,20,&registration,cm_ps3_random_source,NULL,cm_launch_signal,&rtc_state);
