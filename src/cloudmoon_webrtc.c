@@ -118,7 +118,7 @@ static void cm_rtc_channel_open(int id,void*ptr) {
     CM_ATOMIC_STORE(&rtc->data_channel,id);
     n=snprintf(initial,sizeof(initial),"res>%dx%d",rtc->width,rtc->height);
     if(n>0&&(size_t)n<sizeof(initial))(void)rtcSendMessage(id,initial,n);
-    (void)rtcSendMessage(id,"adBlock>true",12);
+    /* Ad-block status is not known on PS3; do not falsely report it as enabled. */
 }
 
 static void cm_rtc_data_channel(int pc,int dc,void*ptr) {
