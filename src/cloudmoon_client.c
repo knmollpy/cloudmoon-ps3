@@ -3,6 +3,7 @@
 #include "cloudmoon_discovery.h"
 #include "cloudmoon_ws.h"
 #include <string.h>
+#include <stdlib.h>
 #define CM_CLIENT_PACKET_MAX 32768
 static int cm_client_send_event(cm_cloudmoon_client_t *client,const char *packet,size_t length){return client->send?client->send(client->send_context,packet,length):-1;}
 void cm_cloudmoon_client_init(cm_cloudmoon_client_t *client,const cm_cloudmoon_registration_t *registration,cm_cloudmoon_send_fn send,cm_cloudmoon_signal_fn signal,void *send_context,void *signal_context){if(!client)return;memset(client,0,sizeof(*client));cm_session_init(&client->session);if(registration)client->registration=*registration;client->send=send;client->signal=signal;client->send_context=send_context;client->signal_context=signal_context;}
