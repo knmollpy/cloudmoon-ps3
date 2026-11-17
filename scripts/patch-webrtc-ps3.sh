@@ -147,7 +147,7 @@ compat = """
 if "#define IPVERSION 4" not in s:
     if needle not in s:
         raise SystemExit("Could not locate sctp_output.c OS include")
-    s = s.replace(needle, needle + "\\n" + compat, 1)
+    s = s.replace(needle, needle + "\n" + compat, 1)
     sctp_output.write_text(s)
 
 os_header = pathlib.Path(sys.argv[4])
