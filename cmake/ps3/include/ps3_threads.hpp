@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include <time.h>
 #include <errno.h>
+#include <sched.h>
 #include <stdint.h>
 #include <chrono>
 #include <exception>
@@ -132,6 +133,8 @@ private:
     M *b_;
 };
 
+enum class cv_status { no_timeout, timeout };
+
 class condition_variable {
 public:
     condition_variable() { pthread_cond_init(&c_, nullptr); }
@@ -161,8 +164,6 @@ public:
 private:
     pthread_cond_t c_;
 };
-
-enum class cv_status { no_timeout, timeout };
 
 template<class T> struct ps3_future_state {
     mutex m;
@@ -213,22 +214,32 @@ private:
 template<class T> class future {
 public:
     future() = default;
+    future(future &&) noexcept = default;
+    future &operator=(future &&) noexcept = default;
+    future(const future &) = delete;
+    future &operator=(const future &) = delete;
     explicit future(shared_ptr<ps3_future_state<T>> s) : s_(move(s)) {}
     void wait() const { unique_lock<mutex> l(s_->m); s_->cv.wait(l,[&]{return s_->ready;}); }
     T get() { wait(); if(s_->error) rethrow_exception(s_->error); return move(*s_->value); }
     shared_future<T> share() { return shared_future<T>(s_); }
 private:
     shared_ptr<ps3_future_state<T>> s_;
+    friend class shared_future<T>;
 };
 template<> class future<void> {
 public:
     future() = default;
+    future(future &&) noexcept = default;
+    future &operator=(future &&) noexcept = default;
+    future(const future &) = delete;
+    future &operator=(const future &) = delete;
     explicit future(shared_ptr<ps3_future_state<void>> s) : s_(move(s)) {}
     void wait() const { unique_lock<mutex> l(s_->m); s_->cv.wait(l,[&]{return s_->ready;}); }
     void get() { wait(); if(s_->error) rethrow_exception(s_->error); }
     shared_future<void> share() { return shared_future<void>(s_); }
 private:
     shared_ptr<ps3_future_state<void>> s_;
+    friend class shared_future<void>;
 };
 template<class T> future<T> promise<T>::get_future() { return future<T>(s_); }
 inline future<void> promise<void>::get_future() { return future<void>(s_); }
@@ -237,6 +248,7 @@ template<class T> class shared_future {
 public:
     shared_future() = default;
     explicit shared_future(shared_ptr<ps3_future_state<T>> s) : s_(move(s)) {}
+    shared_future(future<T> &&f) noexcept : s_(move(f.s_)) {}
     void wait() const { unique_lock<mutex> l(s_->m); s_->cv.wait(l,[&]{return s_->ready;}); }
     const T &get() const { wait(); if(s_->error) rethrow_exception(s_->error); return *s_->value; }
 private:
@@ -246,6 +258,7 @@ template<> class shared_future<void> {
 public:
     shared_future() = default;
     explicit shared_future(shared_ptr<ps3_future_state<void>> s) : s_(move(s)) {}
+    shared_future(future<void> &&f) noexcept : s_(move(f.s_)) {}
     void wait() const { unique_lock<mutex> l(s_->m); s_->cv.wait(l,[&]{return s_->ready;}); }
     void get() const { wait(); if(s_->error) rethrow_exception(s_->error); }
 private:
@@ -267,7 +280,7 @@ class thread {
     struct task_base { virtual ~task_base(){}; virtual void run()=0; };
     template<class F,class... A> struct task final : task_base {
         F f; tuple<A...> args;
-        task(F&& fn,A&&... a):f(forward<F>(fn)),args(forward<A>(a)...){}
+        template<class FF,class... AA> task(FF&& fn,AA&&... a):f(forward<FF>(fn)),args(forward<AA>(a)...){}
         void run() override { apply(move(f),move(args)); }
     };
 public:
