@@ -275,6 +275,84 @@ if grep -q 'std::stoul(' "$RTC_CONFIGURATION"; then
 fi
 
 
+
+# The PS3 libstdc++ omits the std::sto* string conversion helpers.
+# Patch every remaining conversion in libdatachannel's compiled source tree.
+python3 - "$ROOT_DIR/vendor/libdatachannel/src" <<'PY'
+import pathlib, re, sys
+root = pathlib.Path(sys.argv[1])
+
+description = root / "description.cpp"
+s = description.read_text()
+old = """template <typename T> T to_integer(string_view s) {
+	const string str(s);
+	try {
+		return std::is_signed<T>::value ? T(std::stol(str)) : T(std::stoul(str));
+	} catch (...) {
+		throw std::invalid_argument("Invalid integer \\"" + str + "\\" in description");
+	}
+}"""
+new = """template <typename T> T to_integer(string_view s) {
+	const string str(s);
+	char *end = nullptr;
+	if constexpr (std::is_signed<T>::value) {
+		long value = strtol(str.c_str(), &end, 10);
+		if (end == str.c_str() || *end != '\\\\0')
+			throw std::invalid_argument("Invalid integer \\"" + str + "\\" in description");
+		return T(value);
+	} else {
+		unsigned long value = strtoul(str.c_str(), &end, 10);
+		if (end == str.c_str() || *end != '\\\\0')
+			throw std::invalid_argument("Invalid integer \\"" + str + "\\" in description");
+		return T(value);
+	}
+}"""
+if old not in s:
+    raise SystemExit("Could not locate description.cpp to_integer helper")
+s = s.replace(old, new, 1)
+if "#include <stdlib.h>" not in s:
+    lines = s.splitlines(True)
+    i = max((i for i, line in enumerate(lines) if line.startswith("#include ")), default=-1)
+    if i < 0:
+        raise SystemExit("Cannot add stdlib include to description.cpp")
+    lines.insert(i + 1, "#include <stdlib.h>\\n")
+    s = "".join(lines)
+description.write_text(s)
+
+utils = root / "impl" / "utils.cpp"
+s = utils.read_text()
+s = s.replace("std::stoi(value, nullptr, 16)", "strtol(value.c_str(), nullptr, 16)")
+if "std::stoi(" in s:
+    raise SystemExit("std::stoi remains in libdatachannel utils.cpp")
+if "#include <stdlib.h>" not in s:
+    lines = s.splitlines(True)
+    i = max((i for i, line in enumerate(lines) if line.startswith("#include ")), default=-1)
+    if i < 0:
+        raise SystemExit("Cannot add stdlib include to libdatachannel utils.cpp")
+    lines.insert(i + 1, "#include <stdlib.h>\\n")
+    s = "".join(lines)
+utils.write_text(s)
+
+ice = root / "impl" / "icetransport.cpp"
+s = ice.read_text()
+s = s.replace("std::stoul(servbuffer)", "strtoul(servbuffer, nullptr, 10)")
+if "std::stoul(" in s:
+    raise SystemExit("std::stoul remains in libdatachannel icetransport.cpp")
+if "#include <stdlib.h>" not in s:
+    lines = s.splitlines(True)
+    i = max((i for i, line in enumerate(lines) if line.startswith("#include ")), default=-1)
+    if i < 0:
+        raise SystemExit("Cannot add stdlib include to icetransport.cpp")
+    lines.insert(i + 1, "#include <stdlib.h>\\n")
+    s = "".join(lines)
+ice.write_text(s)
+
+for p in root.rglob("*.cpp"):
+    text = p.read_text(errors="ignore")
+    if re.search(r"std::sto(?:i|l|ul|ll|ull|f|d)\\s*\\(", text):
+        raise SystemExit("Unsupported std::sto* conversion remains in " + str(p))
+PY
+
 # usrsctp has no RNG backend selected for the PSL1GHT/newlib target.
 # Use the OS entropy device (never a deterministic/fuzzing RNG).
 python3 - "$ROOT_DIR/vendor/libdatachannel/deps/usrsctp/usrsctplib/user_environment.c" <<'PY'
