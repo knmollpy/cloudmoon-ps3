@@ -65,7 +65,7 @@ static int cm_rtc_send_signal(cm_cloudmoon_webrtc_t*rtc,const char*type,
     }
     if(mid) {
         if(cm_json_quote(qmid,sizeof(qmid),mid)<0){__sync_sub_and_fetch(&rtc->signaling_users,1);return -1;}
-        n=snprintf(json,sizeof(json),"{\"type\":\"%s\",\"candidate\":%s,\"mid\":%s,\"label\":%d,\"sdpMid\":%s,\"sdpMLineIndex\":%d}",type,qvalue,qmid,label,qmid,label);
+        n=snprintf(json,sizeof(json),"{\"type\":\"%s\",\"candidate\":%s,\"label\":%d,\"id\":%s}",type,qvalue,label,qmid);
     } else n=snprintf(json,sizeof(json),"{\"type\":\"%s\",\"sdp\":%s}",type,qvalue);
     if(n<0||(size_t)n>=sizeof(json))result=-1;
     else result=cm_cloudmoon_client_send_signal(client,json,(size_t)n);
@@ -221,7 +221,7 @@ static void cm_rtc_input_loop(void*arg) {
 
 int cm_cloudmoon_webrtc_create(cm_cloudmoon_webrtc_t**out,
                                cm_cloudmoon_client_t*client,int width,int height) {
-    static const char*ice_servers[]={"stun:stun.nenly.cn:53006","stun:stun.l.google.com:19302"};
+    static const char*ice_servers[]={"stun:stun.ipfire.org:3478","stun:global.stun.twilio.com:3478","stun:stun.l.google.com:19302"};
     rtcConfiguration config;
     cm_cloudmoon_webrtc_t*rtc;
     if(!out||!client||width<=0||height<=0)return -1;
@@ -267,7 +267,9 @@ void cm_cloudmoon_webrtc_signal(void*context,const char*json,size_t length) {
         if(cm_json_get_string(json,length,"candidate",candidate,sizeof(candidate))<0)return;
         if(cm_json_get_integer(json,length,"label",&label)<0)
             (void)cm_json_get_integer(json,length,"sdpMLineIndex",&label);
-        if(cm_json_get_string(json,length,"sdpMid",candidate_mid,sizeof(candidate_mid))==0)
+        if(cm_json_get_string(json,length,"id",candidate_mid,sizeof(candidate_mid))==0)
+            mid=candidate_mid;
+        else if(cm_json_get_string(json,length,"sdpMid",candidate_mid,sizeof(candidate_mid))==0)
             mid=candidate_mid;
         else if(cm_json_get_string(json,length,"mid",candidate_mid,sizeof(candidate_mid))==0)
             mid=candidate_mid;
