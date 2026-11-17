@@ -117,20 +117,6 @@ private:
     pthread_cond_t c_;
 };
 
-template <class M>
-class shared_lock {
-public:
-    explicit shared_lock(M &m) : m_(&m), owns_(true) { m_->lock_shared(); }
-    ~shared_lock() {
-        if (owns_)
-            m_->unlock_shared();
-    }
-    shared_lock(const shared_lock &) = delete;
-    shared_lock &operator=(const shared_lock &) = delete;
-private:
-    M *m_;
-    bool owns_;
-};
 
 template <class T>
 struct ps3_future_state {
