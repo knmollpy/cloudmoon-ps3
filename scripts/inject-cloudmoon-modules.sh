@@ -498,6 +498,21 @@ replace_once('"Press \\x01 to return."',
              '"Press \\x01 to return to the menu."',
              "error hint")
 
+# Apply CloudMoon's restrained navy/metallic-blue visual palette.
+# This changes UI colors only; Tiny3D initialization, viewport, thread and loop stay untouched.
+palette = {
+    "0xff82b1ff": "0xff55c8ff",  # selected text: electric cyan
+    "0xffb0bec5": "0xffa9bfd8",  # secondary text: cool silver
+    "0xff9e9e9e": "0xff7894b8",  # hints: muted blue-grey
+    "0xff80d8ff": "0xff65caff",  # log text: icy blue
+    "0.12f, 0.12f, 0.12f": "0.025f, 0.055f, 0.110f",  # panel navy
+    "0.090f, 0.090f, 0.090f": "0.012f, 0.026f, 0.060f", # deep footer
+    "0.16f, 0.16f, 0.16f": "0.035f, 0.075f, 0.135f",  # selected row
+    "0.247f, 0.318f, 0.710f": "0.035f, 0.420f, 0.920f", # blue accent
+}
+for old, new in palette.items():
+    s = s.replace(old, new)
+
 # Keep the upstream 64 KiB UI thread stack unchanged.
 if "sysThreadCreate(&ui_thread, ui_loop, 0, 500, 0x10000," not in s:
     raise SystemExit("Upstream UI thread stack is missing")
