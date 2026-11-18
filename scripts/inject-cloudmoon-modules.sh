@@ -685,7 +685,7 @@ cloudmoon_connect_view = """            } else if (ui_state == UI_STATE_LINKING)
                 SetFontSize(SF(15), SF(15));
                 SetFontColor(0xff8ca6c6, 0);
                 DrawString(SX(55), SY(325), "Only the active game session is sent to this PS3.");
-                DrawString(SX(55), SY(350), "Your Google password is never sent to this application.");
+                DrawString(SX(55), SY(350), "The one-time QR expires after 10 minutes.");
                 if (ui_cloudmoon_pair_url[0]) {
                     DrawString(SX(55), SY(388), "Local address:");
                     DrawString(SX(55), SY(410), ui_cloudmoon_pair_url);
