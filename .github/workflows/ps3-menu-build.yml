@@ -1,0 +1,33 @@
+name: CloudMoon PS3 menu-only B PKG
+on:
+  push:
+    branches: [ps3-menu-redesign-b-safe]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cloudmoon-menu-pkg:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install image preparation dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pil
+      - name: Build menu-only diagnostic B (WebRTC disabled)
+        run: make prototype-pkg
+      - name: Validate menu-only package
+        run: |
+          PKG="$(find vendor/PS3-Moonlight/build -maxdepth 1 -type f -name '*.pkg' -print -quit)"
+          test -n "$PKG"
+          python3 scripts/validate-ps3-menu-pkg.py --pkg "$PKG" --stage vendor/PS3-Moonlight/build/pkg --elf vendor/PS3-Moonlight/cloudmoon-ps3.elf
+      - name: Upload menu-only CloudMoon PKG
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudmoon-ps3-menu-only-b-safe
+          path: vendor/PS3-Moonlight/build/*.pkg
+          if-no-files-found: error
+          retention-days: 14
