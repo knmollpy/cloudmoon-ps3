@@ -20,16 +20,16 @@ jobs:
       - name: Test CloudMoon signaling, WebSocket and session protocol
         run: make host-test
       - name: Build native WebRTC stack and PS3 HEN package
-        run: make cloudmoon-pkg
+        run: make cloudmoon-safe-pkg
       - name: Validate PS3 package before upload
         run: |
           PKG="$(find vendor/PS3-Moonlight/build -maxdepth 1 -type f -name '*.pkg' -print -quit)"
           test -n "$PKG"
-          python3 scripts/validate-ps3-pkg.py --pkg "$PKG" --stage vendor/PS3-Moonlight/build/pkg --elf vendor/PS3-Moonlight/cloudmoon-ps3.elf
+          python3 scripts/validate-ps3-pkg.py --pkg "$PKG" --stage vendor/PS3-Moonlight/build/pkg --elf vendor/PS3-Moonlight/cloudmoon-ps3.elf --mode safe
       - name: Upload CloudMoon PS3 PKG
         uses: actions/upload-artifact@v4
         with:
-          name: cloudmoon-ps3-hen-pkg
+          name: cloudmoon-ps3-hen-safe-pkg
           path: vendor/PS3-Moonlight/build/*.pkg
           if-no-files-found: error
           retention-days: 14
