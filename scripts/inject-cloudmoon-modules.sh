@@ -129,8 +129,22 @@ PY
 
 if ! grep -q 'src/cloudmoon_webrtc.c' "$PS3_BASE/Makefile"; then
     sed -i 's#src/cloudmoon_ws_tls.c#src/cloudmoon_ws_tls.c src/cloudmoon_mbedtls_entropy.c src/cloudmoon_clock_compat.c src/cloudmoon_time_compat.c src/cloudmoon_webrtc.c src/cloudmoon_launch.c#' "$PS3_BASE/Makefile"
-    # Put the freshly built Mbed TLS headers before PSL1GHT's older bundled headers.
-    sed -i 's#COMMON_INCLUDES[[:space:]]*:=[[:space:]]*#COMMON_INCLUDES := -D__PS3__ -I'"$ROOT_DIR"'/build/ps3deps/include #' "$PS3_BASE/Makefile"
+    # Prepend the freshly built Mbed TLS headers but preserve all upstream SDK/Freetype includes.
+    python3 - "$PS3_BASE/Makefile" "$ROOT_DIR/build/ps3deps/include" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+include = sys.argv[2]
+lines = p.read_text().splitlines()
+assignment = "COMMON_INCLUDES := -I" + include + " $(COMMON_INCLUDES)"
+if assignment not in lines:
+    for i, line in enumerate(lines):
+        if line.startswith("COMMON_INCLUDES") and ":=" in line:
+            lines.insert(i + 1, assignment)
+            break
+    else:
+        raise SystemExit("Could not locate upstream COMMON_INCLUDES assignment")
+p.write_text("\\n".join(lines) + "\\n")
+PY
     sed -i 's#-I./src -I./src/spu/include#-I./src -I./src/spu/include -DCM_ENABLE_WEBRTC -DRTC_STATIC#' "$PS3_BASE/Makefile"
     # Prefer the just-built Mbed TLS 3.x archives over older SDK portlibs.
     sed -i 's#-L./third_party/moonlight-common-c#-L'"$ROOT_DIR"'/build/ps3deps/lib -L./third_party/moonlight-common-c#' "$PS3_BASE/Makefile"
@@ -315,9 +329,8 @@ fi
 
 # Use the unmodified Tiny3D library from the upstream PS3 SDK.
 
-# Apply screen/RSX safety to the no-WebRTC diagnostic build as well. The full
-# WebRTC branch above already patched these call sites; B must use the same
-# display detection, UI scaling and Tiny3D failure handling to be a valid test.
+# Apply the same GameOS display-mode query to the no-WebRTC diagnostic build.
+# Both variants retain upstream Tiny3D initialization and viewport code.
 python3 - "$DST/main.c" "$DST/ui.c" <<'PY'
 import pathlib
 import sys
