@@ -505,9 +505,15 @@ palette = {
     "0xffb0bec5": "0xffa9bfd8",  # secondary text: cool silver
     "0xff9e9e9e": "0xff7894b8",  # hints: muted blue-grey
     "0xff80d8ff": "0xff65caff",  # log text: icy blue
+    "0.188f, 0.188f, 0.188f": "0.008f, 0.020f, 0.045f", # main background: deep navy
+    "0.141f, 0.141f, 0.141f": "0.016f, 0.035f, 0.070f", # lower background: navy
+    "0.200f, 0.260f, 0.620f": "0.025f, 0.160f, 0.360f", # header gradient
+    "0.102f, 0.137f, 0.494f": "0.020f, 0.340f, 0.780f", # metallic-blue separator
+    "0.118f, 0.118f, 0.118f": "0.018f, 0.040f, 0.075f", # log panel
     "0.12f, 0.12f, 0.12f": "0.025f, 0.055f, 0.110f",  # panel navy
     "0.090f, 0.090f, 0.090f": "0.012f, 0.026f, 0.060f", # deep footer
     "0.16f, 0.16f, 0.16f": "0.035f, 0.075f, 0.135f",  # selected row
+    "1.0f, 0.51f, 0.69f": "0.10f, 0.55f, 0.95f", # legacy pink marker -> blue
     "0.247f, 0.318f, 0.710f": "0.035f, 0.420f, 0.920f", # blue accent
 }
 for old, new in palette.items():
