@@ -13,7 +13,7 @@ extern "C" {
 #define CM_PAIR_URL_CAP 160
 
 /* Starts a one-time, LAN-only pairing page and returns its URL plus QR matrix. */
-int cm_cloudmoon_pair_start(char *url, size_t url_capacity,
+int cm_cloudmoon_pair_start(const char *selected_game, char *url, size_t url_capacity,
                             uint8_t *modules, size_t modules_capacity,
                             int *module_size);
 void cm_cloudmoon_pair_stop(void);
