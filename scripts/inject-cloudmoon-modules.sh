@@ -549,3 +549,13 @@ echo "CloudMoon transport modules integrated."
 if [ "${CLOUDMOON_WEBRTC:-0}" = "1" ]; then
   echo "WebRTC, DualShock input and H.264/Opus PS3 decoder bridges integrated."
 fi
+
+# Keep CloudMoon XMB artwork in both the no-WebRTC B and WebRTC builds.
+# This is shared by both build variants: the menu-only B package must also
+# carry the custom XMB icon and background, without enabling WebRTC.
+python3 "$ROOT_DIR/scripts/generate-cloudmoon-art.py" "$ROOT_DIR/assets"
+cp "$ROOT_DIR/assets/ICON0.PNG" "$PS3_BASE/ICON0.PNG"
+cp "$ROOT_DIR/assets/PIC1.PNG" "$PS3_BASE/PIC1.PNG"
+if ! grep -Fq 'cp PIC1.PNG $(BUILD)/pkg/PIC1.PNG' "$PS3_BASE/Makefile"; then
+  sed -i '/cp $(ICON0) $(BUILD)\/pkg\/ICON0.PNG/a\\\tcp PIC1.PNG $(BUILD)/pkg/PIC1.PNG' "$PS3_BASE/Makefile"
+fi
