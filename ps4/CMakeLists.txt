@@ -17,6 +17,13 @@ add_library(cloudmoon_protocol_core STATIC
 )
 target_include_directories(cloudmoon_protocol_core PUBLIC ../src)
 target_compile_options(cloudmoon_protocol_core PRIVATE -Wall -Wextra -Werror)
+
+add_library(cloudmoon_account_core STATIC
+    src/account/cloudmoon_session_link.c
+)
+target_include_directories(cloudmoon_account_core PUBLIC src/account ../src)
+target_link_libraries(cloudmoon_account_core PUBLIC cloudmoon_protocol_core)
+target_compile_options(cloudmoon_account_core PRIVATE -Wall -Wextra -Werror)
 target_include_directories(cloudmoon_ps4_ui PUBLIC src/ui)
 target_compile_options(cloudmoon_ps4_ui PRIVATE -Wall -Wextra -Werror)
 
@@ -32,6 +39,11 @@ if(CM_UI_BUILD_TESTS)
     target_link_libraries(cloudmoon_protocol_smoke PRIVATE cloudmoon_protocol_core)
     target_compile_options(cloudmoon_protocol_smoke PRIVATE -Wall -Wextra -Werror)
     add_test(NAME cloudmoon_protocol_smoke COMMAND cloudmoon_protocol_smoke)
+
+    add_executable(cloudmoon_session_link_smoke tests/session_link_smoke.c)
+    target_link_libraries(cloudmoon_session_link_smoke PRIVATE cloudmoon_account_core)
+    target_compile_options(cloudmoon_session_link_smoke PRIVATE -Wall -Wextra -Werror)
+    add_test(NAME cloudmoon_session_link_smoke COMMAND cloudmoon_session_link_smoke)
 endif()
 
 if(PS4)
@@ -41,6 +53,6 @@ if(PS4)
         src/platform/orbis_dashboard.c
     )
     target_include_directories(cloudmoon_ps4_orbis_platform PUBLIC src/platform)
-    target_link_libraries(cloudmoon_ps4_orbis_platform PUBLIC cloudmoon_ps4_ui cloudmoon_protocol_core)
+    target_link_libraries(cloudmoon_ps4_orbis_platform PUBLIC cloudmoon_ps4_ui cloudmoon_protocol_core cloudmoon_account_core)
     target_compile_options(cloudmoon_ps4_orbis_platform PRIVATE -Wall -Wextra)
 endif()
