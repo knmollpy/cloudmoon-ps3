@@ -1,6 +1,14 @@
 name: CloudMoon PS3 freeze bisect
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'Makefile'
+      - 'scripts/inject-cloudmoon-modules.sh'
+      - 'scripts/validate-ps3-pkg.py'
+      - '.github/workflows/ps3-bisect.yml'
+      - 'vendor/**'
   workflow_dispatch:
 
 permissions:
