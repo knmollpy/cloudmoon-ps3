@@ -22,7 +22,8 @@ footer{color:#8298b2;font-size:12px;text-align:center;margin:20px}
 <main>
   <div class="brand">CloudMoon PS3 · Mobile Link</div>
   <h1>Vincular una partida a tu PS3</h1>
-  <p class="lead">Usá el celular para iniciar sesión en CloudMoon y preparar el archivo de sesión que leerá nuestra aplicación de PS3.</p>
+  <p class="lead">Usá el celular para iniciar sesión en CloudMoon y vincular a la PS3 la partida del juego que elegiste.</p>
+  <p class="small" id="selectedGame" aria-live="polite"></p>
   <section class="card">
     <div class="steps">
       <div class="step"><span class="num">1</span><div><b>Iniciá sesión en CloudMoon</b><div class="small">Abrí la página oficial y usá el método de acceso que CloudMoon te ofrezca.</div><a class="linkbtn secondary" href="https://web.cloudmoonapp.com/es/" target="_blank" rel="noopener">Abrir CloudMoon oficial</a><div class="small">Dejá esta pestaña abierta. Iniciá sesión y abrí el juego en la otra pestaña; después copiá la URL completa de la partida y volvé acá.</div></div></div>
@@ -45,10 +46,16 @@ footer{color:#8298b2;font-size:12px;text-align:center;margin:20px}
   var input=document.getElementById("sessionUrl");
   var button=document.getElementById("make");
   var status=document.getElementById("status");
-  var pairKey=new URLSearchParams(window.location.search).get("k");
+  var query=new URLSearchParams(window.location.search);
+  var pairKey=query.get("k");
+  var selectedGame=query.get("game")||"";
   if(pairKey){
     button.textContent="Validar sesión y vincular con esta PS3";
     document.getElementById("ftpHelp").style.display="none";
+  }
+  if(selectedGame){
+    document.getElementById("selectedGame").textContent=
+      "Juego elegido en la PS3: "+selectedGame+". La sesión importada debe corresponder exactamente a este paquete.";
   }
 
   function show(kind,message){
@@ -87,6 +94,7 @@ footer{color:#8298b2;font-size:12px;text-align:center;margin:20px}
     if(!/^[A-Za-z0-9+/_=-]+$/.test(instance))throw new Error("El identificador de sesión no tiene el formato Base64 esperado.");
     decodeInstance(instance);
     if(!/^[A-Za-z0-9._-]+$/.test(game))throw new Error("El identificador del juego no tiene un formato válido.");
+    if(selectedGame && game!==selectedGame)throw new Error("La sesión no corresponde al juego elegido en la PS3. Abrí ese título en CloudMoon y volvé a copiar la URL.");
     if(user.length>180)throw new Error("El identificador de usuario es demasiado largo.");
     return {game:game,user:user,instance:instance};
   }
