@@ -270,7 +270,7 @@ static void cm_pair_handle_client(int fd) {
             ui_set_state(UI_STATE_LINKED);
             (void)cm_pair_send_response(fd, 200, "OK",
                 "application/json; charset=utf-8",
-                "{\"ok\":true,\"message\":\"Cuenta vinculada. Ya podés volver a la PS3.\"}");
+                "{\"ok\":true,\"message\":\"Sesión de juego vinculada. Ya podés volver a la PS3.\"}");
         } else {
             (void)cm_pair_send_response(fd, 400, "Bad Request",
                 "application/json; charset=utf-8",
