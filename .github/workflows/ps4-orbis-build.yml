@@ -21,6 +21,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Initialize Mbed TLS and framework sources
+        run: |
+          git submodule update --init --depth 1 vendor/mbedtls
+          git -C vendor/mbedtls submodule update --init --depth 1 framework
+
       - name: Install missing LLVM linker tools
         run: |
           sudo apt-get update -qq
