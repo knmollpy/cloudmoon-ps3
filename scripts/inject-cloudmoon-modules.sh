@@ -306,6 +306,7 @@ if "tiny3d_UserViewportSurface(1, (float)ui_width, (float)ui_height);" not in u:
 if "sysThreadCreate(&ui_thread, ui_loop, 0, 500, 0x10000," not in u:
     raise SystemExit("Unexpected UI thread stack configuration")
 ui.write_text(u)
+PY
   # Ship a real CA bundle inside the PKG so TLS certificate verification works.
   if ! grep -q 'cacert.pem' "$PS3_BASE/Makefile"; then
     sed -i '/mkdir -p $(BUILD)\/pkg\/USRDIR/a\	cp '"$ROOT_DIR"'/assets/cacert.pem $(BUILD)/pkg/USRDIR/cacert.pem' "$PS3_BASE/Makefile"
