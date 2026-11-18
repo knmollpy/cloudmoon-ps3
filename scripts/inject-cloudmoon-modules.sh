@@ -389,36 +389,6 @@ if s.count(old_exit) != 1:
     raise SystemExit("Could not uniquely locate final main() network shutdown")
 s = s.replace(old_exit, new_exit, 1)
 
-# Early boot log, independent of NLOG, UI and network initialization.
-if "void cm_boot_log(const char *message)" not in s:
-    include_anchor = '#include "cloudmoon_launch.h"'
-    if include_anchor not in s:
-        raise SystemExit("Could not locate CloudMoon include anchor for boot logger")
-    boot_logger = """#include <stdio.h>
-static void cm_boot_log_write(const char *message) {
-  FILE *f = fopen("/dev_hdd0/tmp/cloudmoon_boot.log", "a");
-  if (!f) f = fopen("/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon_boot.log", "a");
-  if (f) { fprintf(f, "%s\\n", message ? message : "(null)"); fclose(f); }
-}
-/* Run after the C runtime's low-priority lock/stdio constructors. */
-__attribute__((constructor(200))) static void cm_boot_log_constructor(void) {
-  cm_boot_log_write("0 constructor");
-}
-void cm_boot_log(const char *message) { cm_boot_log_write(message); }
-
-"""
-    s = s.replace(include_anchor, include_anchor + "\n" + boot_logger, 1)
-main_anchor = "int main("
-if 'cm_boot_log("1 main")' not in s:
-    pos = s.find(main_anchor)
-    if pos < 0: raise SystemExit("Could not locate main() for boot logging")
-    brace = s.find("{", pos)
-    if brace < 0: raise SystemExit("Could not locate main() opening brace")
-    s = s[:brace+1] + '\n  cm_boot_log("1 main");' + s[brace+1:]
-s = s.replace('ui_init(width, height, is_4_3);', 'ui_init(width, height, is_4_3);\n  cm_boot_log("3 ui_init complete");', 1)
-s = s.replace('ps3input_start();', 'ps3input_start();\n  cm_boot_log("4 ps3input_start complete");', 1)
-s = s.replace('NLOG("CloudMoon: network initialization result %d", net_rc);', 'NLOG("CloudMoon: network initialization result %d", net_rc);\n        cm_boot_log("2 network init attempted");')
-s = s.replace('NLOG("CloudMoon: Connect to CloudMoon selected; starting coordinator session.");', 'NLOG("CloudMoon: Connect to CloudMoon selected; starting coordinator session.");\n        cm_boot_log("5 Connect selected");')
 p.write_text(s)
 
 ui = pathlib.Path(sys.argv[2])
@@ -484,6 +454,39 @@ if "CLOUDMOON_STOCK_DISPLAY_QUERY" not in main:
     if start < 0 or end < 0:
         raise SystemExit("Could not locate upstream PS3 display detection block")
     main = main[:start] + "  /* CLOUDMOON_STOCK_DISPLAY_QUERY */\n" + safe_main + main[end:]
+// No global constructor: file I/O begins only after the PS3 C runtime enters main().
+if '#include <stdio.h>' not in main:
+    include_anchor = '#include "input.h"'
+    if include_anchor not in main:
+        raise SystemExit("Could not locate main include for boot logger")
+    main = main.replace(include_anchor, include_anchor + '\n#include <stdio.h>', 1)
+logger_code = r"""static void cm_boot_log_write(const char *message) {
+    FILE *f = fopen("/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon_boot.log", "a");
+    if (f) {
+        fprintf(f, "%s\n", message ? message : "(null)");
+        fclose(f);
+    }
+}
+void cm_boot_log(const char *message) { cm_boot_log_write(message); }
+
+"""
+if "void cm_boot_log(const char *message)" not in main:
+    anchor = '#include <stdio.h>'
+    main = main.replace(anchor, anchor + '\n' + logger_code, 1)
+main_start = main.find("int main(")
+if main_start < 0:
+    raise SystemExit("Could not locate main() for explicit boot logging")
+main_head, main_body = main[:main_start], main[main_start:]
+if 'cm_boot_log("1 main")' not in main_body:
+    brace = main_body.find("{")
+    if brace < 0:
+        raise SystemExit("Could not locate main() opening brace")
+    main_body = main_body[:brace + 1] + '\n    cm_boot_log("1 main");' + main_body[brace + 1:]
+main_body = main_body.replace('ui_init(width, height, is_4_3);',
+                              'ui_init(width, height, is_4_3);\n    cm_boot_log("2 ui_init complete");', 1)
+main_body = main_body.replace('ps3input_start();',
+                              'ps3input_start();\n    cm_boot_log("3 ps3input_start complete");', 1)
+main = main_head + main_body
 main_path.write_text(main)
 
 # Tiny3D is deliberately untouched to match the upstream, working UI path.
@@ -500,15 +503,20 @@ PY
 # Align the inherited Moonlight screen with the CloudMoon session workflow.
 # Keep the stream settings page, but remove the obsolete Sunshine host-IP action.
 python3 - "$DST/ui.c" "$DST/ui.h" <<'PY'
+import os
 import pathlib
 import sys
 
+webrtc_enabled = 1 if os.environ.get("CLOUDMOON_WEBRTC") == "1" else 0
 p = pathlib.Path(sys.argv[1])
 s = p.read_text()
 header_path = pathlib.Path(sys.argv[2])
 h = header_path.read_text()
 if "CLOUDMOON_PS3_MENU_PATCH" in s:
     raise SystemExit(0)
+
+s = s.replace("#define UI_CLOUDMOON_QR_MAX 3249",
+              f"#define CLOUDMOON_WEBRTC_ENABLED {webrtc_enabled}\n#define UI_CLOUDMOON_QR_MAX 3249", 1)
 
 h = h.replace("    UI_STATE_ERROR\n};",
               "    UI_STATE_ERROR,\n    UI_STATE_LINKING,\n    UI_STATE_LINKED\n};")
@@ -662,10 +670,14 @@ app_list_input_replacement = """        } else if (ui_state == UI_STATE_APPLIST)
                         int catalog_id = current_app_list.apps[active_app_idx].id;
                         const cm_cloudmoon_game_t *selected = cm_cloudmoon_catalog_at((size_t)catalog_id);
                         if (selected && cm_cloudmoon_catalog_select(catalog_id) == 0) {
+#if CLOUDMOON_WEBRTC_ENABLED
                             cloudmoon_catalog_mode = 0;
                             app_selection_confirmed = 0;
                             ui_push_log("CloudMoon: selected game; scan QR to link its active session.");
                             ui_state = UI_STATE_LINKING;
+#else
+                            ui_push_log("CloudMoon transport is disabled in this safe build; catalogue browsing only.");
+#endif
                         }
                     } else {
                         app_selection_confirmed = 1;
@@ -733,11 +745,21 @@ new_actions = """                // CloudMoon native catalog and session actions
                         active_settings_item = 0;
                     }
                 } else if (active_main_item == 2) {
-                    if (pad.buttons_pressed & A_FLAG) ui_state = UI_STATE_LINKING;
+                    if (pad.buttons_pressed & A_FLAG) {
+#if CLOUDMOON_WEBRTC_ENABLED
+                        ui_state = UI_STATE_LINKING;
+#else
+                        ui_push_log("Phone linking is unavailable in this safe build.");
+#endif
+                    }
                 } else if (active_main_item == 3) {
                     if (pad.buttons_pressed & A_FLAG) {
+#if CLOUDMOON_WEBRTC_ENABLED
                         ui_flush_settings_if_dirty();
                         ui_state = UI_STATE_PAIRING;
+#else
+                        ui_push_log("CloudMoon streaming transport is not loaded in this safe build.");
+#endif
                     }
                 }
 
