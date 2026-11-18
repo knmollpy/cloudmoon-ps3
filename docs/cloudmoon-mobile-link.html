@@ -25,7 +25,7 @@ footer{color:#8298b2;font-size:12px;text-align:center;margin:20px}
   <p class="lead">Usá el celular para iniciar sesión en CloudMoon y preparar el archivo de sesión que leerá nuestra aplicación de PS3.</p>
   <section class="card">
     <div class="steps">
-      <div class="step"><span class="num">1</span><div><b>Iniciá sesión en CloudMoon</b><div class="small">Abrí la página oficial y usá el método de acceso que CloudMoon te ofrezca.</div><a class="linkbtn secondary" href="https://web.cloudmoonapp.com/es/" target="_blank" rel="noopener">Abrir CloudMoon oficial</a></div></div>
+      <div class="step"><span class="num">1</span><div><b>Iniciá sesión en CloudMoon</b><div class="small">Abrí la página oficial y usá el método de acceso que CloudMoon te ofrezca.</div><a class="linkbtn secondary" href="https://web.cloudmoonapp.com/es/" target="_blank" rel="noopener">Abrir CloudMoon oficial</a><div class="small">Dejá esta pestaña abierta. Iniciá sesión y abrí el juego en la otra pestaña; después copiá la URL completa de la partida y volvé acá.</div></div></div>
       <div class="step"><span class="num">2</span><div><b>Iniciá el juego que quieras usar</b><div class="small">Cuando la partida cargue, copiá la dirección completa que aparece en la barra del navegador. No copies una contraseña ni un código de verificación.</div></div></div>
       <div class="step"><span class="num">3</span><div><b>Generá el archivo para PS3</b><div class="small">Pegá la dirección abajo. El procesamiento ocurre únicamente en este dispositivo.</div></div></div>
     </div>
@@ -94,13 +94,29 @@ footer{color:#8298b2;font-size:12px;text-align:center;margin:20px}
         "game="+s.game+"\n"+
         "user_id="+s.user+"\n"+
         "android_instance_id="+s.instance+"\n";
-      var blob=new Blob([contents],{type:"text/plain;charset=utf-8"});
-      var objectUrl=URL.createObjectURL(blob);
-      var a=document.createElement("a");
-      a.href=objectUrl;a.download="cloudmoon.ini";
-      document.body.appendChild(a);a.click();a.remove();
-      setTimeout(function(){URL.revokeObjectURL(objectUrl);},1000);
-      show("ok","Sesión validada. Se descargó cloudmoon.ini.\nJuego: "+s.game+"\nUsuario: "+s.user+"\n\nAhora transferí el archivo por FTP a la carpeta USRDIR de CloudMoon PS3.");
+      var pairKey=new URLSearchParams(window.location.search).get("k");
+      if(pairKey){
+        fetch("/submit?k="+encodeURIComponent(pairKey),{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          cache:"no-store",
+          body:JSON.stringify({url:raw})
+        }).then(function(response){
+          return response.json().then(function(data){
+            if(!response.ok||!data.ok)throw new Error(data.error||"No se pudo vincular la sesión.");
+            show("ok",data.message+"\\n\\nYa podés volver a la PS3.");
+            button.disabled=true;
+          });
+        }).catch(function(error){show("error",error.message||"Error de conexión con la PS3.");button.disabled=false;});
+      }else{
+        var blob=new Blob([contents],{type:"text/plain;charset=utf-8"});
+        var objectUrl=URL.createObjectURL(blob);
+        var a=document.createElement("a");
+        a.href=objectUrl;a.download="cloudmoon.ini";
+        document.body.appendChild(a);a.click();a.remove();
+        setTimeout(function(){URL.revokeObjectURL(objectUrl);},1000);
+        show("ok","Sesión validada. Se descargó cloudmoon.ini.\\nJuego: "+s.game+"\\nUsuario: "+s.user+"\\n\\nAhora transferí el archivo por FTP a la carpeta USRDIR de CloudMoon PS3.");
+      }
     }catch(e){
       show("error",e && e.message ? e.message : "No se pudo validar la sesión.");
     }finally{
