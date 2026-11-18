@@ -385,32 +385,34 @@ if "sysThreadCreate(&ui_thread, ui_loop, 0, 500, 0x10000," not in u:
 ui.write_text(u)
 PY
 
+
+fi
+
 # These app resources are required in both SAFE and full packages.
-  python3 "$ROOT_DIR/scripts/generate-cloudmoon-art.py" "$ROOT_DIR/assets"
-  # Existing user artwork may have been saved at a preview size (for example 128x70).
-  # Normalize it to the PS3 XMB ICON0 contract before staging the PKG.
-  python3 "$ROOT_DIR/scripts/resize-ps3-icon.py" "$ROOT_DIR/assets/ICON0.PNG"
-  if [ -s "$ROOT_DIR/assets/ICON0.PNG" ]; then
-    cp "$ROOT_DIR/assets/ICON0.PNG" "$PS3_BASE/ICON0.PNG"
-  else
-    echo "CloudMoon ICON0.PNG missing from assets/" >&2
-    exit 1
+python3 "$ROOT_DIR/scripts/generate-cloudmoon-art.py" "$ROOT_DIR/assets"
+# Existing user artwork may have been saved at a preview size (for example 128x70).
+# Normalize it to the PS3 XMB ICON0 contract before staging the PKG.
+python3 "$ROOT_DIR/scripts/resize-ps3-icon.py" "$ROOT_DIR/assets/ICON0.PNG"
+if [ -s "$ROOT_DIR/assets/ICON0.PNG" ]; then
+  cp "$ROOT_DIR/assets/ICON0.PNG" "$PS3_BASE/ICON0.PNG"
+else
+  echo "CloudMoon ICON0.PNG missing from assets/" >&2
+  exit 1
+fi
+if [ -s "$ROOT_DIR/assets/PIC1.PNG" ]; then
+  cp "$ROOT_DIR/assets/PIC1.PNG" "$PS3_BASE/PIC1.PNG"
+  if ! grep -q 'PIC1.PNG' "$PS3_BASE/Makefile"; then
+    sed -i '/cp $(ICON0) $(BUILD)\/pkg\/ICON0.PNG/a\	cp PIC1.PNG $(BUILD)/pkg/PIC1.PNG' "$PS3_BASE/Makefile"
   fi
-  if [ -s "$ROOT_DIR/assets/PIC1.PNG" ]; then
-    cp "$ROOT_DIR/assets/PIC1.PNG" "$PS3_BASE/PIC1.PNG"
-    if ! grep -q 'PIC1.PNG' "$PS3_BASE/Makefile"; then
-      sed -i '/cp $(ICON0) $(BUILD)\/pkg\/ICON0.PNG/a\	cp PIC1.PNG $(BUILD)/pkg/PIC1.PNG' "$PS3_BASE/Makefile"
-    fi
-  else
-    echo "CloudMoon PIC1.PNG missing from assets/; package preview will use no custom background." >&2
-  fi
-  # Ship a real CA bundle inside the PKG so TLS certificate verification works.
-  if ! grep -q 'cacert.pem' "$PS3_BASE/Makefile"; then
-    sed -i '/mkdir -p $(BUILD)\/pkg\/USRDIR/a\	cp '"$ROOT_DIR"'/assets/cacert.pem $(BUILD)/pkg/USRDIR/cacert.pem' "$PS3_BASE/Makefile"
-  fi
-  if ! grep -q 'cloudmoon-mobile-link.html' "$PS3_BASE/Makefile"; then
-    sed -i '/mkdir -p $(BUILD)\/pkg\/USRDIR/a\	cp '"$ROOT_DIR"'/docs/cloudmoon-mobile-link.html $(BUILD)/pkg/USRDIR/cloudmoon-mobile-link.html' "$PS3_BASE/Makefile"
-  fi
+else
+  echo "CloudMoon PIC1.PNG missing from assets/; package preview will use no custom background." >&2
+fi
+# Ship a real CA bundle inside the PKG so TLS certificate verification works.
+if ! grep -q 'cacert.pem' "$PS3_BASE/Makefile"; then
+  sed -i '/mkdir -p $(BUILD)\/pkg\/USRDIR/a\	cp '"$ROOT_DIR"'/assets/cacert.pem $(BUILD)/pkg/USRDIR/cacert.pem' "$PS3_BASE/Makefile"
+fi
+if ! grep -q 'cloudmoon-mobile-link.html' "$PS3_BASE/Makefile"; then
+  sed -i '/mkdir -p $(BUILD)\/pkg\/USRDIR/a\	cp '"$ROOT_DIR"'/docs/cloudmoon-mobile-link.html $(BUILD)/pkg/USRDIR/cloudmoon-mobile-link.html' "$PS3_BASE/Makefile"
 fi
 
 # Use the unmodified Tiny3D library from the upstream PS3 SDK.
