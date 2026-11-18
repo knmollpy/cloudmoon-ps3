@@ -61,6 +61,32 @@ static void *s_memory;
 static void *s_buffers[CM_VIDEO_BUFFER_COUNT];
 static cm_ui_surface_t s_surface;
 static int s_ready;
+static int s_allocated;
+static int s_registered;
+
+extern int32_t sceVideoOutClose(int32_t handle);
+extern int32_t sceVideoOutUnregisterBuffers(int32_t handle, int32_t attributeIndex);
+extern int32_t sceKernelMunmap(void *addr, size_t len);
+extern int32_t sceKernelReleaseDirectMemory(off_t start, size_t len);
+
+void cm_orbis_video_shutdown(void) {
+    if (s_video >= 0) {
+        if (s_registered) (void)sceVideoOutUnregisterBuffers(s_video, 0);
+        (void)sceVideoOutClose(s_video);
+    }
+    if (s_memory) (void)sceKernelMunmap(s_memory, s_memory_size);
+    if (s_allocated) (void)sceKernelReleaseDirectMemory(s_memory_offset, s_memory_size);
+    s_video = -1;
+    s_memory = NULL;
+    s_memory_size = 0;
+    s_allocated = 0;
+    s_registered = 0;
+    s_ready = 0;
+    s_frame_size = 0;
+    s_memory_offset = 0;
+    memset(s_buffers, 0, sizeof(s_buffers));
+    memset(&s_surface, 0, sizeof(s_surface));
+}
 
 int cm_orbis_video_init(int width, int height) {
     cm_video_buffer_attribute_t attr;
@@ -91,17 +117,18 @@ int cm_orbis_video_init(int width, int height) {
     s_video = sceVideoOutOpen(user_id, CM_VIDEO_BUS_MAIN, 0, NULL);
     if (s_video < 0)
         s_video = sceVideoOutOpen(CM_VIDEO_USER_MAIN, CM_VIDEO_BUS_MAIN, 0, NULL);
-    if (s_video < 0) return -1;
+    if (!s_ready || s_video < 0) return -1;
 
     rc = sceKernelAllocateDirectMemory(0, (off_t)sceKernelGetDirectMemorySize(),
                                        s_memory_size, CM_VIDEO_DMEM_ALIGN,
                                        CM_VIDEO_DMEM_GARLIC_WC, &s_memory_offset);
-    if (rc < 0) return -1;
+    if (rc < 0) goto fail;
+    s_allocated = 1;
 
     s_memory = NULL;
     rc = sceKernelMapDirectMemory(&s_memory, s_memory_size, CM_VIDEO_DMEM_PROT_RW,
                                   0, s_memory_offset, CM_VIDEO_DMEM_ALIGN);
-    if (rc < 0 || !s_memory) return -1;
+    if (rc < 0 || !s_memory) goto fail;
 
     for (i = 0; i < CM_VIDEO_BUFFER_COUNT; ++i) {
         s_buffers[i] = (uint8_t *)s_memory + (size_t)i * s_frame_size;
@@ -115,7 +142,8 @@ int cm_orbis_video_init(int width, int height) {
                                   (uint32_t)width);
     rc = sceVideoOutRegisterBuffers(s_video, 0, s_buffers,
                                     CM_VIDEO_BUFFER_COUNT, &attr);
-    if (rc < 0) return -1;
+    if (rc < 0) goto fail;
+    s_registered = 1;
 
     (void)sceVideoOutSetFlipRate(s_video, 0);
     s_next = 0;
@@ -123,10 +151,14 @@ int cm_orbis_video_init(int width, int height) {
     (void)sceGnmFlushGarlic();
     s_ready = 1;
     return 0;
+
+fail:
+    cm_orbis_video_shutdown();
+    return -1;
 }
 
 cm_ui_surface_t *cm_orbis_video_surface(void) {
-    if (s_video < 0) return NULL;
+    if (!s_ready || s_video < 0) return NULL;
     s_surface.pixels = (uint32_t *)s_buffers[s_next];
     return &s_surface;
 }
