@@ -60,11 +60,11 @@ def main() -> None:
     entry = int.from_bytes(elf[24:32], "big")
     if machine != 21 or entry != 0x10000000:
         fail(f"unexpected PPU ELF machine/entry: machine={machine}, entry=0x{entry:x}")
-    # Validate markers emitted by the current runtime path. The old
-    # "waiting for first rendered UI frame" marker was removed when startup
-    # was simplified; requiring it caused false-negative package rejections.
+    # Validate strings emitted by the current startup and connection paths.
+    # The UI logs initialization from main.c; there is no separate
+    # "first UI frame rendered" marker in the tested stock-Tiny3D path.
     for marker in (b"CloudMoon: network initialization result %d",
-                   b"CloudMoon PS3 first UI frame rendered",
+                   b"CloudMoon PS3 UI Initialized",
                    b"CloudMoon: connecting directly to coordinator"):
         if marker not in elf:
             fail(f"PPU ELF is missing required startup marker: {marker.decode()}")
