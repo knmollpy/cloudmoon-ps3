@@ -11,7 +11,6 @@ extern "C" {
 #define CM_PAIR_QR_MAX_SIZE 57
 #define CM_PAIR_QR_MAX_MODULES (CM_PAIR_QR_MAX_SIZE * CM_PAIR_QR_MAX_SIZE)
 #define CM_PAIR_URL_CAP 160
-#define CM_PAIR_URL_CAP 160
 
 /* Starts a one-time, LAN-only pairing page and returns its URL plus QR matrix. */
 int cm_cloudmoon_pair_start(char *url, size_t url_capacity,
