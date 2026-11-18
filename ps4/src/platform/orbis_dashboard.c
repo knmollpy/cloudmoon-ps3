@@ -16,6 +16,7 @@ int cm_orbis_dashboard_run(cm_ui_model_t *model,
     rc = cm_orbis_video_init(1280, 720);
     if (rc != 0) {
         cm_orbis_input_shutdown();
+        cm_orbis_video_shutdown();
         return -3;
     }
 
@@ -31,6 +32,7 @@ int cm_orbis_dashboard_run(cm_ui_model_t *model,
                 rc = on_action(event, model, context);
                 if (rc != 0) {
                     cm_orbis_input_shutdown();
+                    cm_orbis_video_shutdown();
                     return rc;
                 }
             }
@@ -39,11 +41,13 @@ int cm_orbis_dashboard_run(cm_ui_model_t *model,
         surface = cm_orbis_video_surface();
         if (!surface) {
             cm_orbis_input_shutdown();
+            cm_orbis_video_shutdown();
             return -4;
         }
         cm_ui_draw(surface, &state, model);
         if (cm_orbis_video_present() != 0) {
             cm_orbis_input_shutdown();
+            cm_orbis_video_shutdown();
             return -5;
         }
         sceKernelUsleep(16000);
