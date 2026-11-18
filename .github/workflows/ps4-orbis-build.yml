@@ -11,6 +11,10 @@ on:
       - "ps4/**"
   workflow_dispatch:
 
+concurrency:
+  group: cloudmoon-ps4-orbis-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   orbis-compile:
     runs-on: ubuntu-24.04
