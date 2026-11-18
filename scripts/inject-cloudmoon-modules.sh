@@ -269,6 +269,26 @@ replacement_main = """  ui_init(width, height, is_4_3);
   cm_cloudmoon_autostart();
 """
 s = s.replace(needle, replacement_main, 1)
+# CloudMoon does not use Moonlight's blocking LiStartConnection loop.
+# Keep the upstream main thread draining VDEC while WebRTC owns the session.
+main_loop_patch = """  while (ui_is_running()) {
+    sysUtilCheckCallback();
+    if (ui_get_state() == UI_STATE_STREAMING) {
+      vdec_poll();
+      ps3perf_tick(5);
+      usleep(1000);
+    } else {
+      ps3perf_tick(5);
+      usleep(50000);
+    }
+  }
+"""
+if "CloudMoon main-loop VDEC polling patch" not in s:
+    anchor_loop = "  while (ui_is_running()) {\n    sysUtilCheckCallback();\n    ps3perf_tick(5);\n    usleep(50000);\n  }"
+    if s.count(anchor_loop) != 1:
+        raise SystemExit("Could not uniquely locate idle main loop for VDEC polling patch")
+    s = s.replace(anchor_loop, main_loop_patch + "  /* CloudMoon main-loop VDEC polling patch */", 1)
+
 p.write_text(s)
 
 ui = pathlib.Path(sys.argv[2])
