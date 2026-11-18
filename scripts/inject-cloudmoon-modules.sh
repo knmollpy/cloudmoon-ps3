@@ -397,9 +397,11 @@ if "void cm_boot_log(const char *message)" not in s:
     boot_logger = """#include <stdio.h>
 static void cm_boot_log_write(const char *message) {
   FILE *f = fopen("/dev_hdd0/tmp/cloudmoon_boot.log", "a");
+  if (!f) f = fopen("/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon_boot.log", "a");
   if (f) { fprintf(f, "%s\\n", message ? message : "(null)"); fclose(f); }
 }
-__attribute__((constructor(101))) static void cm_boot_log_constructor(void) {
+/* Run after the C runtime's low-priority lock/stdio constructors. */
+__attribute__((constructor(200))) static void cm_boot_log_constructor(void) {
   cm_boot_log_write("0 constructor");
 }
 void cm_boot_log(const char *message) { cm_boot_log_write(message); }
