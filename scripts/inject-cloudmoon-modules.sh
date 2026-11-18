@@ -615,7 +615,7 @@ new_rows = """                // Row 0: Stream settings
                 // Row 1: QR account linking from phone
                 SetFontSize(SF(24), SF(24));
                 SetFontColor((active_main_item == 1) ? 0xff82b1ff : 0xffffffff, 0);
-                DrawString(SX(60), SY(222), "[ LINK ACCOUNT FROM PHONE ]");
+                DrawString(SX(60), SY(222), "[ LINK CLOUDMOON SESSION FROM PHONE ]");
                 SetFontSize(SF(18), SF(18));
                 SetFontColor(0xffb0bec5, 0);
                 DrawString(SX(60), SY(258), "Scan a QR and authorize a CloudMoon game session.");
@@ -669,7 +669,7 @@ if pair_start < 0 or pair_end < 0:
 cloudmoon_connect_view = """            } else if (ui_state == UI_STATE_LINKING) {
                 SetFontSize(SF(26), SF(26));
                 SetFontColor(0xffffffff, 0);
-                DrawString(SX(40), SY(18), "CloudMoon PS3  -  Link Account");
+                DrawString(SX(40), SY(18), "CloudMoon PS3  -  Link Session");
 
                 SetFontSize(SF(23), SF(23));
                 SetFontColor(0xff55c8ff, 0);
@@ -700,7 +700,7 @@ cloudmoon_connect_view = """            } else if (ui_state == UI_STATE_LINKING)
             } else if (ui_state == UI_STATE_LINKED) {
                 SetFontSize(SF(26), SF(26));
                 SetFontColor(0xffffffff, 0);
-                DrawString(SX(40), SY(18), "CloudMoon PS3  -  Account Linked");
+                DrawString(SX(40), SY(18), "CloudMoon PS3  -  Session Linked");
 
                 SetFontSize(SF(30), SF(30));
                 SetFontColor(0xff72e0a0, 0);
