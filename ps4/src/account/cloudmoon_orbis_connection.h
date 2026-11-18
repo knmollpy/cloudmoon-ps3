@@ -2,7 +2,7 @@
 #define CLOUDMOON_ORBIS_CONNECTION_H
 
 #include "cloudmoon_session_link.h"
-#include "../../src/cloudmoon_client.h"
+#include "cloudmoon_client.h"
 
 /* Runs the CloudMoon Socket.IO/WebSocket coordinator loop.
  * Call from a worker thread; the function blocks until the connection stops.
