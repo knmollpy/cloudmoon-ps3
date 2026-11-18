@@ -68,6 +68,9 @@ def main() -> None:
                    b"CloudMoon: Connect to CloudMoon selected",
                    b"CONNECTING TO CLOUDMOON",
                    b"CloudMoon: connecting directly to coordinator",
+                   b"CloudMoon: phone pairing page ready at %s",
+                   b"SCAN THIS QR CODE WITH YOUR PHONE",
+                   b"CLOUDMOON SESSION LINKED",
                    b"USRDIR/cloudmoon.ini"):
         if marker not in elf:
             fail(f"PPU ELF is missing required CloudMoon connection marker: {marker.decode()}")
@@ -92,6 +95,18 @@ def main() -> None:
     if eboot.read_bytes()[:4] != b"SCE\0":
         fail("USRDIR/EBOOT.BIN does not have the expected SELF signature")
     print(f"PASS: signed EBOOT.BIN ({eboot.stat().st_size} bytes)")
+
+    helper = stage / "USRDIR" / "cloudmoon-mobile-link.html"
+    if not helper.is_file() or helper.stat().st_size < 4_000:
+        fail("USRDIR/cloudmoon-mobile-link.html missing or incomplete")
+    helper_text = helper.read_text(encoding="utf-8")
+    for marker in ('fetch("/submit?k="', "android_instance_id",
+                   "https://web.cloudmoonapp.com/es/"):
+        if marker not in helper_text:
+            fail(f"mobile session helper is missing required marker: {marker}")
+    if 'inputType="password"' in helper_text or 'type="password"' in helper_text:
+        fail("mobile session helper must never collect a CloudMoon or Google password")
+    print(f"PASS: local mobile session helper ({helper.stat().st_size} bytes)")
 
     ca = stage / "USRDIR" / "cacert.pem"
     if not ca.is_file() or ca.stat().st_size < 10_000:
