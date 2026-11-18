@@ -135,7 +135,7 @@ import pathlib, sys
 p = pathlib.Path(sys.argv[1])
 include = sys.argv[2]
 lines = p.read_text().splitlines()
-assignment = "COMMON_INCLUDES := -I" + include + " $(COMMON_INCLUDES)"
+assignment = "COMMON_INCLUDES := -D__PS3__ -I" + include + " $(COMMON_INCLUDES)"
 if assignment not in lines:
     for i, line in enumerate(lines):
         if line.startswith("COMMON_INCLUDES") and ":=" in line:
