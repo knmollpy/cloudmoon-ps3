@@ -343,7 +343,7 @@ if "CloudMoon complete main-loop replacement" not in s:
     if end_loop < 0:
         raise SystemExit("Could not locate application termination after main loop")
     s = s[:start_loop] + main_loop_patch + "  /* CloudMoon complete main-loop replacement */\n\n" + s[end_loop:]
-    s = s.replace(anchor_end, anchor_end + "\n  cm_cloudmoon_stop();", 1)
+    s = s.replace(anchor_end, anchor_end + "\n  cm_cloudmoon_stop();\n  cm_cloudmoon_pair_stop();", 1)
 
 p.write_text(s)
 
