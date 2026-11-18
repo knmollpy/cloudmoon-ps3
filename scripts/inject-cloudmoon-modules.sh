@@ -10,7 +10,7 @@ if [ ! -f "$PS3_BASE/Makefile" ]; then
 fi
 for file in \
   cloudmoon_input.c cloudmoon_input.h \
-  cloudmoon_link.c cloudmoon_link.h \
+  cloudmoon_link.c cloudmoon_link.h cloudmoon_catalog.c cloudmoon_catalog.h \
   cloudmoon_pairing.c cloudmoon_pairing.h qrcodegen.c qrcodegen.h \
   cloudmoon_video_limits.c cloudmoon_video_limits.h \
   cloudmoon_client.c cloudmoon_client.h \
@@ -28,7 +28,7 @@ do
   cp "$SRC/$file" "$DST/$file"
 done
 if ! grep -q 'src/cloudmoon_client.c' "$PS3_BASE/Makefile"; then
-  sed -i 's#src/spu_opus_bridge.c#src/spu_opus_bridge.c src/cloudmoon_input.c src/cloudmoon_link.c src/qrcodegen.c src/cloudmoon_pairing.c src/cloudmoon_video_limits.c src/cloudmoon_client.c src/cloudmoon_discovery.c src/cloudmoon_protocol.c src/cloudmoon_session.c src/cloudmoon_ws.c src/cloudmoon_upgrade.c src/cloudmoon_random.c src/cloudmoon_ps3_random.c src/cloudmoon_tls_polarssl.c src/cloudmoon_ws_tls.c#' "$PS3_BASE/Makefile"
+  sed -i 's#src/spu_opus_bridge.c#src/spu_opus_bridge.c src/cloudmoon_input.c src/cloudmoon_link.c src/cloudmoon_catalog.c src/qrcodegen.c src/cloudmoon_pairing.c src/cloudmoon_video_limits.c src/cloudmoon_client.c src/cloudmoon_discovery.c src/cloudmoon_protocol.c src/cloudmoon_session.c src/cloudmoon_ws.c src/cloudmoon_upgrade.c src/cloudmoon_random.c src/cloudmoon_ps3_random.c src/cloudmoon_tls_polarssl.c src/cloudmoon_ws_tls.c#' "$PS3_BASE/Makefile"
 fi
 
 if [ "${CLOUDMOON_WEBRTC:-0}" = "1" ]; then
@@ -159,6 +159,10 @@ PY
     sed -i '/#include "input.h"/a #include "cloudmoon_launch.h"' "$DST/main.c"
     sed -i '/#include "cloudmoon_launch.h"/a #include "cloudmoon_pairing.h"' "$DST/main.c"
   fi
+  if ! grep -q '#include "cloudmoon_catalog.h"' "$DST/main.c"; then
+    sed -i '/#include "cloudmoon_pairing.h"/a #include "cloudmoon_catalog.h"' "$DST/main.c"
+  fi
+  sed -i 's/#define MAX_APP_ENTRIES 32/#define MAX_APP_ENTRIES 48/' "$DST/handshake.h"
   python3 "$ROOT_DIR/scripts/generate-cloudmoon-art.py" "$ROOT_DIR/assets"
   if [ -s "$ROOT_DIR/assets/ICON0.PNG" ]; then
     cp "$ROOT_DIR/assets/ICON0.PNG" "$PS3_BASE/ICON0.PNG"
@@ -444,8 +448,11 @@ if "ui_set_cloudmoon_link_qr" not in h:
                   "void ui_set_cloudmoon_link_qr(const uint8_t *modules, int size, const char *url);\nvoid ui_clear_cloudmoon_link_qr(void);\nvoid ui_init(int width, int height, int is_4_3);")
 header_path.write_text(h)
 
+if '#include "cloudmoon_catalog.h"' not in s:
+    s = s.replace('#include "input.h"', '#include "input.h"\\n#include "cloudmoon_catalog.h"', 1)
 state_anchor = "static volatile int ui_state = UI_STATE_IP_ENTRY;"
 qr_globals = """#define UI_CLOUDMOON_QR_MAX 3249
+static int cloudmoon_catalog_mode = 0;
 static uint8_t ui_cloudmoon_qr[UI_CLOUDMOON_QR_MAX];
 static int ui_cloudmoon_qr_size = 0;
 static volatile int ui_cloudmoon_qr_ready = 0;
