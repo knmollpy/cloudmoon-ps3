@@ -27,9 +27,10 @@
 #define CM_ATOMIC_CAS(p, oldv, newv) __sync_val_compare_and_swap((p), (oldv), (newv))
 
 struct cm_cloudmoon_webrtc {
-    int pc;
+    int pc,video_track,audio_track;
     volatile int data_channel,video_started,audio_started,connected,closing;
-    int width,height;
+    int width,height,video_width,video_height;
+    volatile int media_callbacks,video_blocked,video_keyframe_requested,video_failure_logged;
     volatile int input_running;
     int input_started;
     sys_ppu_thread_t input_thread;
@@ -158,28 +159,285 @@ static void cm_rtc_data_channel(int pc,int dc,void*ptr) {
     rtcSetClosedCallback(dc,cm_rtc_channel_closed);
 }
 
+
+/* Minimal bounded H.264 SPS reader. Access units arrive Annex-B after the
+   libdatachannel depacketizer. The parser only needs the SPS fields up to crop. */
+typedef struct {
+    const uint8_t *data;
+    size_t bit_pos, byte_len;
+} cm_h264_bit_reader;
+
+static int cm_h264_read_bit(cm_h264_bit_reader *br, uint32_t *value) {
+    size_t byte_pos;
+    unsigned shift;
+    if (!br || !value || br->bit_pos >= br->byte_len * 8U) return -1;
+    byte_pos = br->bit_pos >> 3;
+    shift = 7U - (unsigned)(br->bit_pos & 7U);
+    *value = (br->data[byte_pos] >> shift) & 1U;
+    br->bit_pos++;
+    return 0;
+}
+static int cm_h264_read_bits(cm_h264_bit_reader *br, unsigned count, uint32_t *value) {
+    uint32_t out = 0, bit;
+    unsigned i;
+    if (!value || count > 32) return -1;
+    for (i = 0; i < count; ++i) {
+        if (cm_h264_read_bit(br, &bit) != 0) return -1;
+        out = (out << 1) | bit;
+    }
+    *value = out;
+    return 0;
+}
+static int cm_h264_read_ue(cm_h264_bit_reader *br, uint32_t *value) {
+    unsigned zeros = 0;
+    uint32_t bit, suffix = 0;
+    uint64_t code;
+    do {
+        if (cm_h264_read_bit(br, &bit) != 0) return -1;
+        if (bit) break;
+        if (++zeros > 31) return -1;
+    } while (1);
+    if (zeros && cm_h264_read_bits(br, zeros, &suffix) != 0) return -1;
+    code = (((uint64_t)1 << zeros) - 1U) + suffix;
+    if (code > 0xffffffffULL) return -1;
+    *value = (uint32_t)code;
+    return 0;
+}
+static int cm_h264_read_se(cm_h264_bit_reader *br, int32_t *value) {
+    uint32_t code;
+    int64_t signed_value;
+    if (!value || cm_h264_read_ue(br, &code) != 0) return -1;
+    signed_value = (code & 1U) ? (int64_t)((code + 1ULL) / 2ULL) : -(int64_t)(code / 2U);
+    if (signed_value < -2147483647LL || signed_value > 2147483647LL) return -1;
+    *value = (int32_t)signed_value;
+    return 0;
+}
+static int cm_h264_skip_scaling_list(cm_h264_bit_reader *br, unsigned count) {
+    int last_scale = 8, next_scale = 8;
+    unsigned j;
+    for (j = 0; j < count; ++j) {
+        if (next_scale != 0) {
+            int32_t delta_scale;
+            if (cm_h264_read_se(br, &delta_scale) != 0) return -1;
+            next_scale = (last_scale + delta_scale + 256) & 255;
+        }
+        if (next_scale != 0) last_scale = next_scale;
+    }
+    return 0;
+}
+static int cm_h264_parse_sps(const uint8_t *nal, size_t nal_len,
+                             int *out_width, int *out_height) {
+    uint8_t rbsp[1024];
+    size_t rbsp_len = 0, i;
+    unsigned zero_count = 0;
+    uint32_t profile, ignored, chroma_format = 1, separate_colour_plane = 0;
+    uint32_t width_mbs_minus1, height_map_units_minus1, frame_mbs_only;
+    uint32_t pic_order_cnt_type, crop_flag = 0, crop_left = 0, crop_right = 0;
+    uint32_t crop_top = 0, crop_bottom = 0, bit;
+    uint64_t coded_width, coded_height, crop_x = 1, crop_y = 1;
+    cm_h264_bit_reader br;
+    if (!nal || nal_len < 4 || !out_width || !out_height ||
+        (nal[0] & 0x1fU) != 7U) return -1;
+    for (i = 1; i < nal_len && rbsp_len < sizeof(rbsp); ++i) {
+        uint8_t b = nal[i];
+        if (zero_count >= 2 && b == 3) {
+            zero_count = 0;
+            continue;
+        }
+        rbsp[rbsp_len++] = b;
+        if (b == 0) zero_count++; else zero_count = 0;
+    }
+    if (i < nal_len || rbsp_len < 3) return -1;
+    br.data = rbsp; br.byte_len = rbsp_len; br.bit_pos = 0;
+    if (cm_h264_read_bits(&br, 8, &profile) != 0 ||
+        cm_h264_read_bits(&br, 8, &ignored) != 0 ||
+        cm_h264_read_bits(&br, 8, &ignored) != 0 ||
+        cm_h264_read_ue(&br, &ignored) != 0) return -1;
+
+    if (profile == 100 || profile == 110 || profile == 122 || profile == 244 ||
+        profile == 44 || profile == 83 || profile == 86 || profile == 118 ||
+        profile == 128 || profile == 138 || profile == 139 || profile == 134 ||
+        profile == 135 || profile == 144) {
+        uint32_t scaling_matrix_present;
+        if (cm_h264_read_ue(&br, &chroma_format) != 0 || chroma_format > 3) return -1;
+        if (chroma_format == 3 &&
+            cm_h264_read_bit(&br, &separate_colour_plane) != 0) return -1;
+        if (cm_h264_read_ue(&br, &ignored) != 0 ||
+            cm_h264_read_ue(&br, &ignored) != 0 ||
+            cm_h264_read_bit(&br, &bit) != 0 ||
+            cm_h264_read_bit(&br, &scaling_matrix_present) != 0) return -1;
+        if (scaling_matrix_present) {
+            unsigned count = chroma_format == 3 ? 12U : 8U;
+            unsigned j;
+            for (j = 0; j < count; ++j) {
+                uint32_t present;
+                if (cm_h264_read_bit(&br, &present) != 0) return -1;
+                if (present && cm_h264_skip_scaling_list(&br, j < 6 ? 16U : 64U) != 0)
+                    return -1;
+            }
+        }
+    }
+    if (cm_h264_read_ue(&br, &ignored) != 0 ||
+        cm_h264_read_ue(&br, &pic_order_cnt_type) != 0) return -1;
+    if (pic_order_cnt_type == 0) {
+        if (cm_h264_read_ue(&br, &ignored) != 0) return -1;
+    } else if (pic_order_cnt_type == 1) {
+        uint32_t cycle, j;
+        int32_t signed_ignored;
+        if (cm_h264_read_bit(&br, &bit) != 0 ||
+            cm_h264_read_se(&br, &signed_ignored) != 0 ||
+            cm_h264_read_se(&br, &signed_ignored) != 0 ||
+            cm_h264_read_ue(&br, &cycle) != 0 || cycle > 255) return -1;
+        for (j = 0; j < cycle; ++j)
+            if (cm_h264_read_se(&br, &signed_ignored) != 0) return -1;
+    } else if (pic_order_cnt_type != 2) {
+        return -1;
+    }
+    if (cm_h264_read_ue(&br, &ignored) != 0 ||
+        cm_h264_read_bit(&br, &bit) != 0 ||
+        cm_h264_read_ue(&br, &width_mbs_minus1) != 0 ||
+        cm_h264_read_ue(&br, &height_map_units_minus1) != 0 ||
+        cm_h264_read_bit(&br, &frame_mbs_only) != 0) return -1;
+    if (!frame_mbs_only && cm_h264_read_bit(&br, &bit) != 0) return -1;
+    if (cm_h264_read_bit(&br, &bit) != 0 ||
+        cm_h264_read_bit(&br, &crop_flag) != 0) return -1;
+    if (crop_flag &&
+        (cm_h264_read_ue(&br, &crop_left) != 0 ||
+         cm_h264_read_ue(&br, &crop_right) != 0 ||
+         cm_h264_read_ue(&br, &crop_top) != 0 ||
+         cm_h264_read_ue(&br, &crop_bottom) != 0)) return -1;
+
+    coded_width = ((uint64_t)width_mbs_minus1 + 1U) * 16U;
+    coded_height = ((uint64_t)height_map_units_minus1 + 1U) * 16U *
+                   (2U - frame_mbs_only);
+    if (coded_width > 8192U || coded_height > 8192U) return -1;
+    if (separate_colour_plane) chroma_format = 0;
+    if (chroma_format == 1) { crop_x = 2; crop_y = 2U * (2U - frame_mbs_only); }
+    else if (chroma_format == 2) { crop_x = 2; crop_y = 1U * (2U - frame_mbs_only); }
+    else { crop_x = 1; crop_y = 1U * (2U - frame_mbs_only); }
+    if (((uint64_t)crop_left + crop_right) * crop_x >= coded_width ||
+        ((uint64_t)crop_top + crop_bottom) * crop_y >= coded_height) return -1;
+    coded_width -= ((uint64_t)crop_left + crop_right) * crop_x;
+    coded_height -= ((uint64_t)crop_top + crop_bottom) * crop_y;
+    if (!coded_width || !coded_height || coded_width > 8192U || coded_height > 8192U)
+        return -1;
+    *out_width = (int)coded_width;
+    *out_height = (int)coded_height;
+    return 0;
+}
+static size_t cm_h264_find_start_code(const uint8_t *data, size_t length,
+                                      size_t from, size_t *prefix_len) {
+    size_t i;
+    for (i = from; i + 3 <= length; ++i) {
+        if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1) {
+            *prefix_len = 3;
+            return i;
+        }
+        if (i + 4 <= length && data[i] == 0 && data[i + 1] == 0 &&
+            data[i + 2] == 0 && data[i + 3] == 1) {
+            *prefix_len = 4;
+            return i;
+        }
+    }
+    return length;
+}
+static int cm_h264_find_sps(const uint8_t *data, size_t length,
+                            int *width, int *height) {
+    size_t prefix = 0, start, next_prefix, end;
+    if (!data || !length || !width || !height) return -1;
+    if ((data[0] & 0x1fU) == 7U)
+        return cm_h264_parse_sps(data, length, width, height) == 0 ? 1 : -1;
+    start = cm_h264_find_start_code(data, length, 0, &prefix);
+    while (start < length) {
+        size_t nal_start = start + prefix;
+        end = cm_h264_find_start_code(data, length, nal_start, &next_prefix);
+        if (nal_start < end && (data[nal_start] & 0x1fU) == 7U)
+            return cm_h264_parse_sps(data + nal_start, end - nal_start,
+                                     width, height) == 0 ? 1 : -1;
+        start = end;
+        if (start < length) prefix = next_prefix;
+    }
+    return 0;
+}
+
+static void cm_rtc_request_keyframe(cm_cloudmoon_webrtc_t *rtc, int track) {
+    int video_track = track >= 0 ? track : (rtc ? rtc->video_track : -1);
+    if (video_track >= 0) (void)rtcRequestKeyframe(video_track);
+}
+static void cm_rtc_request_keyframe_once(cm_cloudmoon_webrtc_t *rtc, int track) {
+    if (rtc && CM_ATOMIC_CAS(&rtc->video_keyframe_requested, 0, 1) == 0)
+        cm_rtc_request_keyframe(rtc, track);
+}
+static void cm_rtc_video_fail(cm_cloudmoon_webrtc_t *rtc, const char *message) {
+    if (!rtc) return;
+    CM_ATOMIC_STORE(&rtc->video_blocked, 1);
+    CM_ATOMIC_STORE(&rtc->connected, 0);
+    ui_set_state(UI_STATE_ERROR);
+    if (CM_ATOMIC_CAS(&rtc->video_failure_logged, 0, 1) == 0)
+        ui_push_log(message);
+}
+
 static void cm_rtc_video_frame(int track,const char*data,int size,
                                const rtcFrameInfo*info,void*ptr) {
     cm_cloudmoon_webrtc_t*rtc=(cm_cloudmoon_webrtc_t*)ptr;
-    (void)track;
-    if(!rtc||CM_ATOMIC_LOAD(&rtc->closing)||!data||size<=0||!info)return;
-    if(CM_ATOMIC_LOAD(&rtc->video_started)!=2) {
-        if(CM_ATOMIC_CAS(&rtc->video_started,0,1)==0) {
-            if(ps3video_cloudmoon_start(rtc->width,rtc->height)==0)
-                CM_ATOMIC_STORE(&rtc->video_started,2);
-            else
-                CM_ATOMIC_STORE(&rtc->video_started,0);
-        }
-        if(CM_ATOMIC_LOAD(&rtc->video_started)!=2)return;
+    int actual_width=0, actual_height=0, sps_result, submit_result;
+    if(!rtc||!data||size<=0||!info)return;
+    __sync_add_and_fetch(&rtc->media_callbacks,1);
+    if(CM_ATOMIC_LOAD(&rtc->closing))goto done;
+    if(CM_ATOMIC_LOAD(&rtc->video_blocked))goto done;
+
+    sps_result=cm_h264_find_sps((const uint8_t*)data,(size_t)size,
+                                &actual_width,&actual_height);
+    if(sps_result<0) {
+        cm_rtc_request_keyframe_once(rtc,track);
+        goto done;
     }
-    (void)ps3video_submit_h264((const uint8_t*)data,(size_t)size,info->timestamp);
+    if(sps_result>0) {
+        if(actual_width>rtc->width||actual_height>rtc->height) {
+            cm_rtc_video_fail(rtc,"CloudMoon: stream resolution exceeds negotiated buffer limit.");
+            cm_rtc_request_keyframe_once(rtc,track);
+            goto done;
+        }
+        if(CM_ATOMIC_LOAD(&rtc->video_started)==0) {
+            if(CM_ATOMIC_CAS(&rtc->video_started,0,1)==0) {
+                rtc->video_width=actual_width;
+                rtc->video_height=actual_height;
+                if(ps3video_cloudmoon_start(actual_width,actual_height)==0) {
+                    CM_ATOMIC_STORE(&rtc->video_started,2);
+                    CM_ATOMIC_STORE(&rtc->video_keyframe_requested,0);
+                } else {
+                    cm_rtc_video_fail(rtc,"CloudMoon: PS3 H.264 decoder initialization failed.");
+                }
+            }
+        } else if(CM_ATOMIC_LOAD(&rtc->video_started)==2 &&
+                  (actual_width!=rtc->video_width||actual_height!=rtc->video_height)) {
+            cm_rtc_video_fail(rtc,"CloudMoon: stream resolution changed; reconnect at the negotiated size.");
+            cm_rtc_request_keyframe_once(rtc,track);
+            goto done;
+        }
+    }
+    if(CM_ATOMIC_LOAD(&rtc->video_blocked))goto done;
+    if(CM_ATOMIC_LOAD(&rtc->video_started)!=2) {
+        cm_rtc_request_keyframe_once(rtc,track);
+        goto done;
+    }
+    submit_result=ps3video_submit_h264((const uint8_t*)data,(size_t)size,info->timestamp);
+    if(submit_result!=DR_OK) {
+        cm_rtc_request_keyframe_once(rtc,track);
+    } else {
+        CM_ATOMIC_STORE(&rtc->video_keyframe_requested,0);
+    }
+done:
+    __sync_sub_and_fetch(&rtc->media_callbacks,1);
 }
 
 static void cm_rtc_audio_frame(int track,const char*data,int size,
                                const rtcFrameInfo*info,void*ptr) {
     cm_cloudmoon_webrtc_t*rtc=(cm_cloudmoon_webrtc_t*)ptr;
     (void)track;(void)info;
-    if(!rtc||CM_ATOMIC_LOAD(&rtc->closing)||!data||size<=0)return;
+    if(!rtc||!data||size<=0)return;
+    __sync_add_and_fetch(&rtc->media_callbacks,1);
+    if(CM_ATOMIC_LOAD(&rtc->closing))goto done;
     if(CM_ATOMIC_LOAD(&rtc->audio_started)!=2) {
         if(CM_ATOMIC_CAS(&rtc->audio_started,0,1)==0) {
             if(ps3audio_cloudmoon_start()==0)
@@ -187,9 +445,11 @@ static void cm_rtc_audio_frame(int track,const char*data,int size,
             else
                 CM_ATOMIC_STORE(&rtc->audio_started,0);
         }
-        if(CM_ATOMIC_LOAD(&rtc->audio_started)!=2)return;
+        if(CM_ATOMIC_LOAD(&rtc->audio_started)!=2)goto done;
     }
     ps3audio_submit_opus((const uint8_t*)data,(size_t)size);
+done:
+    __sync_sub_and_fetch(&rtc->media_callbacks,1);
 }
 
 static void cm_rtc_track(int pc,int track,void*ptr) {
@@ -201,11 +461,11 @@ static void cm_rtc_track(int pc,int track,void*ptr) {
     rtcSetUserPointer(track,rtc);
     if(strstr(description,"m=video")&&
        (strstr(description,"H264")||strstr(description,"h264"))) {
-        (void)rtcSetH264Depacketizer(track,RTC_NAL_SEPARATOR_START_SEQUENCE);
-        (void)rtcSetFrameCallback(track,cm_rtc_video_frame);
+        if(rtcSetH264Depacketizer(track,RTC_NAL_SEPARATOR_START_SEQUENCE)<0)return;
+        if(rtcSetFrameCallback(track,cm_rtc_video_frame)==0)rtc->video_track=track;
     } else if(strstr(description,"m=audio")&&strstr(description,"opus")) {
-        (void)rtcSetOpusDepacketizer(track);
-        (void)rtcSetFrameCallback(track,cm_rtc_audio_frame);
+        if(rtcSetOpusDepacketizer(track)<0)return;
+        if(rtcSetFrameCallback(track,cm_rtc_audio_frame)==0)rtc->audio_track=track;
     }
 }
 
@@ -346,7 +606,7 @@ int cm_cloudmoon_webrtc_create(cm_cloudmoon_webrtc_t**out,
     *out=NULL;
     rtc=(cm_cloudmoon_webrtc_t*)calloc(1,sizeof(*rtc));
     if(!rtc)return -1;
-    rtc->pc=-1;rtc->data_channel=-1;rtc->client=client;rtc->width=width;rtc->height=height;
+    rtc->pc=-1;rtc->data_channel=-1;rtc->video_track=-1;rtc->audio_track=-1;rtc->client=client;rtc->width=width;rtc->height=height;
     cm_layout_default(&rtc->layout,width,height);cm_input_reset(&rtc->input_state);
     memset(&config,0,sizeof(config));
     config.iceServers=ice_servers;config.iceServersCount=3;
@@ -471,19 +731,23 @@ void cm_cloudmoon_webrtc_detach_signaling(cm_cloudmoon_webrtc_t*rtc){
 }
 int cm_cloudmoon_webrtc_is_connected(const cm_cloudmoon_webrtc_t*rtc){return rtc?CM_ATOMIC_LOAD((volatile int*)&rtc->connected):0;}
 void cm_cloudmoon_webrtc_close(cm_cloudmoon_webrtc_t*rtc) {
-    int pc,dc;
+    int pc,dc,video_track,audio_track;
     if(!rtc)return;
     CM_ATOMIC_STORE(&rtc->closing,1);
     CM_ATOMIC_STORE(&rtc->input_running,0);
     if(rtc->input_started){u64 result;sysThreadJoin(rtc->input_thread,&result);rtc->input_started=0;}
     pc=rtc->pc;dc=CM_ATOMIC_LOAD(&rtc->data_channel);
+    video_track=rtc->video_track;audio_track=rtc->audio_track;
     rtc->pc=-1;
     CM_ATOMIC_STORE(&rtc->data_channel,-1);
-    /* Stop WebRTC callbacks before tearing down the PS3 decoders they feed. */
+    /* Stop new media callbacks before releasing the buffers they may touch. */
+    if(video_track>=0)(void)rtcSetFrameCallback(video_track,NULL);
+    if(audio_track>=0)(void)rtcSetFrameCallback(audio_track,NULL);
     if(pc>=0)rtcClosePeerConnection(pc);
+    if(dc>=0){rtcClose(dc);rtcDelete(dc);}
+    while(CM_ATOMIC_LOAD(&rtc->media_callbacks)>0)usleep(1000);
+    if(pc>=0)rtcDeletePeerConnection(pc);
     if(CM_ATOMIC_LOAD(&rtc->video_started)==2)ps3video_cloudmoon_stop();
     if(CM_ATOMIC_LOAD(&rtc->audio_started)==2)ps3audio_cloudmoon_stop();
-    if(dc>=0){rtcClose(dc);rtcDelete(dc);}
-    if(pc>=0)rtcDeletePeerConnection(pc);
     free(rtc);
 }

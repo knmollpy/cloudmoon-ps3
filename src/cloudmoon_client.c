@@ -7,6 +7,14 @@
 #include <stdint.h>
 #include <sys/time.h>
 #define CM_CLIENT_PACKET_MAX 32768
+
+static volatile int cm_client_stop_requested = 0;
+void cm_cloudmoon_client_request_stop(void) {
+    __sync_lock_test_and_set(&cm_client_stop_requested, 1);
+}
+void cm_cloudmoon_client_reset_stop(void) {
+    __sync_lock_test_and_set(&cm_client_stop_requested, 0);
+}
 static int cm_client_send_event(cm_cloudmoon_client_t *client,const char *packet,size_t length){return client->send?client->send(client->send_context,packet,length):-1;}
 static uint64_t cm_client_now_ms(void) {
     struct timeval tv;
@@ -87,6 +95,7 @@ int cm_cloudmoon_client_run(const char *hostname,uint16_t port,const char *path,
     uint64_t register_retry_at=0;
     if(!registration||!random_source)return -1;
     if(cm_ws_tls_connect(&transport,hostname,port,path,ca_bundle_path,timeout_seconds,random_source,random_context)!=0)return -1;
+    if(__sync_fetch_and_add(&cm_client_stop_requested,0)){cm_ws_tls_close(transport);return 0;}
     queue=(cm_client_tx_queue*)calloc(1,sizeof(*queue)+(size_t)CM_CLIENT_TX_QUEUE_COUNT*CM_CLIENT_PACKET_MAX);
     if(!queue){cm_ws_tls_close(transport);return -1;}
     queue->storage=(char*)(queue+1);
@@ -94,6 +103,7 @@ int cm_cloudmoon_client_run(const char *hostname,uint16_t port,const char *path,
     cm_cloudmoon_client_init(&client,registration,cm_client_transport_send,signal,&tx,signal_context);
     for(;;) {
         int ready,n;
+        if(__sync_fetch_and_add(&cm_client_stop_requested,0)){result=0;break;}
         if(client.session.state==CM_SESSION_CLIENT_REGISTER_SENT) {
             uint64_t now=cm_client_now_ms();
             if(register_attempts==0) {
@@ -164,4 +174,4 @@ int cm_cloudmoon_client_run(const char *hostname,uint16_t port,const char *path,
     cm_ws_tls_close(transport);
     return result;
 }
-int cm_cloudmoon_client_run_from_instance_id(const char *android_instance_id,const char *ca_bundle_path,unsigned timeout_seconds,const cm_cloudmoon_registration_t *registration,cm_random_source_fn random_source,void *random_context,cm_cloudmoon_signal_fn signal,void *signal_context){char hostname[256],path[1024];uint16_t port;if(cm_cloudmoon_get_coordinator(android_instance_id,hostname,sizeof(hostname),&port,path,sizeof(path))!=0)return -1;return cm_cloudmoon_client_run(hostname,port,path,ca_bundle_path,timeout_seconds,registration,random_source,random_context,signal,signal_context);}
+int cm_cloudmoon_client_run_from_instance_id(const char *android_instance_id,const char *ca_bundle_path,unsigned timeout_seconds,const cm_cloudmoon_registration_t *registration,cm_random_source_fn random_source,void *random_context,cm_cloudmoon_signal_fn signal,void *signal_context){char hostname[256],path[1024];uint16_t port;if(__sync_fetch_and_add(&cm_client_stop_requested,0))return 0;if(cm_cloudmoon_get_coordinator(android_instance_id,hostname,sizeof(hostname),&port,path,sizeof(path))!=0)return -1;return cm_cloudmoon_client_run(hostname,port,path,ca_bundle_path,timeout_seconds,registration,random_source,random_context,signal,signal_context);}

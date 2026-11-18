@@ -13,6 +13,8 @@ typedef void (*cm_cloudmoon_signal_fn)(void *context,cm_cloudmoon_client_t *clie
 typedef struct { int width,height; const char *game,*user_id,*instance_id; } cm_cloudmoon_registration_t;
 struct cm_cloudmoon_client { cm_session_t session; cm_cloudmoon_registration_t registration; cm_cloudmoon_send_fn send; cm_cloudmoon_signal_fn signal; void *send_context; void *signal_context; int stream_ready; };
 typedef enum { CM_CLIENT_PACKET_ERROR=-1,CM_CLIENT_PACKET_IGNORED=0,CM_CLIENT_PACKET_CONTINUE=1,CM_CLIENT_PACKET_STOP=2 } cm_client_packet_result_t;
+void cm_cloudmoon_client_request_stop(void);
+void cm_cloudmoon_client_reset_stop(void);
 void cm_cloudmoon_client_init(cm_cloudmoon_client_t *client,const cm_cloudmoon_registration_t *registration,cm_cloudmoon_send_fn send,cm_cloudmoon_signal_fn signal,void *send_context,void *signal_context);
 cm_client_packet_result_t cm_cloudmoon_client_handle_packet(cm_cloudmoon_client_t *client,const char *packet,size_t packet_length);
 int cm_cloudmoon_client_send_signal(cm_cloudmoon_client_t *client,const char *json,size_t json_length);

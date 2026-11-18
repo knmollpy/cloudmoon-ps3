@@ -36,6 +36,8 @@ static int cm_read_config(char*game,size_t gc,char*user,size_t uc,char*instance,
 typedef struct { char game[192],user[192],instance[3072]; } cm_launch_config;
 static sys_ppu_thread_t cm_cloudmoon_thread;
 static volatile int cm_cloudmoon_thread_running=0;
+static volatile int cm_cloudmoon_stop_requested=0;
+static int cm_cloudmoon_thread_started=0;
 static void cm_cloudmoon_worker(void *arg){
  cm_launch_config *cfg=(cm_launch_config*)arg;
  char normalized[3072]={0};
@@ -56,11 +58,14 @@ static void cm_cloudmoon_worker(void *arg){
  /* CloudMoon closes Socket.IO with getout/errorCode=10 after WebRTC setup.
     Keep the independent media peer alive after the signaling socket exits. */
  if(rtc_state.rtc&&rc==0){
-  unsigned int wait_seconds=0;
-  while(!cm_cloudmoon_webrtc_is_connected(rtc_state.rtc)&&wait_seconds<90){
-   usleep(1000000);wait_seconds++;
+  unsigned int wait_ticks=0;
+  while(!cm_cloudmoon_webrtc_is_connected(rtc_state.rtc)&&wait_ticks<900&&
+        !__sync_fetch_and_add(&cm_cloudmoon_stop_requested,0)){
+   usleep(100000);wait_ticks++;
   }
-  while(cm_cloudmoon_webrtc_is_connected(rtc_state.rtc))usleep(250000);
+  while(cm_cloudmoon_webrtc_is_connected(rtc_state.rtc)&&
+        !__sync_fetch_and_add(&cm_cloudmoon_stop_requested,0))
+   usleep(100000);
  }
  if(rtc_state.rtc){cm_cloudmoon_webrtc_close(rtc_state.rtc);rtc_state.rtc=NULL;}
  NLOG("CloudMoon: session ended with status %d",rc);
@@ -74,10 +79,16 @@ int cm_cloudmoon_autostart(void){
  int rc=cm_read_config(game,sizeof(game),user,sizeof(user),instance,sizeof(instance));
  if(rc==0){ui_push_log("CloudMoon: edit USRDIR/cloudmoon.ini and restart.");return 0;}
  if(rc<0){ui_push_log("CloudMoon: cloudmoon.ini is incomplete or invalid.");return -1;}
- if(cm_cloudmoon_thread_running)return 0;
+ if(cm_cloudmoon_thread_started){
+  if(cm_cloudmoon_thread_running)return 0;
+  {u64 result;sysThreadJoin(cm_cloudmoon_thread,&result);}
+  cm_cloudmoon_thread_started=0;
+ }
  cfg=(cm_launch_config*)calloc(1,sizeof(*cfg));
  if(!cfg)return -1;
  strcpy(cfg->game,game);strcpy(cfg->user,user);strcpy(cfg->instance,instance);
+ __sync_lock_test_and_set(&cm_cloudmoon_stop_requested,0);
+ cm_cloudmoon_client_reset_stop();
  cm_cloudmoon_thread_running=1;
  if(sysThreadCreate(&cm_cloudmoon_thread,cm_cloudmoon_worker,cfg,200,0x40000,
                     THREAD_JOINABLE,"CloudMoonNet")!=0){
@@ -85,5 +96,19 @@ int cm_cloudmoon_autostart(void){
   ui_push_log("CloudMoon: could not start network worker.");
   return -1;
  }
+ cm_cloudmoon_thread_started=1;
  return 0;
+}
+
+void cm_cloudmoon_stop(void){
+ __sync_lock_test_and_set(&cm_cloudmoon_stop_requested,1);
+ cm_cloudmoon_client_request_stop();
+ if(cm_cloudmoon_thread_started){
+  u64 result;
+  sysThreadJoin(cm_cloudmoon_thread,&result);
+  cm_cloudmoon_thread_started=0;
+ }
+ cm_cloudmoon_thread_running=0;
+ cm_cloudmoon_client_reset_stop();
+ __sync_lock_test_and_set(&cm_cloudmoon_stop_requested,0);
 }
