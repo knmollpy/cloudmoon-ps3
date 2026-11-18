@@ -60,6 +60,7 @@ static size_t s_frame_size;
 static void *s_memory;
 static void *s_buffers[CM_VIDEO_BUFFER_COUNT];
 static cm_ui_surface_t s_surface;
+static int s_ready;
 
 int cm_orbis_video_init(int width, int height) {
     cm_video_buffer_attribute_t attr;
@@ -68,7 +69,8 @@ int cm_orbis_video_init(int width, int height) {
     size_t frame_size, allocation_size;
     int i;
 
-    if (s_video >= 0) return 0;
+    if (s_ready) return 0;
+    if (s_video >= 0) return -1;
     if (width < 640 || height < 360 || width > 1920 || height > 1080)
         return -1;
 
@@ -79,11 +81,9 @@ int cm_orbis_video_init(int width, int height) {
     s_surface.pitch_pixels = width;
 
     frame_size = (size_t)width * (size_t)height * 4u;
-    allocation_size = (frame_size * CM_VIDEO_BUFFER_COUNT +
-                       CM_VIDEO_DMEM_ALIGN - 1u) &
-                      ~(size_t)(CM_VIDEO_DMEM_ALIGN - 1u);
     s_frame_size = (frame_size + CM_VIDEO_DMEM_ALIGN - 1u) &
                    ~(size_t)(CM_VIDEO_DMEM_ALIGN - 1u);
+    allocation_size = s_frame_size * CM_VIDEO_BUFFER_COUNT;
     s_memory_size = allocation_size;
 
     if (sceUserServiceGetInitialUser(&user_id) < 0)
@@ -121,6 +121,7 @@ int cm_orbis_video_init(int width, int height) {
     s_next = 0;
     s_surface.pixels = (uint32_t *)s_buffers[s_next];
     (void)sceGnmFlushGarlic();
+    s_ready = 1;
     return 0;
 }
 
