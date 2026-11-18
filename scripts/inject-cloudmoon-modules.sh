@@ -636,8 +636,9 @@ if start < 0 or end < 0:
     raise SystemExit("Could not locate the main-menu action handler")
 new_actions = """                // CloudMoon native catalog and session actions.
                 if (active_main_item == 0) {
-                    ps3_app_list_t catalog_list = {0};
-                    size_t catalog_count = cm_cloudmoon_catalog_count();
+                    if (pad.buttons_pressed & A_FLAG) {
+                        ps3_app_list_t catalog_list = {0};
+                        size_t catalog_count = cm_cloudmoon_catalog_count();
                     size_t i;
                     if (catalog_count > MAX_APP_ENTRIES) catalog_count = MAX_APP_ENTRIES;
                     for (i = 0; i < catalog_count; ++i) {
@@ -655,6 +656,7 @@ new_actions = """                // CloudMoon native catalog and session actions
                         ui_state = UI_STATE_APPLIST;
                     } else {
                         ui_push_log("CloudMoon: catalog is empty.");
+                        }
                     }
                 } else if (active_main_item == 1) {
                     if ((pad.buttons_pressed & A_FLAG) || (pad.buttons_pressed & RIGHT_FLAG)) {
