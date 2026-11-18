@@ -24,17 +24,25 @@ make cloudmoon-pkg
 
 El objetivo cruza Mbed TLS y libdatachannel para PPU/PSL1GHT y luego genera el PKG. La primera compilación puede tardar por las dependencias.
 
-## Vinculación desde el celular
+## Vinculación de una sesión desde el celular (QR local)
 
-CloudMoon publica un catálogo navegable y un botón de inicio de sesión en su web. El método de autenticación exacto lo controla CloudMoon; esta aplicación no solicita ni almacena tu contraseña de Google.
+La aplicación de PS3 genera su propio QR de un solo uso; no es un QR oficial de inicio de sesión de CloudMoon. El celular y la PS3 deben estar conectados a la misma red local.
 
-1. Abrí la página oficial de CloudMoon en el navegador del celular e iniciá sesión con el método que allí te ofrezcan.
-2. Elegí un juego y pulsá **Jugar**. Esperá a que la sesión del juego se abra.
-3. Usá el importador local `docs/cloudmoon-mobile-link.html`: pegá la URL completa de la sesión y descargá `cloudmoon.ini`.
-4. Transferí el archivo por FTP a `/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon.ini` en la PS3.
-5. En la PS3, seleccioná **CONNECT TO CLOUDMOON**.
+1. En la PS3, elegí **LINK CLOUDMOON SESSION FROM PHONE**.
+2. Escaneá el QR con el celular. Se abre la página de vinculación alojada directamente en la PS3.
+3. En esa página, abrí CloudMoon oficial en una segunda pestaña, iniciá sesión con el método que CloudMoon ofrezca y pulsá **Jugar** en el juego elegido.
+4. Copiá la URL completa de la sesión activa, volvé a la pestaña de vinculación, pegala y pulsá **Validar sesión y vincular con esta PS3**.
+5. La PS3 valida los campos y guarda `cloudmoon.ini`. Volvé al menú y elegí **CONNECT TO CLOUDMOON**.
 
-El importador procesa la URL completamente dentro del navegador: no la envía a ningún servidor ni guarda la contraseña. La URL y el archivo INI contienen identificadores privados de sesión; no los publiques ni los compartas.
+El proceso vincula una **sesión de juego activa**, no guarda un inicio de sesión permanente de CloudMoon. Para cambiar de juego, iniciá el nuevo juego en CloudMoon y repetí la vinculación. La exploración del catálogo y la selección del juego siguen ocurriendo en la página oficial del celular; el catálogo nativo de PS3 todavía no está implementado.
+
+La página local no solicita tu contraseña ni códigos de Google, y no envía la URL a servicios de terceros. La transferencia entre el celular y la PS3 usa HTTP dentro de la red local (no TLS): usá una Wi-Fi privada de confianza y no compartas el QR, la URL ni el archivo de sesión. El QR caduca al cancelar la pantalla o completar la vinculación.
+
+### Alternativa por FTP
+
+También podés abrir `docs/cloudmoon-mobile-link.html` fuera del modo QR, pegar la URL completa y descargar `cloudmoon.ini`. Transferilo por FTP a:
+
+`/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon.ini`
 
 ## Configuración manual alternativa
 
