@@ -284,7 +284,7 @@ main_loop_patch = """  int cloudmoon_connect_started = 0;
     sysUtilCheckCallback();
     if (ui_get_state() == UI_STATE_LINKING) {
       if (!cloudmoon_link_started) {
-        if (cm_cloudmoon_pair_start(cloudmoon_pair_url, sizeof(cloudmoon_pair_url),
+        if (cm_cloudmoon_pair_start((cm_cloudmoon_catalog_selected() ? cm_cloudmoon_catalog_selected()->package_id : NULL), cloudmoon_pair_url, sizeof(cloudmoon_pair_url),
                                     cloudmoon_pair_qr, sizeof(cloudmoon_pair_qr),
                                     &cloudmoon_pair_qr_size) == 0) {
           ui_set_cloudmoon_link_qr(cloudmoon_pair_qr, cloudmoon_pair_qr_size,
@@ -561,6 +561,59 @@ if cancel_anchor not in s:
     raise SystemExit("Could not locate input pairing handler")
 s = s.replace(cancel_anchor, cancel_replacement, 1)
 
+# In the native CloudMoon catalog, selecting an entry starts the QR link flow.
+app_list_input_anchor = """        } else if (ui_state == UI_STATE_APPLIST) {
+            if (current_app_list.count > 0) {
+                if (pad.buttons_pressed & UP_FLAG) {
+                    active_app_idx = (active_app_idx + current_app_list.count - 1) % current_app_list.count;
+                }
+                if (pad.buttons_pressed & DOWN_FLAG) {
+                    active_app_idx = (active_app_idx + 1) % current_app_list.count;
+                }
+                if (pad.buttons_pressed & A_FLAG) {
+                    app_selection_confirmed = 1;
+                }
+            }
+            // Circle button returns to main menu
+            if (pad.buttons_pressed & B_FLAG) {
+                app_selection_confirmed = 0;
+                ui_state = UI_STATE_IP_ENTRY;
+            }
+        }
+"""
+app_list_input_replacement = """        } else if (ui_state == UI_STATE_APPLIST) {
+            if (current_app_list.count > 0) {
+                if (pad.buttons_pressed & UP_FLAG)
+                    active_app_idx = (active_app_idx + current_app_list.count - 1) % current_app_list.count;
+                if (pad.buttons_pressed & DOWN_FLAG)
+                    active_app_idx = (active_app_idx + 1) % current_app_list.count;
+                if (pad.buttons_pressed & A_FLAG) {
+                    if (cloudmoon_catalog_mode &&
+                        active_app_idx >= 0 && active_app_idx < current_app_list.count) {
+                        int catalog_id = current_app_list.apps[active_app_idx].id;
+                        const cm_cloudmoon_game_t *selected = cm_cloudmoon_catalog_at((size_t)catalog_id);
+                        if (selected && cm_cloudmoon_catalog_select(catalog_id) == 0) {
+                            cloudmoon_catalog_mode = 0;
+                            app_selection_confirmed = 0;
+                            ui_push_log("CloudMoon: selected game; scan QR to link its active session.");
+                            ui_state = UI_STATE_LINKING;
+                        }
+                    } else {
+                        app_selection_confirmed = 1;
+                    }
+                }
+            }
+            if (pad.buttons_pressed & B_FLAG) {
+                cloudmoon_catalog_mode = 0;
+                app_selection_confirmed = 0;
+                ui_state = UI_STATE_IP_ENTRY;
+            }
+        }
+"""
+if app_list_input_anchor not in s:
+    raise SystemExit("Could not locate upstream APPLIST input handler for CloudMoon catalog")
+s = s.replace(app_list_input_anchor, app_list_input_replacement, 1)
+
 def replace_once(old, new, label):
     global s
     if old not in s:
@@ -683,9 +736,19 @@ replace_once('"Do you want to quit Moonlight and return to the PS3 XMB?"',
 replace_once('"ERROR: Target unreachable or Pairing failed."',
              '"ERROR: CloudMoon connection failed. Check cloudmoon.ini and network."',
              "error message")
-replace_once('"Press \\x01 to return."',
-             '"Press \\x01 to return to the menu."',
-             "error hint")
+replace_once('\"Press \\x01 to return.\"',
+             '\"Press \\x01 to return to the menu.\"',
+             \"error hint\")
+
+replace_once('DrawString(SX(40), SY(18), \"Moonlight PS3  -  Host Applications\");',
+             'DrawString(SX(40), SY(18), \"CloudMoon PS3  -  Game Catalog\");',
+             \"catalog title\")
+replace_once('DrawString(SX(60), SY(95), \"Select Game or Application to Stream:\");',
+             'DrawString(SX(60), SY(95), \"Choose a CloudMoon game to link from your phone:\");',
+             \"catalog subtitle\")
+replace_once('DrawString(SX(60), SY(445), \"\\\\x05 Navigate   |   \\\\x01 Launch Game   |   \\\\x02 Cancel\");',
+             'DrawString(SX(60), SY(445), \"\\\\x05 Browse titles   |   \\\\x01 Select and link   |   \\\\x02 Back\");',
+             \"catalog legend\")
 
 # Replace Moonlight's PIN/pairing page with a CloudMoon coordinator connection page.
 # The UI_STATE_PAIRING value is used only as the internal "connecting" state.
