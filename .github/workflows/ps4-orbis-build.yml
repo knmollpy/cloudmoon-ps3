@@ -39,10 +39,9 @@ jobs:
           echo "Archive size:"; ls -lh /tmp/openorbis.tar.gz
           echo "Archive checksum:"; sha256sum /tmp/openorbis.tar.gz
           echo "Checking archive members..."
-          tar -tzf /tmp/openorbis.tar.gz | head -30
-          tar -xzf /tmp/openorbis.tar.gz \
-            -C "$HOME/ps4dev/OpenOrbis/PS4Toolchain" \
-            bin/data bin/linux include lib scripts LICENSE link.x
+          tar -tzf /tmp/openorbis.tar.gz > /tmp/openorbis-files.txt
+          sed -n '1,30p' /tmp/openorbis-files.txt
+          tar -xzf /tmp/openorbis.tar.gz -C "$HOME/ps4dev" OpenOrbis/PS4Toolchain
           test -f "$HOME/ps4dev/OpenOrbis/PS4Toolchain/link.x"
           test -d "$HOME/ps4dev/OpenOrbis/PS4Toolchain/include/orbis"
           echo "OO_PS4_TOOLCHAIN=$HOME/ps4dev/OpenOrbis/PS4Toolchain" >> "$GITHUB_ENV"
