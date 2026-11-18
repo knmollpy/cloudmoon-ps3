@@ -79,7 +79,7 @@ def main() -> None:
                    b"CloudMoon QR: network initialization result %d",
                    b"CloudMoon QR: local phone link ready at %s",
                    b"SCAN THIS QR CODE WITH YOUR PHONE",
-                   b"SIGN IN WITH PHONE QR",
+                   b"[ SIGN IN WITH PHONE QR ]",
                    b"cloudmoon-mobile-link.html",
                    b"USRDIR/cloudmoon_boot.log")
     for marker in markers:
