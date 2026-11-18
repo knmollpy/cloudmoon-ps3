@@ -48,6 +48,44 @@ if(PS4)
     add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../vendor/mbedtls"
                      "${CMAKE_CURRENT_BINARY_DIR}/mbedtls")
 
+
+    # libdatachannel is the same WebRTC engine used by the portable CloudMoon
+    # adapter. Build its static C API, SCTP, ICE and SRTP support for Orbis.
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    set(BUILD_SHARED_DEPS_LIBS OFF CACHE BOOL "" FORCE)
+    set(USE_MBEDTLS ON CACHE BOOL "" FORCE)
+    set(USE_GNUTLS OFF CACHE BOOL "" FORCE)
+    set(USE_NICE OFF CACHE BOOL "" FORCE)
+    set(PREFER_SYSTEM_LIB OFF CACHE BOOL "" FORCE)
+    set(USE_SYSTEM_SRTP OFF CACHE BOOL "" FORCE)
+    set(USE_SYSTEM_JUICE OFF CACHE BOOL "" FORCE)
+    set(USE_SYSTEM_USRSCTP OFF CACHE BOOL "" FORCE)
+    set(USE_SYSTEM_PLOG OFF CACHE BOOL "" FORCE)
+    set(USE_SYSTEM_JSON OFF CACHE BOOL "" FORCE)
+    set(NO_WEBSOCKET ON CACHE BOOL "" FORCE)
+    set(NO_MEDIA OFF CACHE BOOL "" FORCE)
+    set(NO_EXAMPLES ON CACHE BOOL "" FORCE)
+    set(NO_TESTS ON CACHE BOOL "" FORCE)
+    set(WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
+    set(RTC_UPDATE_VERSION_HEADER OFF CACHE BOOL "" FORCE)
+    set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+
+    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../vendor/libdatachannel/CMakeLists.txt")
+        message(FATAL_ERROR "libdatachannel submodule is missing")
+    endif()
+
+    if(NOT TARGET MbedTLS::MbedTLS)
+        add_library(MbedTLS::MbedTLS INTERFACE IMPORTED GLOBAL)
+        set_property(TARGET MbedTLS::MbedTLS PROPERTY
+            INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/../vendor/mbedtls/include")
+        set_property(TARGET MbedTLS::MbedTLS PROPERTY
+            INTERFACE_LINK_LIBRARIES "mbedtls;mbedx509;mbedcrypto")
+    endif()
+
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../vendor/libdatachannel"
+                     "${CMAKE_CURRENT_BINARY_DIR}/libdatachannel")
+
+
     add_library(cloudmoon_tls_mbedtls STATIC
         src/net/cloudmoon_tls_mbedtls.c
         src/net/cloudmoon_random_mbedtls.c
@@ -91,6 +129,12 @@ if(PS4)
         src/account/cloudmoon_orbis_connection.c
     )
     target_include_directories(cloudmoon_ps4_orbis_platform PUBLIC src/platform)
-    target_link_libraries(cloudmoon_ps4_orbis_platform PUBLIC cloudmoon_ps4_ui cloudmoon_protocol_core cloudmoon_account_core)
+    target_include_directories(cloudmoon_ps4_orbis_platform PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/../vendor/libdatachannel/include"
+    )
+    target_link_libraries(cloudmoon_ps4_orbis_platform PUBLIC
+        cloudmoon_ps4_ui cloudmoon_protocol_core cloudmoon_account_core
+        datachannel-static
+    )
     target_compile_options(cloudmoon_ps4_orbis_platform PRIVATE -Wall -Wextra)
 endif()
