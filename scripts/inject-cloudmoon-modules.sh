@@ -164,6 +164,9 @@ PY
   fi
   sed -i 's/#define MAX_APP_ENTRIES 32/#define MAX_APP_ENTRIES 48/' "$DST/handshake.h"
   python3 "$ROOT_DIR/scripts/generate-cloudmoon-art.py" "$ROOT_DIR/assets"
+  # Existing user artwork may have been saved at a preview size (for example 128x70).
+  # Normalize it to the PS3 XMB ICON0 contract before staging the PKG.
+  python3 "$ROOT_DIR/scripts/resize-ps3-icon.py" "$ROOT_DIR/assets/ICON0.PNG"
   if [ -s "$ROOT_DIR/assets/ICON0.PNG" ]; then
     cp "$ROOT_DIR/assets/ICON0.PNG" "$PS3_BASE/ICON0.PNG"
   else
