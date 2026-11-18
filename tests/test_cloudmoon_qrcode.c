@@ -22,7 +22,7 @@ int main(void) {
         !qrcodegen_getModule(qr, 6, 0) ||
         !qrcodegen_getModule(qr, 0, 6) ||
         !qrcodegen_getModule(qr, 6, 6) ||
-        qrcodegen_getModule(qr, 3, 3)) {
+        !qrcodegen_getModule(qr, 3, 3)) {
         fputs("QR finder pattern validation failed.\n", stderr);
         return 1;
     }
