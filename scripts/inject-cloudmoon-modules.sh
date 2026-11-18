@@ -257,15 +257,13 @@ if needle not in s:
     raise SystemExit("Could not locate UI startup sequence")
 # Preserve the upstream network-init call, but capture its result so the
 # runtime log reports whether the PS3 network pool actually initialized.
+# Defer network initialization until the user opens Link or Connect.
+# The menu can now start without loading sys_net or allocating its network pool.
 if "int net_rc = ps3_net_init();" not in s:
     if s.count("  ps3_net_init();") != 1:
         raise SystemExit("Could not uniquely locate the original network initialization call")
-    s = s.replace("  ps3_net_init();", "  int net_rc = ps3_net_init();", 1)
-if 'NLOG("CloudMoon: network initialization result %d", net_rc);' not in s:
-    anchor = "  net_logger_init();\n"
-    if anchor not in s:
-        raise SystemExit("Could not locate network logger startup")
-    s = s.replace(anchor, anchor + '  NLOG("CloudMoon: network initialization result %d", net_rc);\n', 1)
+    s = s.replace("  ps3_net_init();", "  /* CloudMoon initializes sys_net lazily from the menu. */", 1)
+s = s.replace('  NLOG("CloudMoon: network initialization result %d", net_rc);\n', "", 1)
 
 replacement_main = """  ui_init(width, height, is_4_3);
   ps3input_start();
@@ -277,12 +275,25 @@ s = s.replace(needle, replacement_main, 1)
 # Do not leave the legacy Sunshine handshake ahead of the CloudMoon Connect action.
 main_loop_patch = """  int cloudmoon_connect_started = 0;
   int cloudmoon_link_started = 0;
+  int cloudmoon_net_initialized = 0;
   uint8_t cloudmoon_pair_qr[CM_PAIR_QR_MAX_MODULES];
   char cloudmoon_pair_url[CM_PAIR_URL_CAP];
   int cloudmoon_pair_qr_size = 0;
   while (ui_is_running()) {
     sysUtilCheckCallback();
     if (ui_get_state() == UI_STATE_LINKING) {
+      if (!cloudmoon_net_initialized) {
+        int net_rc = ps3_net_init();
+        NLOG("CloudMoon: deferred network initialization result %d", net_rc);
+        if (net_rc != 0) {
+          ui_push_log("CloudMoon: PS3 network initialization failed.");
+          ui_set_state(UI_STATE_ERROR);
+          ps3perf_tick(5);
+          usleep(50000);
+          continue;
+        }
+        cloudmoon_net_initialized = 1;
+      }
       if (!cloudmoon_link_started) {
         if (cm_cloudmoon_pair_start((cm_cloudmoon_catalog_selected() ? cm_cloudmoon_catalog_selected()->package_id : NULL), cloudmoon_pair_url, sizeof(cloudmoon_pair_url),
                                     cloudmoon_pair_qr, sizeof(cloudmoon_pair_qr),
@@ -305,6 +316,19 @@ main_loop_patch = """  int cloudmoon_connect_started = 0;
       }
       if (!cloudmoon_connect_started) {
         cloudmoon_connect_started = 1;
+        if (!cloudmoon_net_initialized) {
+          int net_rc = ps3_net_init();
+          NLOG("CloudMoon: deferred network initialization result %d", net_rc);
+          if (net_rc != 0) {
+            ui_push_log("CloudMoon: PS3 network initialization failed.");
+            ui_set_state(UI_STATE_ERROR);
+            cloudmoon_connect_started = 0;
+            ps3perf_tick(5);
+            usleep(50000);
+            continue;
+          }
+          cloudmoon_net_initialized = 1;
+        }
         NLOG("CloudMoon: Connect to CloudMoon selected; starting coordinator session.");
         cm_cloudmoon_autostart();
       }
@@ -332,6 +356,10 @@ main_loop_patch = """  int cloudmoon_connect_started = 0;
         NLOG("CloudMoon: menu cancellation requested; stopping active session.");
         cm_cloudmoon_stop();
       }
+      if (cloudmoon_net_initialized) {
+        ps3_net_shutdown();
+        cloudmoon_net_initialized = 0;
+      }
       ps3perf_tick(5);
       usleep(50000);
     }
@@ -350,6 +378,8 @@ if "CloudMoon complete main-loop replacement" not in s:
     s = s[:start_loop] + main_loop_patch + "  /* CloudMoon complete main-loop replacement */\n\n" + s[end_loop:]
     s = s.replace(anchor_end, anchor_end + "\n  cm_cloudmoon_stop();\n  cm_cloudmoon_pair_stop();", 1)
 
+# Do not tear down sys_net on app exit if the user never opened Link/Connect.
+s = s.replace("  ps3_net_shutdown();", "  if (cloudmoon_net_initialized) {\\n    ps3_net_shutdown();\\n    cloudmoon_net_initialized = 0;\\n  }", 1)
 p.write_text(s)
 
 ui = pathlib.Path(sys.argv[2])
