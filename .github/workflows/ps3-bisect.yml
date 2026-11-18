@@ -1,0 +1,70 @@
+name: CloudMoon PS3 freeze bisect
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    name: A - Original PS3-Moonlight baseline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - name: Build untouched upstream baseline
+        run: make baseline-pkg
+      - name: Upload A baseline PKG
+        uses: actions/upload-artifact@v4
+        with:
+          name: bisect-A-original-moonlight
+          path: vendor/PS3-Moonlight/build/*.pkg
+          if-no-files-found: error
+          retention-days: 14
+
+  prototype:
+    name: B - CloudMoon prototype without WebRTC
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - name: Build CloudMoon prototype without WebRTC
+        run: make CLOUDMOON_WEBRTC=0 prototype-pkg
+      - name: Upload B prototype PKG
+        uses: actions/upload-artifact@v4
+        with:
+          name: bisect-B-cloudmoon-no-webrtc
+          path: vendor/PS3-Moonlight/build/*.pkg
+          if-no-files-found: error
+          retention-days: 14
+
+  full:
+    name: C - Full CloudMoon WebRTC client
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - name: Build full CloudMoon client
+        run: make cloudmoon-pkg
+      - name: Validate C package
+        run: |
+          PKG="$(find vendor/PS3-Moonlight/build -maxdepth 1 -type f -name '*.pkg' -print -quit)"
+          test -n "$PKG"
+          python3 scripts/validate-ps3-pkg.py --pkg "$PKG" --stage vendor/PS3-Moonlight/build/pkg --elf vendor/PS3-Moonlight/cloudmoon-ps3.elf
+      - name: Upload C CloudMoon PKG
+        uses: actions/upload-artifact@v4
+        with:
+          name: bisect-C-cloudmoon-full-webrtc
+          path: vendor/PS3-Moonlight/build/*.pkg
+          if-no-files-found: error
+          retention-days: 14
