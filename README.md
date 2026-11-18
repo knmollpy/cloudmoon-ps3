@@ -1,6 +1,6 @@
 # CloudMoon PS3
 
-Cliente nativo experimental para PS3 HEN, con conexión directa al coordinator de CloudMoon. No utiliza PC, móvil ni servidor puente.
+Cliente nativo experimental para PS3 HEN, con conexión directa al coordinator de CloudMoon. El celular se usa únicamente para iniciar sesión en CloudMoon y exportar una sesión activa; no se necesita un PC ni un servidor puente.
 
 ## Implementación incluida
 
@@ -24,13 +24,25 @@ make cloudmoon-pkg
 
 El objetivo cruza Mbed TLS y libdatachannel para PPU/PSL1GHT y luego genera el PKG. La primera compilación puede tardar por las dependencias.
 
-## Configuración de sesión
+## Vinculación desde el celular
+
+CloudMoon publica un catálogo navegable y un botón de inicio de sesión en su web. El método de autenticación exacto lo controla CloudMoon; esta aplicación no solicita ni almacena tu contraseña de Google.
+
+1. Abrí la página oficial de CloudMoon en el navegador del celular e iniciá sesión con el método que allí te ofrezcan.
+2. Elegí un juego y pulsá **Jugar**. Esperá a que la sesión del juego se abra.
+3. Usá el importador local `docs/cloudmoon-mobile-link.html`: pegá la URL completa de la sesión y descargá `cloudmoon.ini`.
+4. Transferí el archivo por FTP a `/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon.ini` en la PS3.
+5. En la PS3, seleccioná **CONNECT TO CLOUDMOON**.
+
+El importador procesa la URL completamente dentro del navegador: no la envía a ningún servidor ni guarda la contraseña. La URL y el archivo INI contienen identificadores privados de sesión; no los publiques ni los compartas.
+
+## Configuración manual alternativa
 
 El primer arranque crea:
 
 `/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon.ini`
 
-Editar con FTP/gestor de archivos y reiniciar:
+También se puede completar manualmente:
 
 ```ini
 game=PACKAGE_NAME
@@ -38,12 +50,14 @@ user_id=CLOUDMOON_USER_ID
 android_instance_id=BASE64_ANDROID_INSTANCE_ID
 ```
 
-Los valores se copian de la URL de la sesión activa de CloudMoon:
-- `game`: paquete del juego.
-- `user_id`: parámetro `userid`.
-- `android_instance_id`: parámetro completo `android_instance_id`, sin decodificar.
+El cliente también acepta una línea `session_url=` con la URL HTTPS completa de una sesión iniciada desde un subdominio oficial de `cloudmoonapp.com`; la valida localmente y extrae `game`, `userid` y `android_instance_id`.
 
-No compartir ese archivo: identifica una sesión privada.
+Los datos requeridos vienen de la URL de una partida activa:
+- `game`: paquete del juego.
+- `user_id`: parámetro `userid` (o `user_id`).
+- `android_instance_id`: identificador Base64 completo.
+
+Una sesión activa identifica un juego concreto; volver a importar cuando se inicie otra partida. No compartas ese archivo: identifica una sesión privada.
 
 ## Estado y límites
 
