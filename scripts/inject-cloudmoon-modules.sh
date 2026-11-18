@@ -250,10 +250,21 @@ s = s.replace(old_shutdown, new_shutdown, 1)
 needle = "  ui_init(width, height, is_4_3);\n  ps3input_start();\n"
 if needle not in s:
     raise SystemExit("Could not locate UI startup sequence")
+# Preserve the upstream network-init call, but capture its result so the
+# runtime log reports whether the PS3 network pool actually initialized.
+if "int net_rc = ps3_net_init();" not in s:
+    if s.count("  ps3_net_init();") != 1:
+        raise SystemExit("Could not uniquely locate the original network initialization call")
+    s = s.replace("  ps3_net_init();", "  int net_rc = ps3_net_init();", 1)
+if 'NLOG("CloudMoon: network initialization result %d", net_rc);' not in s:
+    anchor = "  net_logger_init();\n"
+    if anchor not in s:
+        raise SystemExit("Could not locate network logger startup")
+    s = s.replace(anchor, anchor + '  NLOG("CloudMoon: network initialization result %d", net_rc);\n', 1)
+
 replacement_main = """  ui_init(width, height, is_4_3);
   ps3input_start();
-  NLOG("Moonlight PS3 UI Initialized");
-  NLOG("CloudMoon network initialization completed before UI startup.");
+  NLOG("CloudMoon PS3 UI Initialized");
   cm_cloudmoon_autostart();
 """
 s = s.replace(needle, replacement_main, 1)
