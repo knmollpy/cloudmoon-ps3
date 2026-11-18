@@ -26,14 +26,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define CM_PAIR_PORT_FIRST 18765
-#define CM_PAIR_PORT_LAST 18775
 #define CM_PAIR_CONFIG_PATH "/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon.ini"
 #define CM_PAIR_PAGE_PATH "/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon-mobile-link.html"
 #define CM_PAIR_HTTP_LIMIT 20000
 #define CM_PAIR_BODY_LIMIT 16384
 #define CM_PAIR_HEADER_LIMIT 4096
-#define CM_PAIR_TIMEOUT_SECONDS 600
 
 static sys_ppu_thread_t cm_pair_thread;
 static volatile int cm_pair_running;
@@ -43,7 +40,6 @@ static int cm_pair_thread_started;
 static int cm_pair_listen_fd = -1;
 static char cm_pair_key[33];
 static char cm_pair_address[16];
-static uint16_t cm_pair_port;
 
 static int cm_pair_send_all(int fd, const void *data, size_t length) {
     const char *p = (const char *)data;
@@ -75,19 +71,6 @@ static int cm_pair_send_response(int fd, int status, const char *reason,
     return body_len ? cm_pair_send_all(fd, body, body_len) : 0;
 }
 
-static int cm_pair_hex_key(char out[33]) {
-    static const char hex[] = "0123456789abcdef";
-    uint8_t raw[16];
-    size_t i;
-    if (cm_ps3_random_source(NULL, raw, sizeof(raw)) != 0) return -1;
-    for (i = 0; i < sizeof(raw); ++i) {
-        out[i * 2] = hex[raw[i] >> 4];
-        out[i * 2 + 1] = hex[raw[i] & 15];
-    }
-    out[32] = '\0';
-    memset(raw, 0, sizeof(raw));
-    return 0;
-}
 
 static int cm_pair_read_request(int fd, char *buffer, size_t capacity,
                                 size_t *header_length, size_t *body_length) {
@@ -208,7 +191,6 @@ static int cm_pair_write_config(const cm_cloudmoon_link_t *link) {
 static void cm_pair_handle_client(int fd) {
     char *request, method[8], path[256];
     size_t header_len = 0, body_len = 0;
-    int result = -1;
 
     request = (char *)malloc(CM_PAIR_HTTP_LIMIT + 1);
     if (!request) return;
@@ -280,13 +262,11 @@ static void cm_pair_handle_client(int fd) {
             (void)cm_pair_send_response(fd, 200, "OK",
                 "application/json; charset=utf-8",
                 "{\"ok\":true,\"message\":\"Cuenta vinculada. Ya podés volver a la PS3.\"}");
-            result = 0;
         } else {
             (void)cm_pair_send_response(fd, 400, "Bad Request",
                 "application/json; charset=utf-8",
                 "{\"ok\":false,\"error\":\"La URL no contiene una sesión CloudMoon válida. Iniciá un juego y copiá su URL completa.\"}");
         }
-        (void)result;
         free(request);
         return;
     }
@@ -397,7 +377,6 @@ int cm_cloudmoon_pair_start(char *url, size_t url_capacity,
         }
     }
     port = (unsigned)ntohs(address.sin_port);
-    cm_pair_port = (uint16_t)port;
     rc = snprintf(candidate, sizeof(candidate), "http://%s:%u/?k=%s",
                   info.ip_address, port, cm_pair_key);
     if (rc < 0 || (size_t)rc >= sizeof(candidate) ||
