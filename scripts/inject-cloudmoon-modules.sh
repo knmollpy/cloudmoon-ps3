@@ -430,47 +430,127 @@ new_actions = """                // CloudMoon main actions: stream settings and 
 """
 s = s[:start] + new_actions + s[end:]
 
+# CloudMoon panel helper: uses the same upstream Tiny3D 2D renderer and viewport.
+helper_code = r"""
+static void cloudmoon_draw_panel(float x1, float y1, float x2, float y2,
+                                 float r, float g, float b, float a) {
+    tiny3d_SetPolygon(TINY3D_TRIANGLE_STRIP);
+    tiny3d_VertexPos(x1, y1, 65535);
+    tiny3d_VertexFcolor(r, g, b, a);
+    tiny3d_VertexPos(x2, y1, 65535);
+    tiny3d_VertexFcolor(r, g, b, a);
+    tiny3d_VertexPos(x1, y2, 65535);
+    tiny3d_VertexFcolor(r, g, b, a);
+    tiny3d_VertexPos(x2, y2, 65535);
+    tiny3d_VertexFcolor(r, g, b, a);
+    tiny3d_End();
+}
+"""
+if "static void cloudmoon_draw_panel(" not in s:
+    helper_anchor = "static void ui_loop(void *arg) {"
+    if helper_anchor not in s:
+        raise SystemExit("Could not locate UI loop for CloudMoon card helper")
+    s = s.replace(helper_anchor, helper_code + "\n" + helper_anchor, 1)
+
 # Replace the old Sunshine menu rows with a CloudMoon session landing screen.
 start = s.find("                // Row 0: Sunshine Host")
 end = s.find("            } else if (ui_state == UI_STATE_SETTINGS)", start)
 if start < 0 or end < 0:
     raise SystemExit("Could not locate the main-menu drawing block")
-new_rows = """                // Row 0: Stream settings
-                SetFontSize(SF(24), SF(24));
-                SetFontColor((active_main_item == 0) ? 0xff82b1ff : 0xffffffff, 0);
-                DrawString(SX(60), SY(125), "[ CONFIGURE STREAM SETTINGS ]");
+new_rows = """                // CloudMoon home: two large selectable action cards.
+                const int settings_selected = (active_main_item == 0);
+                const int connect_selected = (active_main_item == 1);
+                const float selected_r = 0.055f, selected_g = 0.66f, selected_b = 1.0f;
+                const float idle_r = 0.025f, idle_g = 0.24f, idle_b = 0.48f;
 
-                // Active settings summary preview
+                // Main action card backgrounds.
+                cloudmoon_draw_panel(SX(48), SY(105), SX(620), SY(360),
+                                     0.010f, 0.029f, 0.068f, 0.98f);
+                cloudmoon_draw_panel(SX(650), SY(105), SX(1232), SY(360),
+                                     0.008f, 0.024f, 0.060f, 0.98f);
+
+                // Active card gets a bright cyan top and left edge; idle card stays blue.
+                cloudmoon_draw_panel(SX(48), SY(105), SX(620), SY(109),
+                                     settings_selected ? selected_r : idle_r,
+                                     settings_selected ? selected_g : idle_g,
+                                     settings_selected ? selected_b : idle_b, 1.0f);
+                cloudmoon_draw_panel(SX(48), SY(105), SX(54), SY(360),
+                                     settings_selected ? selected_r : idle_r,
+                                     settings_selected ? selected_g : idle_g,
+                                     settings_selected ? selected_b : idle_b, 1.0f);
+                cloudmoon_draw_panel(SX(650), SY(105), SX(1232), SY(109),
+                                     connect_selected ? selected_r : idle_r,
+                                     connect_selected ? selected_g : idle_g,
+                                     connect_selected ? selected_b : idle_b, 1.0f);
+                cloudmoon_draw_panel(SX(650), SY(105), SX(656), SY(360),
+                                     connect_selected ? selected_r : idle_r,
+                                     connect_selected ? selected_g : idle_g,
+                                     connect_selected ? selected_b : idle_b, 1.0f);
+
+                // Left card: stream profile.
+                SetFontSize(SF(16), SF(16));
+                SetFontColor(0x61d2ffff, 0);
+                DrawString(SX(78), SY(137), "01  /  STREAM PROFILE"); /* CLOUDMOON_HOME_CARDS */
+                SetFontSize(SF(29), SF(29));
+                SetFontColor(settings_selected ? 0x44b8ffff : 0xb4cbe4ff, 0);
+                DrawString(SX(78), SY(178), "CONFIGURE STREAM");
                 SetFontSize(SF(18), SF(18));
-                SetFontColor(0xff9e9e9e, 0);
-                int kbps = ui_bitrate_options[ui_bitrate_idx];
-                if (kbps % 1000 == 0) {
-                    DrawFormatString(SX(60), SY(165), "Current: %d FPS | %d Mbps | %s | %s | %s",
-                                     ui_fps, kbps / 1000,
-                                     ui_display_is_4_3 ? "4:3 Display" : "16:9 Display",
-                                     ui_get_stream_res_name(), ui_get_scaling_mode_name());
-                } else {
-                    DrawFormatString(SX(60), SY(165), "Current: %d FPS | %.1f Mbps | %s | %s | %s",
-                                     ui_fps, (float)kbps / 1000.0f,
-                                     ui_display_is_4_3 ? "4:3 Display" : "16:9 Display",
-                                     ui_get_stream_res_name(), ui_get_scaling_mode_name());
-                }
+                SetFontColor(0xb4cbe4ff, 0);
+                int cloudmoon_kbps = ui_bitrate_options[ui_bitrate_idx];
+                DrawFormatString(SX(78), SY(231), "TARGET   %d FPS     BITRATE   %.1f Mbps",
+                                 ui_fps, (float)cloudmoon_kbps / 1000.0f);
+                DrawFormatString(SX(78), SY(265), "OUTPUT   %s     RESOLUTION   %s",
+                                 ui_display_is_4_3 ? "4:3" : "16:9",
+                                 ui_get_stream_res_name());
+                SetFontSize(SF(17), SF(17));
+                SetFontColor(settings_selected ? 0x61d2ffff : 0x8ca6c6ff, 0);
+                DrawString(SX(78), SY(319), settings_selected
+                           ? "[ X ]  OPEN STREAM SETTINGS"
+                           : "PRESS X TO EDIT STREAM SETTINGS");
 
-                // Row 1: CloudMoon session connect
-                SetFontSize(SF(24), SF(24));
-                SetFontColor((active_main_item == 1) ? 0xff82b1ff : 0xffffffff, 0);
-                DrawString(SX(60), SY(235), "[ CONNECT TO CLOUDMOON ]");
-
+                // Right card: CloudMoon session entry.
+                SetFontSize(SF(16), SF(16));
+                SetFontColor(0x61d2ffff, 0);
+                DrawString(SX(680), SY(137), "02  /  CLOUD SESSION");
+                SetFontSize(SF(28), SF(28));
+                SetFontColor(connect_selected ? 0x44b8ffff : 0xb4cbe4ff, 0);
+                DrawString(SX(680), SY(178), "CONNECT TO CLOUDMOON");
                 SetFontSize(SF(18), SF(18));
-                SetFontColor(0xffb0bec5, 0);
-                DrawString(SX(60), SY(280), "Session file: USRDIR/cloudmoon.ini");
-                DrawString(SX(60), SY(312), "Set game, user_id and android_instance_id before connecting.");
+                SetFontColor(0xb4cbe4ff, 0);
+                DrawString(SX(680), SY(231), "Load the active coordinator session");
+                DrawString(SX(680), SY(263), "USRDIR/cloudmoon.ini");
+                SetFontSize(SF(16), SF(16));
+                SetFontColor(0x8ca6c6ff, 0);
+                DrawString(SX(680), SY(291), "Requires game, user_id and android_instance_id");
+                SetFontSize(SF(17), SF(17));
+                SetFontColor(connect_selected ? 0x61d2ffff : 0x8ca6c6ff, 0);
+                DrawString(SX(680), SY(319), connect_selected
+                           ? "[ X ]  START CLOUD SESSION"
+                           : "PRESS X TO CONNECT");
 
-                // Controls legend
+                // Compact stream summary strip.
+                cloudmoon_draw_panel(SX(48), SY(382), SX(1232), SY(454),
+                                     0.008f, 0.022f, 0.052f, 0.98f);
+                cloudmoon_draw_panel(SX(48), SY(382), SX(1232), SY(384),
+                                     0.025f, 0.30f, 0.72f, 1.0f);
+                SetFontSize(SF(13), SF(13));
+                SetFontColor(0x8ca6c6ff, 0);
+                DrawString(SX(76), SY(397), "ACTIVE STREAM PROFILE");
                 SetFontSize(SF(18), SF(18));
-                SetFontColor(0xff9e9e9e, 0);
-                DrawString(SX(60), SY(445), "\\x05 Navigate   |   \\x01 Select   |   \\x02 Exit to XMB");
+                SetFontColor(0xf0f6ffff, 0);
+                DrawFormatString(SX(76), SY(425), "%d FPS", ui_fps);
+                DrawFormatString(SX(288), SY(425), "%.1f Mbps", (float)cloudmoon_kbps / 1000.0f);
+                DrawString(SX(500), SY(425), ui_display_is_4_3 ? "4:3 DISPLAY" : "16:9 DISPLAY");
+                DrawString(SX(735), SY(425), ui_get_stream_res_name());
+                DrawString(SX(1015), SY(425),
+                           ui_get_scaling_mode() == SCALING_MODE_SHADER ? "SHADER" : "LEGACY");
+
+                // Controller guide.
+                SetFontSize(SF(16), SF(16));
+                SetFontColor(0x8ca6c6ff, 0);
+                DrawString(SX(76), SY(479), "D-PAD  NAVIGATE     |     X  SELECT     |     O  EXIT TO XMB");
 """
+
 s = s[:start] + new_rows + s[end:]
 
 replace_once('DrawString(SX(40), SY(18), "Moonlight PS3");',
@@ -521,16 +601,27 @@ palette = {
     "0.090f, 0.090f, 0.090f": "0.006f, 0.018f, 0.045f",
     "0.16f, 0.16f, 0.16f": "0.025f, 0.090f, 0.190f",
     "1.0f, 0.51f, 0.69f": "0.06f, 0.58f, 1.0f",
-    "0xff82b1ff": "0xff55c8ff",
-    "0xffb0bec5": "0xffb7cce5",
-    "0xff9e9e9e": "0xff8eacd0",
-    "0xff80d8ff": "0xff65caff",
-    "0x00ff00ff": "0xff65caff",
+    "0xff82b1ff": "0x44b8ffff",
+    "0xffb0bec5": "0xb4cbe4ff",
+    "0xff9e9e9e": "0x8ca6c6ff",
+    "0xff80d8ff": "0x61d2ffff",
+    "0x00ff00ff": "0x61d2ffff",
+    "0xffff82b1": "0x61d2ffff",
 }
 for old, new in palette.items():
     if old not in s and new not in s:
         raise SystemExit("Expected UI palette token missing: " + old)
     s = s.replace(old, new)
+
+# Fail the build if any of the known pink RGBA literals survived.
+for pink_token in ("0xff82b1ff", "0xffb0bec5", "0xff9e9e9e",
+                   "0xff80d8ff", "0x00ff00ff", "0xffff82b1"):
+    if pink_token in s:
+        raise SystemExit("Pink font color survived CloudMoon theme patch: " + pink_token)
+
+# Ensure the rebuilt home screen is genuinely card-based, not the stock row layout.
+if "cloudmoon_draw_panel" not in s or "01  /  STREAM PROFILE" not in s:
+    raise SystemExit("CloudMoon redesigned home screen verification failed")
 
 # Verify strong blue colors are present in the final patched UI source.
 for token in ("tiny3d_Clear(0x07142600", "0.025f, 0.300f, 0.720f", "0xff55c8ff"):
