@@ -464,10 +464,20 @@ new_rows = """                // CloudMoon home: two large selectable action car
                 const float idle_r = 0.025f, idle_g = 0.24f, idle_b = 0.48f;
 
                 // Main action card backgrounds.
+                // High-contrast CloudMoon surfaces: clearly blue, not near-black.
                 cloudmoon_draw_panel(SX(48), SY(105), SX(620), SY(360),
-                                     0.010f, 0.029f, 0.068f, 0.98f);
+                                     0.025f, 0.105f, 0.205f, 1.0f);
                 cloudmoon_draw_panel(SX(650), SY(105), SX(1232), SY(360),
-                                     0.008f, 0.024f, 0.060f, 0.98f);
+                                     0.018f, 0.075f, 0.160f, 1.0f);
+                // Thin inset outlines make the two independent panels visible on TV.
+                cloudmoon_draw_panel(SX(48), SY(105), SX(620), SY(108),
+                                     0.035f, 0.18f, 0.34f, 1.0f);
+                cloudmoon_draw_panel(SX(48), SY(357), SX(620), SY(360),
+                                     0.035f, 0.18f, 0.34f, 1.0f);
+                cloudmoon_draw_panel(SX(650), SY(105), SX(1232), SY(108),
+                                     0.035f, 0.18f, 0.34f, 1.0f);
+                cloudmoon_draw_panel(SX(650), SY(357), SX(1232), SY(360),
+                                     0.035f, 0.18f, 0.34f, 1.0f);
 
                 // Active card gets a bright cyan top and left edge; idle card stays blue.
                 cloudmoon_draw_panel(SX(48), SY(105), SX(620), SY(109),
@@ -545,9 +555,22 @@ new_rows = """                // CloudMoon home: two large selectable action car
                 DrawString(SX(1015), SY(425),
                            ui_get_scaling_mode() == SCALING_MODE_SHADER ? "SHADER" : "LEGACY");
 
-                // Controller guide.
+                // CloudMoon identity rail: a strong blue strip distinct from Moonlight.
+                cloudmoon_draw_panel(SX(48), SY(76), SX(1232), SY(91),
+                                     0.025f, 0.22f, 0.46f, 1.0f);
+                cloudmoon_draw_panel(SX(48), SY(76), SX(56), SY(91),
+                                     0.10f, 0.72f, 1.0f, 1.0f);
+                SetFontSize(SF(14), SF(14));
+                SetFontColor(0x61d2ffff, 0);
+                DrawString(SX(76), SY(78), "CLOUDMOON  /  REMOTE PLAY");
+                SetFontColor(0xe2f2ffff, 0);
+                DrawString(SX(910), SY(78), "PLAYSTATION 3  -  NATIVE CLIENT");
+
+                // Controller guide on its own footer rail.
+                cloudmoon_draw_panel(SX(48), SY(470), SX(1232), SY(506),
+                                     0.012f, 0.055f, 0.115f, 1.0f);
                 SetFontSize(SF(16), SF(16));
-                SetFontColor(0x8ca6c6ff, 0);
+                SetFontColor(0xb4cbe4ff, 0);
                 DrawString(SX(76), SY(479), "D-PAD  NAVIGATE     |     X  SELECT     |     O  EXIT TO XMB");
 """
 
@@ -590,8 +613,8 @@ else:
     s = s.replace(clear_old, clear_new, 1)
 
 palette = {
-    "0.188f, 0.188f, 0.188f": "0.012f, 0.030f, 0.070f",
-    "0.141f, 0.141f, 0.141f": "0.006f, 0.016f, 0.040f",
+    "0.188f, 0.188f, 0.188f": "0.018f, 0.055f, 0.115f",
+    "0.141f, 0.141f, 0.141f": "0.010f, 0.032f, 0.075f",
     "0.200f, 0.260f, 0.620f": "0.025f, 0.150f, 0.340f",
     "0.102f, 0.137f, 0.494f": "0.020f, 0.420f, 0.920f",
     "0.247f, 0.318f, 0.710f": "0.025f, 0.300f, 0.720f",
@@ -620,8 +643,12 @@ for pink_token in ("0xff82b1ff", "0xffb0bec5", "0xff9e9e9e",
         raise SystemExit("Pink font color survived CloudMoon theme patch: " + pink_token)
 
 # Ensure the rebuilt home screen is genuinely card-based, not the stock row layout.
-if "cloudmoon_draw_panel" not in s or "01  /  STREAM PROFILE" not in s:
-    raise SystemExit("CloudMoon redesigned home screen verification failed")
+if ("cloudmoon_draw_panel" not in s
+        or "01  /  STREAM PROFILE" not in s
+        or "CLOUDMOON  /  REMOTE PLAY" not in s
+        or "0.025f, 0.105f, 0.205f" not in s
+        or "0.018f, 0.075f, 0.160f" not in s):
+    raise SystemExit("CloudMoon high-contrast custom home screen verification failed")
 
 # Verify strong blue colors are present in the final patched UI source.
 for token in ("tiny3d_Clear(0x07142600", "0.025f, 0.300f, 0.720f", "0x44b8ffff", "0xb4cbe4ff", "0x61d2ffff", "CLOUDMOON_HOME_CARDS"):
