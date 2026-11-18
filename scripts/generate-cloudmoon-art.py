@@ -62,7 +62,8 @@ def draw_mark(im, box, scale=1.0, label=True):
 # ICON0.PNG: PS3's 320x176 XMB icon aspect ratio.
 icon=background(320,176)
 draw_mark(icon,(35,8,285,164),0.52,True)
-icon.save(out/"ICON0.PNG",format="PNG",optimize=True)
+if not (out/"ICON0.PNG").exists():
+    icon.save(out/"ICON0.PNG",format="PNG",optimize=True)
 
 # PIC1.PNG: wide XMB background, 1920x1080.
 pic=background(1920,1080)
@@ -73,5 +74,6 @@ d.text((845,495),"PLAY YOUR GAMES. ANYWHERE.",font=font(38,True),fill=(80,190,25
 d.text((845,575),"CLOUD GAMING  •  PLAYSTATION 3",font=font(25),fill=(155,190,235,220))
 # Soft light bloom behind the emblem and title.
 pic=pic.filter(ImageFilter.GaussianBlur(0.25))
-pic.save(out/"PIC1.PNG",format="PNG",optimize=True)
-print("Generated assets/ICON0.PNG (320x176) and assets/PIC1.PNG (1920x1080)")
+if not (out/"PIC1.PNG").exists():
+    pic.save(out/"PIC1.PNG",format="PNG",optimize=True)
+print("Preserved existing artwork; generated only missing ICON0.PNG/PIC1.PNG files.")
