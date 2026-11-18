@@ -440,7 +440,7 @@ for required_include in ('#include "cloudmoon_pairing.h"', '#include "cloudmoon_
         include_anchor = '#include "input.h"'
         if include_anchor not in main:
             raise SystemExit("Could not locate main input include for QR pairing")
-        main = main.replace(include_anchor, include_anchor + '\\n' + required_include, 1)
+        main = main.replace(include_anchor, include_anchor + '\n' + required_include, 1)
 
 safe_main = """  /* Query the GameOS-selected mode without changing the HDMI output. */
   videoState vstate = {0};
