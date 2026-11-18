@@ -449,7 +449,7 @@ if "ui_set_cloudmoon_link_qr" not in h:
 header_path.write_text(h)
 
 if '#include "cloudmoon_catalog.h"' not in s:
-    s = s.replace('#include "input.h"', '#include "input.h"\\n#include "cloudmoon_catalog.h"', 1)
+    s = s.replace('#include "input.h"', '#include "input.h"\n#include "cloudmoon_catalog.h"', 1)
 state_anchor = "static volatile int ui_state = UI_STATE_IP_ENTRY;"
 qr_globals = """#define UI_CLOUDMOON_QR_MAX 3249
 static int cloudmoon_catalog_mode = 0;
