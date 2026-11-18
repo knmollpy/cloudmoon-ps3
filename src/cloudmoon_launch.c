@@ -13,13 +13,13 @@
 #include <unistd.h>
 #define CM_CONFIG_PATH "/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon.ini"
 #define CM_CA_PATH "/dev_hdd0/game/MNLT00001/USRDIR/cacert.pem"
-typedef struct { cm_cloudmoon_webrtc_t *rtc; } cm_launch_rtc_context;
+typedef struct { cm_cloudmoon_webrtc_t *rtc; int width; int height; } cm_launch_rtc_context;
 static void cm_launch_signal(void *context,cm_cloudmoon_client_t *client,const char *json,size_t length){
  cm_launch_rtc_context *state=(cm_launch_rtc_context*)context;
  if(!state)return;
  if(!json&&!length){if(state->rtc)cm_cloudmoon_webrtc_detach_signaling(state->rtc);return;}
  if(!client||!json||!length)return;
- if(!state->rtc){if(cm_cloudmoon_webrtc_create(&state->rtc,client,1280,720)!=0){ui_push_log("CloudMoon: WebRTC peer initialization failed.");return;}}
+ if(!state->rtc){if(cm_cloudmoon_webrtc_create(&state->rtc,client,state->width,state->height)!=0){ui_push_log("CloudMoon: WebRTC peer initialization failed.");return;}}
  cm_cloudmoon_webrtc_signal(state->rtc,json,length);
 }
 static void cm_trim(char*s){size_t n;while(*s&&isspace((unsigned char)*s))memmove(s,s+1,strlen(s));n=strlen(s);while(n&&isspace((unsigned char)s[n-1]))s[--n]=0;}
@@ -49,10 +49,11 @@ static void cm_cloudmoon_worker(void *arg){
   ui_push_log("CloudMoon: invalid android_instance_id encoding.");
   free(cfg);cm_cloudmoon_thread_running=0;sysThreadExit(0);
  }
- registration.width=1280;registration.height=720;
+ registration.width=ui_get_stream_width();registration.height=ui_get_stream_height();
+ rtc_state.width=registration.width;rtc_state.height=registration.height;
  registration.game=cfg->game;registration.user_id=cfg->user;registration.instance_id=normalized;
  ui_push_log("CloudMoon: connecting directly to coordinator...");
- NLOG("CloudMoon: coordinator session starting for package %s",cfg->game);
+ NLOG("CloudMoon: coordinator session starting for package %s at %dx%d (%d FPS, %d Kbps)",cfg->game,registration.width,registration.height,ui_get_fps(),ui_get_bitrate());
  rc=cm_cloudmoon_client_run_from_instance_id(normalized,CM_CA_PATH,20,&registration,
       cm_ps3_random_source,NULL,cm_launch_signal,&rtc_state);
  /* CloudMoon closes Socket.IO with getout/errorCode=10 after WebRTC setup.
