@@ -13,6 +13,8 @@ Cliente nativo experimental para PS3 HEN, con conexión directa al coordinator d
 - H.264 depacketizado hacia el decodificador hardware cellVdec.
 - Opus estéreo 48 kHz hacia el reproductor de audio PS3.
 - CA bundle incluido en el PKG para validar TLS.
+- Primer catálogo nativo con 39 títulos públicos y sus package IDs cotejados contra las imágenes CDN oficiales de CloudMoon.
+- Selección del título en PS3 enlazada al QR: el móvil y la PS3 validan que la sesión importada corresponde al mismo package ID.
 
 ## Compilar el PKG CloudMoon
 
@@ -28,13 +30,13 @@ El objetivo cruza Mbed TLS y libdatachannel para PPU/PSL1GHT y luego genera el P
 
 La aplicación de PS3 genera su propio QR de un solo uso; no es un QR oficial de inicio de sesión de CloudMoon. El celular y la PS3 deben estar conectados a la misma red local.
 
-1. En la PS3, elegí **LINK CLOUDMOON SESSION FROM PHONE**.
-2. Escaneá el QR con el celular. Se abre la página de vinculación alojada directamente en la PS3.
+1. En la PS3, elegí **BROWSE CLOUDMOON GAMES** y seleccioná un título. La primera versión del catálogo incluye 39 títulos destacados; todavía no es el catálogo completo de más de 300 juegos.
+2. La PS3 genera un QR específico para el título elegido. Escanealo con el celular; se abre la página de vinculación alojada directamente en la PS3.
 3. En esa página, abrí CloudMoon oficial en una segunda pestaña, iniciá sesión con el método que CloudMoon ofrezca y pulsá **Jugar** en el juego elegido.
 4. Copiá la URL completa de la sesión activa, volvé a la pestaña de vinculación, pegala y pulsá **Validar sesión y vincular con esta PS3**.
 5. La PS3 valida los campos y guarda `cloudmoon.ini`. Volvé al menú y elegí **CONNECT TO CLOUDMOON**.
 
-El proceso vincula una **sesión de juego activa**, no guarda un inicio de sesión permanente de CloudMoon. Para cambiar de juego, iniciá el nuevo juego en CloudMoon y repetí la vinculación. La exploración del catálogo y la selección del juego siguen ocurriendo en la página oficial del celular; el catálogo nativo de PS3 todavía no está implementado.
+El proceso vincula una **sesión de juego activa**, no guarda un inicio de sesión permanente de CloudMoon. Para cambiar de juego, elegí otro título en la PS3 y repetí la vinculación. La lista nativa actual es una primera selección fija de 39 juegos: aún faltan sincronizar los más de 300 títulos, añadir categorías y búsqueda, actualizar imágenes y descubrir el flujo oficial que permita crear una nueva sesión de juego directamente desde PS3. La selección en PS3 no inicia por sí sola una partida; todavía hay que abrir el mismo juego en el móvil y copiar su URL de sesión activa.
 
 La página local no solicita tu contraseña ni códigos de Google, y no envía la URL a servicios de terceros. La transferencia entre el celular y la PS3 usa HTTP dentro de la red local (no TLS): usá una Wi-Fi privada de confianza y no compartas el QR, la URL ni el archivo de sesión. El QR caduca a los 10 minutos, al cancelar la pantalla o al completar la vinculación.
 
