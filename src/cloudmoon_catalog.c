@@ -46,6 +46,8 @@ static const cm_cloudmoon_game_t cm_games[] = {
     {"BASEBALL 9", "us.kr.baseballnine", CLOUDMOON_ICON_PREFIX "us.kr.baseballnine_20261103.webp"}
 };
 
+static int cm_selected_index = -1;
+
 size_t cm_cloudmoon_catalog_count(void) {
     return sizeof(cm_games) / sizeof(cm_games[0]);
 }
@@ -62,4 +64,15 @@ const cm_cloudmoon_game_t *cm_cloudmoon_catalog_find_package(const char *package
         if (strcmp(cm_games[i].package_id, package_id) == 0) return &cm_games[i];
     }
     return NULL;
+}
+
+int cm_cloudmoon_catalog_select(int index) {
+    if (index < 0 || (size_t)index >= cm_cloudmoon_catalog_count()) return -1;
+    cm_selected_index = index;
+    return 0;
+}
+
+const cm_cloudmoon_game_t *cm_cloudmoon_catalog_selected(void) {
+    if (cm_selected_index < 0) return NULL;
+    return cm_cloudmoon_catalog_at((size_t)cm_selected_index);
 }
