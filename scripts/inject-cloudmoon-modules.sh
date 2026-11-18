@@ -869,10 +869,10 @@ new_rows = """                // Row 0: Native CloudMoon catalogue
                 // Row 2: Link selected game via phone
                 SetFontSize(SF(22), SF(22));
                 SetFontColor((active_main_item == 2) ? 0xff55c8ff : 0xffffffff, 0);
-                DrawString(SX(60), SY(270), "[ LINK GAME FROM PHONE ]");
+                DrawString(SX(60), SY(270), "[ SIGN IN WITH PHONE QR ]");
                 SetFontSize(SF(16), SF(16));
                 SetFontColor(0xff7894b8, 0);
-                DrawString(SX(60), SY(298), "Scan the QR and import the active CloudMoon game session.");
+                DrawString(SX(60), SY(298), "Scan with your phone to sign in and link your active CloudMoon game.");
 
                 // Row 3: Connect
                 SetFontSize(SF(22), SF(22));
