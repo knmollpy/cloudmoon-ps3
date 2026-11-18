@@ -386,7 +386,7 @@ int cm_cloudmoon_webrtc_create(cm_cloudmoon_webrtc_t**out,
     rtcSetClosedCallback(rtc->data_channel,cm_rtc_channel_closed);
 
     CM_ATOMIC_STORE(&rtc->input_running,1);
-    if(sysThreadCreate(&rtc->input_thread,cm_rtc_input_loop,rtc,150,0x4000,
+    if(sysThreadCreate(&rtc->input_thread,cm_rtc_input_loop,rtc,150,0x40000,
                        THREAD_JOINABLE,"CloudMoonInput")!=0)goto fail;
     rtc->input_started=1;
     *out=rtc;return 0;
