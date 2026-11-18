@@ -26,7 +26,7 @@ static void cm_launch_signal(void *context,cm_cloudmoon_client_t *client,const c
 static void cm_trim(char*s){size_t n;while(*s&&isspace((unsigned char)*s))memmove(s,s+1,strlen(s));n=strlen(s);while(n&&isspace((unsigned char)s[n-1]))s[--n]=0;}
 static int cm_read_config(char*game,size_t gc,char*user,size_t uc,char*instance,size_t ic){
  FILE*f=fopen(CM_CONFIG_PATH,"r");char line[16384],session_url[16384]={0};
- if(!f){f=fopen(CM_CONFIG_PATH,"w");if(f){fputs("# Import a CloudMoon session URL copied after launching a game on your phone.\\n",f);fputs("# Or fill the three fields manually. Keep this file private.\\n",f);fputs("game=\\nuser_id=\\nandroid_instance_id=\\nsession_url=\\n",f);fclose(f);}return 0;}
+ if(!f){f=fopen(CM_CONFIG_PATH,"w");if(f){fputs("# Import a CloudMoon session URL copied after launching a game on your phone.\n",f);fputs("# Or fill the three fields manually. Keep this file private.\n",f);fputs("game=\nuser_id=\nandroid_instance_id=\nsession_url=\n",f);fclose(f);}return 0;}
  while(fgets(line,sizeof(line),f)){char*eq;cm_trim(line);if(!line[0]||line[0]=='#'||line[0]==';')continue;eq=strchr(line,'=');if(!eq)continue;*eq++=0;cm_trim(line);cm_trim(eq);
   if(!strcmp(line,"game")){if(strlen(eq)>=gc){fclose(f);return -1;}strcpy(game,eq);}
   else if(!strcmp(line,"user_id")){if(strlen(eq)>=uc){fclose(f);return -1;}strcpy(user,eq);}
