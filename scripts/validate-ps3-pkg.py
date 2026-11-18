@@ -91,14 +91,10 @@ def main() -> None:
     print(f"PASS: CA bundle ({ca.stat().st_size} bytes)")
 
     check_png(stage / "ICON0.PNG", (320, 176))
-    preview = stage / "PIC1.PNG"
-    if preview.is_file():
-        check_png(preview, (1920, 1080))
-    else:
-        # PIC1 is presentation-only and must not block functional PKG checks.
-        # The final branded build still needs the user's supplied background.
-        print("WARN: PIC1.PNG is absent; XMB preview background is not customized")
-    print("PASS: all pre-upload PKG checks completed (presentation warning may remain)")
+    # The generated CloudMoon artwork is part of the requested XMB identity,
+    # so a package without its full-size preview background is incomplete.
+    check_png(stage / "PIC1.PNG", (1920, 1080))
+    print("PASS: all pre-upload PKG checks completed")
 
 
 if __name__ == "__main__":
