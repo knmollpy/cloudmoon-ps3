@@ -234,7 +234,7 @@ if ready_decl not in u:
     anchor = "static volatile int ui_running = 1;"
     if anchor not in u:
         raise SystemExit("Could not locate UI running state")
-    u = u.replace(anchor, anchor + "\\n" + ready_decl, 1)
+    u = u.replace(anchor, anchor + "\n" + ready_decl, 1)
 ready_fn = """int ui_wait_ready(uint32_t timeout_ms) {
     const u64 start = sysGetSystemTime();
     const u64 timeout_us = (u64)timeout_ms * 1000ULL;
@@ -249,12 +249,12 @@ if "int ui_wait_ready(uint32_t timeout_ms)" not in u:
     anchor = "int ui_is_running() { return ui_running; }"
     if anchor not in u:
         raise SystemExit("Could not locate UI status accessors")
-    u = u.replace(anchor, anchor + "\\n" + ready_fn, 1)
-if "ui_first_frame_ready = 0;" not in u:
+    u = u.replace(anchor, anchor + "\n" + ready_fn, 1)
+if "    ui_first_frame_ready = 0;" not in u:
     anchor = "void ui_init(int width, int height, int is_4_3) {\n"
     if anchor not in u:
         raise SystemExit("Could not locate ui_init")
-    u = u.replace(anchor, anchor + "    ui_first_frame_ready = 0;\\n", 1)
+    u = u.replace(anchor, anchor + "    ui_first_frame_ready = 0;\n", 1)
 if "ui_first_frame_ready = 1;" not in u:
     anchor = "        tiny3d_Flip();\n"
     if anchor not in u:
@@ -264,7 +264,7 @@ if "int ui_wait_ready(uint32_t timeout_ms);" not in header:
     anchor = "void ui_init(int width, int height, int is_4_3);"
     if anchor not in header:
         raise SystemExit("Could not locate ui_init declaration")
-    header = header.replace(anchor, anchor + "\\nint ui_wait_ready(uint32_t timeout_ms);", 1)
+    header = header.replace(anchor, anchor + "\nint ui_wait_ready(uint32_t timeout_ms);", 1)
 ui.write_text(u)
 h.write_text(header)
 PY
