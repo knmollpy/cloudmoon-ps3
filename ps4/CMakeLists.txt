@@ -14,6 +14,7 @@ add_library(cloudmoon_protocol_core STATIC
     ../src/cloudmoon_session.c
     ../src/cloudmoon_discovery.c
     ../src/cloudmoon_ws.c
+    ../src/cloudmoon_client.c
 )
 target_include_directories(cloudmoon_protocol_core PUBLIC ../src)
 target_compile_options(cloudmoon_protocol_core PRIVATE -Wall -Wextra -Werror)
