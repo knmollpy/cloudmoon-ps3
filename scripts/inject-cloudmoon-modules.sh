@@ -141,6 +141,7 @@ if ! grep -q 'src/cloudmoon_webrtc.c' "$PS3_BASE/Makefile"; then
   if ! grep -q 'cloudmoon_autostart' "$DST/main.c"; then
     sed -i '/#include "input.h"/a #include "cloudmoon_launch.h"' "$DST/main.c"
   fi
+  python3 "$ROOT_DIR/scripts/generate-cloudmoon-art.py" "$ROOT_DIR/assets"
   if [ -s "$ROOT_DIR/assets/ICON0.PNG" ]; then
     cp "$ROOT_DIR/assets/ICON0.PNG" "$PS3_BASE/ICON0.PNG"
   else
@@ -319,9 +320,6 @@ PY
   # Ship a real CA bundle inside the PKG so TLS certificate verification works.
   if ! grep -q 'cacert.pem' "$PS3_BASE/Makefile"; then
     sed -i '/mkdir -p $(BUILD)\/pkg\/USRDIR/a\	cp '"$ROOT_DIR"'/assets/cacert.pem $(BUILD)/pkg/USRDIR/cacert.pem' "$PS3_BASE/Makefile"
-  fi
-  if ! grep -q 'resize-ps3-icon.py' "$PS3_BASE/Makefile"; then
-    sed -i '/cp $(ICON0) $(BUILD)\/pkg\/ICON0.PNG/a\	python3 $(abspath ../../scripts/resize-ps3-icon.py) $(BUILD)/pkg/ICON0.PNG' "$PS3_BASE/Makefile"
   fi
 fi
 # Give the generated package CloudMoon identity instead of the upstream Moonlight label.
