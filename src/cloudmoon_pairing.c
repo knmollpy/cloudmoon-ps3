@@ -351,6 +351,16 @@ int cm_cloudmoon_pair_start(const char *selected_game, char *url, size_t url_cap
     if (!url || !url_capacity || !modules ||
         modules_capacity < CM_PAIR_QR_MAX_MODULES || !module_size) return -1;
     cm_cloudmoon_pair_stop();
+    cm_pair_expected_game[0] = '\0';
+    if (selected_game && selected_game[0]) {
+        size_t i, n = strlen(selected_game);
+        if (n >= sizeof(cm_pair_expected_game)) return -1;
+        for (i = 0; i < n; ++i) {
+            unsigned char c = (unsigned char)selected_game[i];
+            if (!(isalnum(c) || c == '.' || c == '_' || c == '-')) return -1;
+        }
+        memcpy(cm_pair_expected_game, selected_game, n + 1);
+    }
     memset(&info, 0, sizeof(info));
     if (netCtlGetInfo(NET_CTL_INFO_IP_ADDRESS, &info) != 0 ||
         !info.ip_address[0] || strcmp(info.ip_address, "0.0.0.0") == 0) {
@@ -441,24 +451,6 @@ int cm_cloudmoon_pair_start(const char *selected_game, char *url, size_t url_cap
     *module_size = qr_size;
     cm_pair_stop_requested = 0;
     cm_pair_linked = 0;
-    cm_pair_expected_game[0] = '\0';
-    if (selected_game && selected_game[0]) {
-        size_t i, n = strlen(selected_game);
-        if (n >= sizeof(cm_pair_expected_game)) {
-            close(cm_pair_listen_fd);
-            cm_pair_listen_fd = -1;
-            return -1;
-        }
-        for (i = 0; i < n; ++i) {
-            unsigned char c = (unsigned char)selected_game[i];
-            if (!(isalnum(c) || c == '.' || c == '_' || c == '-')) {
-                close(cm_pair_listen_fd);
-                cm_pair_listen_fd = -1;
-                return -1;
-            }
-        }
-        memcpy(cm_pair_expected_game, selected_game, n + 1);
-    }
     cm_pair_expire_at_ms = cm_pair_now_ms() + CM_PAIR_TTL_MS;
     if (cm_pair_expire_at_ms <= CM_PAIR_TTL_MS) {
         close(cm_pair_listen_fd);
