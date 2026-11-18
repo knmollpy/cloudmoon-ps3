@@ -5,6 +5,7 @@
 #include "cloudmoon_webrtc.h"
 #include "cloudmoon_session.h"
 #include "cloudmoon_input.h"
+#include "cloudmoon_video_limits.h"
 #include "video.h"
 #include "audio.h"
 #include "input.h"
@@ -30,6 +31,8 @@ struct cm_cloudmoon_webrtc {
     int pc,video_track,audio_track;
     volatile int data_channel,video_started,audio_started,connected,closing;
     int width,height,video_width,video_height;
+    volatile int layout_pending;
+    int pending_layout_width,pending_layout_height;
     volatile int media_callbacks,video_blocked,video_keyframe_requested,video_failure_logged;
     volatile int input_running;
     int input_started;
@@ -397,12 +400,20 @@ static void cm_rtc_video_frame(int track,const char*data,int size,
         goto done;
     }
     if(sps_result>0) {
-        if(actual_width>rtc->width||actual_height>rtc->height) {
-            cm_rtc_video_fail(rtc,"CloudMoon: stream resolution exceeds negotiated buffer limit.");
+        if(!cm_cloudmoon_video_dimensions_supported(rtc->width,rtc->height,
+                                                       actual_width,actual_height)) {
+            cm_rtc_video_fail(rtc,"CloudMoon: stream resolution exceeds the safe decoder memory limit.");
             cm_rtc_request_keyframe_once(rtc,track);
             goto done;
         }
         if(CM_ATOMIC_LOAD(&rtc->video_started)==0) {
+            /* The server can rotate a mobile game to portrait. Update touch
+               coordinates on the input thread before the video becomes live. */
+            if(CM_ATOMIC_CAS(&rtc->layout_pending,0,-1)==0) {
+                rtc->pending_layout_width=actual_width;
+                rtc->pending_layout_height=actual_height;
+                CM_ATOMIC_STORE(&rtc->layout_pending,1);
+            }
             if(CM_ATOMIC_CAS(&rtc->video_started,0,1)==0) {
                 rtc->video_width=actual_width;
                 rtc->video_height=actual_height;
@@ -569,6 +580,15 @@ static void cm_rtc_input_loop(void*arg) {
     cm_pad_t pad;
     ps3_pad_state_t ps3;
     while(rtc&&CM_ATOMIC_LOAD(&rtc->input_running)) {
+        if(CM_ATOMIC_CAS(&rtc->layout_pending,1,0)==1) {
+            int layout_width=rtc->pending_layout_width;
+            int layout_height=rtc->pending_layout_height;
+            cm_layout_default(&rtc->layout,layout_width,layout_height);
+            cm_input_reset(&rtc->input_state);
+            ui_push_log(layout_width>layout_height ?
+                "CloudMoon: controller layout set to landscape video." :
+                "CloudMoon: controller layout set to portrait video.");
+        }
         ps3input_get_data(&ps3);
         memset(&pad,0,sizeof(pad));
         pad.lx=ps3.lx;pad.ly=ps3.ly;pad.rx=ps3.rx;pad.ry=ps3.ry;
