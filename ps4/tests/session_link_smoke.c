@@ -22,6 +22,9 @@ int main(void) {
     const char *plain_http =
         "http://web.cloudmoonapp.com/?token=t&email=a%40b.net&game=x&userid=y"
         "&android_instance_id=eyJjb29yVXJsIjoiaHR0cHM6Ly9jb29yZC5leGFtcGxlLm5ldCJ9";
+    const char *fragment_fields =
+        "https://web.cloudmoonapp.com/?token=t#email=a%40b.net&game=x&userid=y"
+        "&android_instance_id=eyJjb29yVXJsIjoiaHR0cHM6Ly9jb29yZC5leGFtcGxlLm5ldCJ9";
 
     assert(cm_account_session_parse_url(valid, &session) == 0);
     assert(strcmp(session.token, "short-lived-token") == 0);
@@ -36,6 +39,7 @@ int main(void) {
     assert(cm_account_session_parse_url(wrong_origin, &session) != 0);
     assert(cm_account_session_parse_url(duplicate, &session) != 0);
     assert(cm_account_session_parse_url(plain_http, &session) != 0);
+    assert(cm_account_session_parse_url(fragment_fields, &session) != 0);
 
     puts("CloudMoon session-link smoke tests passed");
     return 0;
