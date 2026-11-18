@@ -100,11 +100,19 @@ footer{color:#8298b2;font-size:12px;text-align:center;margin:20px}
         "user_id="+s.user+"\n"+
         "android_instance_id="+s.instance+"\n";
       if(pairKey){
+        /* Send only the three fields used by the native streaming client.
+           Never forward optional token/email parameters from the browser URL. */
+        var sessionUrl=new URL(input.value.trim());
+        sessionUrl.search="";
+        sessionUrl.hash="";
+        sessionUrl.searchParams.set("game",s.game);
+        sessionUrl.searchParams.set("userid",s.user);
+        sessionUrl.searchParams.set("android_instance_id",s.instance);
         fetch("/submit?k="+encodeURIComponent(pairKey),{
           method:"POST",
           headers:{"Content-Type":"application/json"},
           cache:"no-store",
-          body:JSON.stringify({url:input.value.trim()})
+          body:JSON.stringify({url:sessionUrl.href})
         }).then(function(response){
           return response.json().then(function(data){
             if(!response.ok||!data.ok)throw new Error(data.error||"No se pudo vincular la sesión.");
