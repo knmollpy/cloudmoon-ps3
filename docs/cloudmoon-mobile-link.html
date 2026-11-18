@@ -36,8 +36,8 @@ footer{color:#8298b2;font-size:12px;text-align:center;margin:20px}
     <div id="status" class="status" role="status" aria-live="polite"></div>
     <div class="warning"><b>Privacidad:</b> la URL puede contener identificadores privados de tu sesión. Esta página no los envía a ningún servidor, no usa analítica y no los guarda. No compartas la URL ni el archivo cloudmoon.ini con otras personas.</div>
   </section>
-  <p class="small">Después de descargar el archivo, transferilo por FTP a <code>/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon.ini</code> con la PS3 y el celular conectados a la misma red. Reemplazá el archivo anterior solo cuando quieras cambiar de partida.</p>
-  <footer>CloudMoon PS3 · Herramienta local de importación · Sin contraseña ni tokens de Google</footer>
+  <p class="small" id="ftpHelp">Después de descargar el archivo, transferilo por FTP a <code>/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon.ini</code> con la PS3 y el celular conectados a la misma red. Reemplazá el archivo anterior solo cuando quieras cambiar de partida.</p>
+  <footer>CloudMoon PS3 · Importación local de sesión · No solicita la contraseña de Google</footer>
 </main>
 <script>
 (function(){
@@ -45,6 +45,11 @@ footer{color:#8298b2;font-size:12px;text-align:center;margin:20px}
   var input=document.getElementById("sessionUrl");
   var button=document.getElementById("make");
   var status=document.getElementById("status");
+  var pairKey=new URLSearchParams(window.location.search).get("k");
+  if(pairKey){
+    button.textContent="Validar sesión y vincular con esta PS3";
+    document.getElementById("ftpHelp").style.display="none";
+  }
 
   function show(kind,message){
     status.className="status "+kind;
@@ -94,13 +99,12 @@ footer{color:#8298b2;font-size:12px;text-align:center;margin:20px}
         "game="+s.game+"\n"+
         "user_id="+s.user+"\n"+
         "android_instance_id="+s.instance+"\n";
-      var pairKey=new URLSearchParams(window.location.search).get("k");
       if(pairKey){
         fetch("/submit?k="+encodeURIComponent(pairKey),{
           method:"POST",
           headers:{"Content-Type":"application/json"},
           cache:"no-store",
-          body:JSON.stringify({url:raw})
+          body:JSON.stringify({url:input.value.trim()})
         }).then(function(response){
           return response.json().then(function(data){
             if(!response.ok||!data.ok)throw new Error(data.error||"No se pudo vincular la sesión.");
