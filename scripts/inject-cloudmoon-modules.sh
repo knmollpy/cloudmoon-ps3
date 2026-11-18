@@ -379,7 +379,7 @@ if "CloudMoon complete main-loop replacement" not in s:
     s = s.replace(anchor_end, anchor_end + "\n  cm_cloudmoon_stop();\n  cm_cloudmoon_pair_stop();", 1)
 
 # Do not tear down sys_net on app exit if the user never opened Link/Connect.
-s = s.replace("  ps3_net_shutdown();", "  if (cloudmoon_net_initialized) {\\n    ps3_net_shutdown();\\n    cloudmoon_net_initialized = 0;\\n  }", 1)
+s = s.replace("  ps3_net_shutdown();", "  if (cloudmoon_net_initialized) {\n    ps3_net_shutdown();\n    cloudmoon_net_initialized = 0;\n  }", 1)
 p.write_text(s)
 
 ui = pathlib.Path(sys.argv[2])
