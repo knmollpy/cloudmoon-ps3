@@ -11,6 +11,7 @@ fi
 for file in \
   cloudmoon_input.c cloudmoon_input.h \
   cloudmoon_link.c cloudmoon_link.h \
+  cloudmoon_pairing.c cloudmoon_pairing.h qrcodegen.c qrcodegen.h \
   cloudmoon_client.c cloudmoon_client.h \
   cloudmoon_discovery.c cloudmoon_discovery.h \
   cloudmoon_protocol.c cloudmoon_protocol.h \
@@ -26,6 +27,7 @@ do
   cp "$SRC/$file" "$DST/$file"
 done
 if ! grep -q 'src/cloudmoon_client.c' "$PS3_BASE/Makefile"; then
+  sed -i 's#src/cloudmoon_link.c#src/cloudmoon_link.c src/qrcodegen.c src/cloudmoon_pairing.c#' "$PS3_BASE/Makefile"
   sed -i 's#src/spu_opus_bridge.c#src/spu_opus_bridge.c src/cloudmoon_input.c src/cloudmoon_link.c src/cloudmoon_client.c src/cloudmoon_discovery.c src/cloudmoon_protocol.c src/cloudmoon_session.c src/cloudmoon_ws.c src/cloudmoon_upgrade.c src/cloudmoon_random.c src/cloudmoon_ps3_random.c src/cloudmoon_tls_polarssl.c src/cloudmoon_ws_tls.c#' "$PS3_BASE/Makefile"
 fi
 
@@ -155,6 +157,7 @@ PY
   fi
   if ! grep -q 'cloudmoon_autostart' "$DST/main.c"; then
     sed -i '/#include "input.h"/a #include "cloudmoon_launch.h"' "$DST/main.c"
+    sed -i '/#include "cloudmoon_launch.h"/a #include "cloudmoon_pairing.h"' "$DST/main.c"
   fi
   python3 "$ROOT_DIR/scripts/generate-cloudmoon-art.py" "$ROOT_DIR/assets"
   if [ -s "$ROOT_DIR/assets/ICON0.PNG" ]; then
@@ -332,6 +335,9 @@ PY
   # Ship a real CA bundle inside the PKG so TLS certificate verification works.
   if ! grep -q 'cacert.pem' "$PS3_BASE/Makefile"; then
     sed -i '/mkdir -p $(BUILD)\/pkg\/USRDIR/a\	cp '"$ROOT_DIR"'/assets/cacert.pem $(BUILD)/pkg/USRDIR/cacert.pem' "$PS3_BASE/Makefile"
+  fi
+  if ! grep -q 'cloudmoon-mobile-link.html' "$PS3_BASE/Makefile"; then
+    sed -i '/mkdir -p $(BUILD)\/pkg\/USRDIR/a\	cp '"$ROOT_DIR"'/docs/cloudmoon-mobile-link.html $(BUILD)/pkg/USRDIR/cloudmoon-mobile-link.html' "$PS3_BASE/Makefile"
   fi
 fi
 
