@@ -1,6 +1,7 @@
 #include "cloudmoon_ui.h"
 
 #include <ctype.h>
+#include <stdio.h>
 #include <string.h>
 
 #define C_BG       0xFF080D19u
@@ -267,14 +268,27 @@ static void draw_library(const cm_ui_surface_t *s, const cm_ui_state_t *st,
         centered_text(s, s->width / 2, 450, 2, C_CYAN, "PULSA X PARA VINCULAR");
         return;
     }
-    for (i = 0; i < count && i < 8; ++i) {
-        int col = i % 4, row = i / 4;
-        int x = 62 + col * 292, y = 222 + row * 160;
-        panel(s, x, y, 264, 128, i == st->selected_game);
-        text(s, x + 24, y + 35, 2, C_TEXT,
-             m->games[i] ? m->games[i] : "JUEGO");
-        text(s, x + 24, y + 82, 1, C_MUTED,
-             i == st->selected_game ? "PULSA X PARA JUGAR" : "SELECCIONAR");
+    {
+        int page_start = (st->selected_game / 8) * 8;
+        int visible = count - page_start;
+        if (visible > 8) visible = 8;
+        for (i = 0; i < visible; ++i) {
+            int game_index = page_start + i;
+            int col = i % 4, row = i / 4;
+            int x = 62 + col * 292, y = 222 + row * 160;
+            panel(s, x, y, 264, 128, game_index == st->selected_game);
+            text(s, x + 24, y + 35, 2, C_TEXT,
+                 m->games[game_index] ? m->games[game_index] : "JUEGO");
+            text(s, x + 24, y + 82, 1, C_MUTED,
+                 game_index == st->selected_game ? "PULSA X PARA JUGAR" : "SELECCIONAR");
+        }
+        if (count > 8) {
+            char page[48];
+            (void)snprintf(page, sizeof(page), "PAGINA %d / %d",
+                           st->selected_game / 8 + 1, (count + 7) / 8);
+            text(s, s->width - 240, 166, 1, C_CYAN, page);
+            text(s, 62, 560, 1, C_MUTED, "USA ARRIBA / ABAJO PARA CAMBIAR DE PAGINA");
+        }
     }
 }
 
