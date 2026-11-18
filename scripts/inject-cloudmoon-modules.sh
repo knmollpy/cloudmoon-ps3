@@ -456,7 +456,7 @@ if "CLOUDMOON_STOCK_DISPLAY_QUERY" not in main:
     if start < 0 or end < 0:
         raise SystemExit("Could not locate upstream PS3 display detection block")
     main = main[:start] + "  /* CLOUDMOON_STOCK_DISPLAY_QUERY */\n" + safe_main + main[end:]
-// No global constructor: file I/O begins only after the PS3 C runtime enters main().
+# No global constructor: file I/O begins only after the PS3 C runtime enters main().
 if '#include <stdio.h>' not in main:
     include_anchor = '#include "input.h"'
     if include_anchor not in main:
