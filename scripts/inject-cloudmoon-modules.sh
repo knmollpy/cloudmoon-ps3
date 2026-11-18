@@ -304,7 +304,10 @@ if "ui_first_frame_ready = 1;" not in u:
     anchor = "        tiny3d_Flip();\n"
     if anchor not in u:
         raise SystemExit("Could not locate first frame flip")
-    u = u.replace(anchor, anchor + "        ui_first_frame_ready = 1;\n", 1)
+    u = u.replace(anchor, anchor + "        ui_first_frame_ready = 1;\n        NLOG(\"CloudMoon PS3 first UI frame rendered\");\n", 1)
+elif 'NLOG("CloudMoon PS3 first UI frame rendered")' not in u:
+    u = u.replace("        ui_first_frame_ready = 1;\n",
+                  "        ui_first_frame_ready = 1;\n        NLOG(\"CloudMoon PS3 first UI frame rendered\");\n", 1)
 if "int ui_wait_ready(uint32_t timeout_ms);" not in header:
     anchor = "void ui_init(int width, int height, int is_4_3);"
     if anchor not in header:
