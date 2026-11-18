@@ -3,7 +3,7 @@ name: CloudMoon PS3 PPU build
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, account-link-catalog]
     paths:
       - 'src/**'
       - 'tests/**'
