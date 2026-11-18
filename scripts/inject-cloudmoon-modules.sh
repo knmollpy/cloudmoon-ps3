@@ -10,6 +10,7 @@ if [ ! -f "$PS3_BASE/Makefile" ]; then
 fi
 for file in \
   cloudmoon_input.c cloudmoon_input.h \
+  cloudmoon_link.c cloudmoon_link.h \
   cloudmoon_client.c cloudmoon_client.h \
   cloudmoon_discovery.c cloudmoon_discovery.h \
   cloudmoon_protocol.c cloudmoon_protocol.h \
@@ -25,6 +26,7 @@ do
   cp "$SRC/$file" "$DST/$file"
 done
 if ! grep -q 'src/cloudmoon_client.c' "$PS3_BASE/Makefile"; then
+  sed -i 's#src/cloudmoon_input.c#src/cloudmoon_input.c src/cloudmoon_link.c#' "$PS3_BASE/Makefile"
   sed -i 's#src/spu_opus_bridge.c#src/spu_opus_bridge.c src/cloudmoon_input.c src/cloudmoon_client.c src/cloudmoon_discovery.c src/cloudmoon_protocol.c src/cloudmoon_session.c src/cloudmoon_ws.c src/cloudmoon_upgrade.c src/cloudmoon_random.c src/cloudmoon_ps3_random.c src/cloudmoon_tls_polarssl.c src/cloudmoon_ws_tls.c#' "$PS3_BASE/Makefile"
 fi
 
