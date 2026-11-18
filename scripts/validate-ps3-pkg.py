@@ -65,9 +65,17 @@ def main() -> None:
     # "first UI frame rendered" marker in the tested stock-Tiny3D path.
     for marker in (b"CloudMoon: network initialization result %d",
                    b"CloudMoon PS3 UI Initialized",
-                   b"CloudMoon: connecting directly to coordinator"):
+                   b"CloudMoon: Connect to CloudMoon selected",
+                   b"CONNECTING TO CLOUDMOON",
+                   b"CloudMoon: connecting directly to coordinator",
+                   b"USRDIR/cloudmoon.ini"):
         if marker not in elf:
-            fail(f"PPU ELF is missing required startup marker: {marker.decode()}")
+            fail(f"PPU ELF is missing required CloudMoon connection marker: {marker.decode()}")
+    for forbidden in (b"Sunshine Pairing Required",
+                      b"Open Sunshine Web UI (PIN Tab)",
+                      b"PIN:  %s"):
+        if forbidden in elf:
+            fail(f"Legacy Sunshine PIN workflow remains in PPU ELF: {forbidden.decode()}")
     print(f"PASS: PPU ELF64 PowerPC64, entry 0x{entry:x}, {len(elf)} bytes")
 
     stage = args.stage
