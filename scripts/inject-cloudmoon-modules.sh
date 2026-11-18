@@ -147,6 +147,14 @@ if ! grep -q 'src/cloudmoon_webrtc.c' "$PS3_BASE/Makefile"; then
     echo "CloudMoon ICON0.PNG missing from assets/" >&2
     exit 1
   fi
+  if [ -s "$ROOT_DIR/assets/PIC1.PNG" ]; then
+    cp "$ROOT_DIR/assets/PIC1.PNG" "$PS3_BASE/PIC1.PNG"
+    if ! grep -q 'PIC1.PNG' "$PS3_BASE/Makefile"; then
+      sed -i '/cp $(ICON0) $(BUILD)\/pkg\/ICON0.PNG/a\	cp PIC1.PNG $(BUILD)/pkg/PIC1.PNG' "$PS3_BASE/Makefile"
+    fi
+  else
+    echo "CloudMoon PIC1.PNG missing from assets/; package preview will use no custom background." >&2
+  fi
   python3 - "$DST/main.c" "$DST/ui.c" "$DST/ui.h" <<'PY'
 import pathlib
 import sys
