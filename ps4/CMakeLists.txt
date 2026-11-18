@@ -88,6 +88,7 @@ if(PS4)
         src/platform/orbis_input.c
         src/platform/orbis_video.c
         src/platform/orbis_dashboard.c
+        src/account/cloudmoon_orbis_connection.c
     )
     target_include_directories(cloudmoon_ps4_orbis_platform PUBLIC src/platform)
     target_link_libraries(cloudmoon_ps4_orbis_platform PUBLIC cloudmoon_ps4_ui cloudmoon_protocol_core cloudmoon_account_core)
