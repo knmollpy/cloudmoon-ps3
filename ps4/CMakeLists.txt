@@ -37,6 +37,7 @@ if(PS4)
     set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
     set(GEN_FILES OFF CACHE BOOL "" FORCE)
     set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
+    add_compile_definitions(MBEDTLS_NO_PLATFORM_ENTROPY)
     set(USE_STATIC_MBEDTLS_LIBRARY ON CACHE BOOL "" FORCE)
     set(USE_SHARED_MBEDTLS_LIBRARY OFF CACHE BOOL "" FORCE)
 
@@ -50,6 +51,7 @@ if(PS4)
     add_library(cloudmoon_tls_mbedtls STATIC
         src/net/cloudmoon_tls_mbedtls.c
         src/net/cloudmoon_random_mbedtls.c
+        src/net/cloudmoon_mbedtls_entropy.c
     )
     target_include_directories(cloudmoon_tls_mbedtls PUBLIC
         src/net ../src
