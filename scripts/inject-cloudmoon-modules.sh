@@ -284,7 +284,7 @@ main_loop_patch = """  int cloudmoon_connect_started = 0;
     if (ui_get_state() == UI_STATE_LINKING) {
       if (!cloudmoon_net_initialized) {
         int net_rc = ps3_net_init();
-        NLOG("CloudMoon: deferred network initialization result %d", net_rc);
+        NLOG("CloudMoon: network initialization result %d", net_rc);
         if (net_rc != 0) {
           ui_push_log("CloudMoon: PS3 network initialization failed.");
           ui_set_state(UI_STATE_ERROR);
@@ -318,7 +318,7 @@ main_loop_patch = """  int cloudmoon_connect_started = 0;
         cloudmoon_connect_started = 1;
         if (!cloudmoon_net_initialized) {
           int net_rc = ps3_net_init();
-          NLOG("CloudMoon: deferred network initialization result %d", net_rc);
+          NLOG("CloudMoon: network initialization result %d", net_rc);
           if (net_rc != 0) {
             ui_push_log("CloudMoon: PS3 network initialization failed.");
             ui_set_state(UI_STATE_ERROR);
@@ -412,7 +412,7 @@ if 'cm_boot_log("1 main")' not in s:
     s = s[:brace+1] + '\n  cm_boot_log("1 main");' + s[brace+1:]
 s = s.replace('ui_init(width, height, is_4_3);', 'ui_init(width, height, is_4_3);\n  cm_boot_log("3 ui_init complete");', 1)
 s = s.replace('ps3input_start();', 'ps3input_start();\n  cm_boot_log("4 ps3input_start complete");', 1)
-s = s.replace('NLOG("CloudMoon: deferred network initialization result %d", net_rc);', 'NLOG("CloudMoon: deferred network initialization result %d", net_rc);\n        cm_boot_log("2 network init attempted");')
+s = s.replace('NLOG("CloudMoon: network initialization result %d", net_rc);', 'NLOG("CloudMoon: network initialization result %d", net_rc);\n        cm_boot_log("2 network init attempted");')
 s = s.replace('NLOG("CloudMoon: Connect to CloudMoon selected; starting coordinator session.");', 'NLOG("CloudMoon: Connect to CloudMoon selected; starting coordinator session.");\n        cm_boot_log("5 Connect selected");')
 p.write_text(s)
 
