@@ -292,6 +292,26 @@ ui = pathlib.Path(sys.argv[2])
 h = pathlib.Path(sys.argv[3])
 u = ui.read_text()
 header = h.read_text()
+
+# Scale the logical UI canvas to the actual, validated physical framebuffer.
+# UserViewportSurface is only for render-to-texture surfaces; the menu is
+# rendered directly to the display and therefore needs UserViewport.
+old_viewport = "        tiny3d_UserViewportSurface(1, (float)ui_width, (float)ui_height);"
+new_viewport = """        if (ui_width <= 0 || ui_height <= 0 ||
+            Video_Resolution.width == 0 || Video_Resolution.height == 0) {
+            NLOG("CloudMoon: invalid viewport dimensions; stopping UI safely.");
+            ui_running = 0;
+            sysThreadExit(0);
+            return;
+        }
+        tiny3d_UserViewport(1, 0.0f, 0.0f,
+            (float)Video_Resolution.width / (float)ui_width,
+            (float)Video_Resolution.height / (float)ui_height,
+            1.0f, 1.0f);"""
+if old_viewport in u:
+    u = u.replace(old_viewport, new_viewport, 1)
+elif "tiny3d_UserViewport(1, 0.0f, 0.0f," not in u:
+    raise SystemExit("Could not locate the UI display viewport call")
 ready_decl = "static volatile int ui_first_frame_ready = 0;"
 if ready_decl not in u:
     anchor = "static volatile int ui_running = 1;"
