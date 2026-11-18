@@ -748,9 +748,7 @@ replace_once('DrawString(SX(40), SY(18), \"Moonlight PS3  -  Host Applications\"
 replace_once('DrawString(SX(60), SY(95), \"Select Game or Application to Stream:\");',
              'DrawString(SX(60), SY(95), \"Choose a CloudMoon game to link from your phone:\");',
              "catalog subtitle")
-replace_once('DrawString(SX(60), SY(445), \"\\\\x05 Navigate   |   \\\\x01 Launch Game   |   \\\\x02 Cancel\");',
-             'DrawString(SX(60), SY(445), \"\\\\x05 Browse titles   |   \\\\x01 Select and link   |   \\\\x02 Back\");',
-             "catalog legend")
+replace_once("Launch Game   |   ", "Select and link   |   ", "catalog legend")
 
 # Replace Moonlight's PIN/pairing page with a CloudMoon coordinator connection page.
 # The UI_STATE_PAIRING value is used only as the internal "connecting" state.
