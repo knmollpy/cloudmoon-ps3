@@ -497,6 +497,14 @@ main_body = main_body.replace('ui_init(width, height, is_4_3);',
 main_body = main_body.replace('ps3input_start();',
                               'ps3input_start();\n    cm_boot_log("3 ps3input_start complete");', 1)
 main = main_head + main_body
+# The link-only safe build also needs the local QR receiver and game selector.
+# Add these independently of the boot logger include path.
+for required_include in ('#include "cloudmoon_pairing.h"', '#include "cloudmoon_catalog.h"'):
+    if required_include not in main:
+        include_anchor = '#include "input.h"'
+        if include_anchor not in main:
+            raise SystemExit("Could not locate main input include for QR pairing")
+        main = main.replace(include_anchor, include_anchor + '\\n' + required_include, 1)
 # In the safe build, never execute Moonlight's legacy Sunshine pairing loop.
 # Keep the UI alive, but explicitly reject any stale START/Connect action without
 # opening sockets, generating a Sunshine PIN, or attempting host discovery.
