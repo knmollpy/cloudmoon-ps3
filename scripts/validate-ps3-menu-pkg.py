@@ -52,8 +52,18 @@ def main() -> None:
         fail(f"unexpected PPU ELF machine/entry: machine={machine}, entry=0x{entry:x}")
     # The B diagnostic must carry the CloudMoon settings UI but must not contain
     # the WebRTC coordinator worker that was not proven to boot on real hardware.
-    if b"CloudMoon PS3" not in elf or b"CONFIGURE STREAM SETTINGS" not in elf:
-        fail("PPU ELF is missing CloudMoon menu strings")
+    required_home_strings = (
+        b"CloudMoon PS3",
+        b"01  /  STREAM PROFILE",
+        b"02  /  CLOUD SESSION",
+        b"CONFIGURE STREAM",
+        b"CONNECT TO CLOUDMOON",
+        b"ACTIVE STREAM PROFILE",
+    )
+    missing_home_strings = [item.decode("ascii") for item in required_home_strings if item not in elf]
+    if missing_home_strings:
+        fail("PPU ELF is missing redesigned CloudMoon home-screen strings: " +
+             ", ".join(missing_home_strings))
     if b"CloudMoon: connecting directly to coordinator" in elf:
         fail("menu-only diagnostic unexpectedly contains the WebRTC coordinator path")
     print(f"PASS: menu-only PPU ELF64 PowerPC64, entry 0x{entry:x}, {len(elf)} bytes")
