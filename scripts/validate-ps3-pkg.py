@@ -60,7 +60,10 @@ def main() -> None:
     entry = int.from_bytes(elf[24:32], "big")
     if machine != 21 or entry != 0x10000000:
         fail(f"unexpected PPU ELF machine/entry: machine={machine}, entry=0x{entry:x}")
-    for marker in (b"CloudMoon PS3 waiting for first rendered UI frame",
+    # Validate markers emitted by the current runtime path. The old
+    # "waiting for first rendered UI frame" marker was removed when startup
+    # was simplified; requiring it caused false-negative package rejections.
+    for marker in (b"CloudMoon: network initialization result %d",
                    b"CloudMoon PS3 first UI frame rendered",
                    b"CloudMoon: connecting directly to coordinator"):
         if marker not in elf:
