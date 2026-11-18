@@ -14,6 +14,14 @@ int cm_cloudmoon_video_dimensions_supported(int requested_width,
                                             int actual_width,
                                             int actual_height);
 
+/*
+ * Maps the decoded video dimensions to the Android input coordinate space.
+ * rotation: -1 = not supplied, 0 = portrait, 1 = landscape.
+ */
+int cm_cloudmoon_input_dimensions(int video_width, int video_height,
+                                  int rotation, int *input_width,
+                                  int *input_height);
+
 #ifdef __cplusplus
 }
 #endif

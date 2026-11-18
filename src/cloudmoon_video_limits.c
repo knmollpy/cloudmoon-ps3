@@ -34,3 +34,23 @@ int cm_cloudmoon_video_dimensions_supported(int requested_width,
                     (uint64_t)(unsigned)actual_height;
     return actual_pixels <= requested_pixels;
 }
+
+int cm_cloudmoon_input_dimensions(int video_width, int video_height,
+                                  int rotation, int *input_width,
+                                  int *input_height) {
+    int width, height;
+    if (!input_width || !input_height || video_width <= 0 || video_height <= 0 ||
+        (rotation != -1 && rotation != 0 && rotation != 1)) return -1;
+    width = video_width;
+    height = video_height;
+    /* CloudMoon reports 0=portrait, 1=landscape. Keep display decoder
+       dimensions untouched; only orient the controller's touch coordinates. */
+    if (rotation == 0 && width > height) {
+        int swap = width; width = height; height = swap;
+    } else if (rotation == 1 && height > width) {
+        int swap = width; width = height; height = swap;
+    }
+    *input_width = width;
+    *input_height = height;
+    return 0;
+}

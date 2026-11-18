@@ -33,6 +33,7 @@ struct cm_cloudmoon_webrtc {
     int width,height,video_width,video_height;
     volatile int layout_pending;
     int pending_layout_width,pending_layout_height;
+    volatile int remote_rotation;
     volatile int media_callbacks,video_blocked,video_keyframe_requested,video_failure_logged;
     volatile int input_running;
     int input_started;
@@ -46,6 +47,32 @@ struct cm_cloudmoon_webrtc {
     struct { char candidate[CM_RTC_CANDIDATE_MAX]; char mid[32]; } pending[CM_RTC_PENDING_CANDIDATES];
     char remote_mids[CM_RTC_MAX_MIDS][32];
 };
+
+static void cm_rtc_queue_layout(cm_cloudmoon_webrtc_t *rtc,int width,int height) {
+    int current,attempt;
+    if(!rtc||width<=0||height<=0)return;
+    for(attempt=0;attempt<4;attempt++) {
+        current=CM_ATOMIC_LOAD(&rtc->layout_pending);
+        if(current<0||current>1)return;
+        if(CM_ATOMIC_CAS(&rtc->layout_pending,current,-1)==current) {
+            rtc->pending_layout_width=width;
+            rtc->pending_layout_height=height;
+            CM_ATOMIC_STORE(&rtc->layout_pending,1);
+            return;
+        }
+    }
+}
+
+static void cm_rtc_queue_oriented_layout(cm_cloudmoon_webrtc_t *rtc,
+                                         int width,int height) {
+    int input_width,input_height;
+    int rotation;
+    if(!rtc)return;
+    rotation=CM_ATOMIC_LOAD(&rtc->remote_rotation);
+    if(cm_cloudmoon_input_dimensions(width,height,rotation,
+                                     &input_width,&input_height)==0)
+        cm_rtc_queue_layout(rtc,input_width,input_height);
+}
 
 static int cm_json_quote(char*out,size_t cap,const char*s) {
     size_t n=0;
@@ -131,8 +158,19 @@ static void cm_rtc_channel_message(int id,const char*message,int size,void*ptr) 
     cm_cloudmoon_webrtc_t*rtc=(cm_cloudmoon_webrtc_t*)ptr;
     (void)id;
     if(!rtc||CM_ATOMIC_LOAD(&rtc->closing)||!message||size<=0)return;
-    if(size>=9&&!memcmp(message,"rotation>",9)) {
-        /* Keep the PS3 menu visible until a valid SPS initializes VDEC. */
+    if(size>=10&&!memcmp(message,"rotation>",9)) {
+        int rotation=-1;
+        if(message[9]=='0')rotation=0;
+        else if(message[9]=='1')rotation=1;
+        if(rotation>=0) {
+            int width=rtc->video_width>0?rtc->video_width:rtc->width;
+            int height=rtc->video_height>0?rtc->video_height:rtc->height;
+            CM_ATOMIC_STORE(&rtc->remote_rotation,rotation);
+            cm_rtc_queue_oriented_layout(rtc,width,height);
+            ui_push_log(rotation==0 ?
+                "CloudMoon: remote orientation is portrait." :
+                "CloudMoon: remote orientation is landscape.");
+        }
         return;
     }
     if(size>=8&&!memcmp(message,"kickout>",8)){
@@ -407,16 +445,12 @@ static void cm_rtc_video_frame(int track,const char*data,int size,
             goto done;
         }
         if(CM_ATOMIC_LOAD(&rtc->video_started)==0) {
-            /* The server can rotate a mobile game to portrait. Update touch
-               coordinates on the input thread before the video becomes live. */
-            if(CM_ATOMIC_CAS(&rtc->layout_pending,0,-1)==0) {
-                rtc->pending_layout_width=actual_width;
-                rtc->pending_layout_height=actual_height;
-                CM_ATOMIC_STORE(&rtc->layout_pending,1);
-            }
             if(CM_ATOMIC_CAS(&rtc->video_started,0,1)==0) {
                 rtc->video_width=actual_width;
                 rtc->video_height=actual_height;
+                /* Decoder uses the raw SPS dimensions; touch mapping follows
+                   CloudMoon's explicit 0=portrait / 1=landscape notification. */
+                cm_rtc_queue_oriented_layout(rtc,actual_width,actual_height);
                 if(ps3video_cloudmoon_start(actual_width,actual_height)==0) {
                     CM_ATOMIC_STORE(&rtc->video_started,2);
                     CM_ATOMIC_STORE(&rtc->video_keyframe_requested,0);
@@ -632,7 +666,7 @@ int cm_cloudmoon_webrtc_create(cm_cloudmoon_webrtc_t**out,
     *out=NULL;
     rtc=(cm_cloudmoon_webrtc_t*)calloc(1,sizeof(*rtc));
     if(!rtc)return -1;
-    rtc->pc=-1;rtc->data_channel=-1;rtc->video_track=-1;rtc->audio_track=-1;rtc->client=client;rtc->width=width;rtc->height=height;
+    rtc->pc=-1;rtc->data_channel=-1;rtc->video_track=-1;rtc->audio_track=-1;rtc->client=client;rtc->width=width;rtc->height=height;rtc->remote_rotation=-1;
     cm_layout_default(&rtc->layout,width,height);cm_input_reset(&rtc->input_state);
     memset(&config,0,sizeof(config));
     config.iceServers=ice_servers;config.iceServersCount=3;
