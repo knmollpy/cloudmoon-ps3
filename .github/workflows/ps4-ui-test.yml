@@ -1,0 +1,25 @@
+name: CloudMoon PS4 UI tests
+
+on:
+  push:
+    branches: [ps4-port]
+    paths:
+      - "ps4/**"
+      - ".github/workflows/ps4-ui-test.yml"
+  pull_request:
+    paths:
+      - "ps4/**"
+  workflow_dispatch:
+
+jobs:
+  ui-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile UI test
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -pedantic \
+            ps4/src/ui/cloudmoon_ui.c ps4/tests/ui_smoke.c \
+            -o /tmp/cloudmoon-ps4-ui-test
+      - name: Run UI test
+        run: /tmp/cloudmoon-ps4-ui-test
