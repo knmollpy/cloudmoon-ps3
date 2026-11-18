@@ -433,6 +433,15 @@ main_path, ui_path = map(pathlib.Path, sys.argv[1:])
 main = main_path.read_text()
 ui = ui_path.read_text()
 
+# These declarations are needed by the QR-only safe runtime, not just the
+# experimental WebRTC build. Inject them before splitting main() from headers.
+for required_include in ('#include "cloudmoon_pairing.h"', '#include "cloudmoon_catalog.h"'):
+    if required_include not in main:
+        include_anchor = '#include "input.h"'
+        if include_anchor not in main:
+            raise SystemExit("Could not locate main input include for QR pairing")
+        main = main.replace(include_anchor, include_anchor + '\\n' + required_include, 1)
+
 safe_main = """  /* Query the GameOS-selected mode without changing the HDMI output. */
   videoState vstate = {0};
   videoResolution vres = {0};
@@ -514,7 +523,12 @@ if os.environ.get("CLOUDMOON_WEBRTC") != "1":
     loop_end = main.find('  NLOG("Terminating Moonlight PS3 application...");', loop_start)
     if loop_start < 0 or loop_end < 0:
         raise SystemExit("Could not isolate the legacy Sunshine main loop for safe mode")
-    safe_loop = """  while (ui_is_running()) {
+    safe_loop = """  int cloudmoon_link_started = 0;
+  int cloudmoon_net_initialized = 0;
+  uint8_t cloudmoon_pair_qr[CM_PAIR_QR_MAX_MODULES];
+  char cloudmoon_pair_url[CM_PAIR_URL_CAP];
+  int cloudmoon_pair_qr_size = 0;
+  while (ui_is_running()) {
     sysUtilCheckCallback();
     if (ui_get_state() == UI_STATE_LINKING) {
       if (!cloudmoon_net_initialized) {
