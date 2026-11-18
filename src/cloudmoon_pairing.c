@@ -29,7 +29,7 @@
 
 #define CM_PAIR_CONFIG_PATH "/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon.ini"
 #define CM_PAIR_PAGE_PATH "/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon-mobile-link.html"
-#define CM_PAIR_HTTP_LIMIT 20000
+#define CM_PAIR_HTTP_LIMIT 24576
 #define CM_PAIR_BODY_LIMIT 16384
 #define CM_PAIR_HEADER_LIMIT 4096
 
