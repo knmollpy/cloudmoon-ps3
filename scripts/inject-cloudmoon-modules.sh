@@ -147,7 +147,7 @@ if ! grep -q 'src/cloudmoon_webrtc.c' "$PS3_BASE/Makefile"; then
     echo "CloudMoon ICON0.PNG missing from assets/" >&2
     exit 1
   fi
-  python3 - "$DST/main.c" <<'PY'
+  python3 - "$DST/main.c" "$DST/ui.c" "$DST/ui.h" <<'PY'
 import pathlib
 import sys
 p = pathlib.Path(sys.argv[1])
@@ -203,19 +203,70 @@ s = s.replace("  // Ağı başlat (Genişletilmiş yüksek verimli bellek havuzu
 needle = "  ui_init(width, height, is_4_3);\n  ps3input_start();\n"
 if needle not in s:
     raise SystemExit("Could not locate UI startup sequence")
-s = s.replace(needle, needle + """  NLOG("CloudMoon PS3 UI initialized; starting network stack...");
-  int net_status = ps3_net_init();
-  if (net_status == 0) {
-    NLOG("PS3 network stack initialized.");
-    cm_cloudmoon_autostart();
+replacement_main = """  ps3input_start();
+  ui_init(width, height, is_4_3);
+  NLOG("CloudMoon PS3 waiting for first rendered UI frame...");
+  if (ui_wait_ready(8000)) {
+    NLOG("CloudMoon PS3 first UI frame rendered; starting network stack...");
+    int net_status = ps3_net_init();
+    if (net_status == 0) {
+      NLOG("PS3 network stack initialized.");
+      cm_cloudmoon_autostart();
+    } else {
+      char net_error[96];
+      snprintf(net_error, sizeof(net_error), "Network initialization failed (%d).", net_status);
+      ui_push_log(net_error);
+      NLOG("%s", net_error);
+    }
   } else {
-    char net_error[96];
-    snprintf(net_error, sizeof(net_error), "Network initialization failed (%d).", net_status);
-    ui_push_log(net_error);
-    NLOG("%s", net_error);
+    NLOG("CloudMoon PS3 UI did not render within 8 seconds; network startup suppressed.");
   }
-""", 1)
+"""
+s = s.replace(needle, replacement_main, 1)
 p.write_text(s)
+
+ui = pathlib.Path(sys.argv[2])
+h = pathlib.Path(sys.argv[3])
+u = ui.read_text()
+header = h.read_text()
+ready_decl = "static volatile int ui_first_frame_ready = 0;"
+if ready_decl not in u:
+    anchor = "static volatile int ui_running = 1;"
+    if anchor not in u:
+        raise SystemExit("Could not locate UI running state")
+    u = u.replace(anchor, anchor + "\\n" + ready_decl, 1)
+ready_fn = """int ui_wait_ready(uint32_t timeout_ms) {
+    const u64 start = sysGetSystemTime();
+    const u64 timeout_us = (u64)timeout_ms * 1000ULL;
+    while (!ui_first_frame_ready && ui_running) {
+        if (sysGetSystemTime() - start >= timeout_us) return 0;
+        usleep(10000);
+    }
+    return ui_first_frame_ready ? 1 : 0;
+}
+"""
+if "int ui_wait_ready(uint32_t timeout_ms)" not in u:
+    anchor = "int ui_is_running() { return ui_running; }"
+    if anchor not in u:
+        raise SystemExit("Could not locate UI status accessors")
+    u = u.replace(anchor, anchor + "\\n" + ready_fn, 1)
+if "ui_first_frame_ready = 0;" not in u:
+    anchor = "void ui_init(int width, int height, int is_4_3) {\n"
+    if anchor not in u:
+        raise SystemExit("Could not locate ui_init")
+    u = u.replace(anchor, anchor + "    ui_first_frame_ready = 0;\\n", 1)
+if "ui_first_frame_ready = 1;" not in u:
+    anchor = "        tiny3d_Flip();\n"
+    if anchor not in u:
+        raise SystemExit("Could not locate first frame flip")
+    u = u.replace(anchor, anchor + "        ui_first_frame_ready = 1;\n", 1)
+if "int ui_wait_ready(uint32_t timeout_ms);" not in header:
+    anchor = "void ui_init(int width, int height, int is_4_3);"
+    if anchor not in header:
+        raise SystemExit("Could not locate ui_init declaration")
+    header = header.replace(anchor, anchor + "\\nint ui_wait_ready(uint32_t timeout_ms);", 1)
+ui.write_text(u)
+h.write_text(header)
 PY
   # Ship a real CA bundle inside the PKG so TLS certificate verification works.
   if ! grep -q 'cacert.pem' "$PS3_BASE/Makefile"; then
