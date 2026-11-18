@@ -264,11 +264,6 @@ main_loop_patch = """  int cloudmoon_connect_started = 0;
   uint8_t cloudmoon_pair_qr[CM_PAIR_QR_MAX_MODULES];
   char cloudmoon_pair_url[CM_PAIR_URL_CAP];
   int cloudmoon_pair_qr_size = 0;
-  int cloudmoon_link_started = 0;
-  int cloudmoon_net_initialized = 0;
-  uint8_t cloudmoon_pair_qr[CM_PAIR_QR_MAX_MODULES];
-  char cloudmoon_pair_url[CM_PAIR_URL_CAP];
-  int cloudmoon_pair_qr_size = 0;
   while (ui_is_running()) {
     sysUtilCheckCallback();
     if (ui_get_state() == UI_STATE_LINKING) {
