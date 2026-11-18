@@ -1,7 +1,7 @@
 name: CloudMoon PS3 PKG
 on:
   push:
-    branches: [main]
+    branches: [main, ui-redesign-safe-base]
   workflow_dispatch:
 permissions:
   contents: read
