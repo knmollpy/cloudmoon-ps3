@@ -17,6 +17,8 @@ typedef struct {
 size_t cm_cloudmoon_catalog_count(void);
 const cm_cloudmoon_game_t *cm_cloudmoon_catalog_at(size_t index);
 const cm_cloudmoon_game_t *cm_cloudmoon_catalog_find_package(const char *package_id);
+int cm_cloudmoon_catalog_select(int index);
+const cm_cloudmoon_game_t *cm_cloudmoon_catalog_selected(void);
 
 #ifdef __cplusplus
 }
