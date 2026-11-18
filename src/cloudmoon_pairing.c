@@ -42,6 +42,7 @@ static int cm_pair_thread_started;
 static int cm_pair_listen_fd = -1;
 static char cm_pair_key[33];
 static char cm_pair_address[16];
+static char cm_pair_expected_game[192];
 static uint64_t cm_pair_expire_at_ms;
 
 static uint64_t cm_pair_now_ms(void) {
@@ -167,8 +168,16 @@ static int cm_pair_request_line(char *buffer, char *method, size_t method_cap,
 
 static int cm_pair_path_has_key(const char *path, const char *prefix) {
     size_t n = strlen(prefix);
-    return strncmp(path, prefix, n) == 0 &&
-           strcmp(path + n, cm_pair_key) == 0;
+    const char *value, *end;
+    size_t key_len;
+    if (!path || strncmp(path, prefix, n) != 0) return 0;
+    value = path + n;
+    end = strchr(value, '&');
+    key_len = end ? (size_t)(end - value) : strlen(value);
+    if (key_len != strlen(cm_pair_key) ||
+        memcmp(value, cm_pair_key, key_len) != 0) return 0;
+    /* Only the optional game selector may follow the one-time key. */
+    return !end || strncmp(end, "&game=", 6) == 0;
 }
 
 static int cm_pair_write_config(const cm_cloudmoon_link_t *link) {
@@ -264,6 +273,8 @@ static void cm_pair_handle_client(int fd) {
         if (cm_json_get_string(body, body_len, "url",
                                session_url, sizeof(session_url)) == 0 &&
             cm_cloudmoon_parse_session_url(session_url, &link) == 0 &&
+            (!cm_pair_expected_game[0] ||
+             strcmp(cm_pair_expected_game, link.game) == 0) &&
             cm_pair_write_config(&link) == 0) {
             cm_pair_linked = 1;
             ui_push_log("CloudMoon: phone session linked successfully.");
@@ -274,7 +285,7 @@ static void cm_pair_handle_client(int fd) {
         } else {
             (void)cm_pair_send_response(fd, 400, "Bad Request",
                 "application/json; charset=utf-8",
-                "{\"ok\":false,\"error\":\"La URL no contiene una sesión CloudMoon válida. Iniciá un juego y copiá su URL completa.\"}");
+                "{\"ok\":false,\"error\":\"El enlace no es válido o el juego de la sesión no coincide con el título elegido en la PS3. Abrí ese mismo juego en CloudMoon y copiá su URL activa.\"}");
         }
         free(request);
         return;
@@ -325,7 +336,7 @@ static void cm_pair_worker(void *unused) {
     sysThreadExit(0);
 }
 
-int cm_cloudmoon_pair_start(char *url, size_t url_capacity,
+int cm_cloudmoon_pair_start(const char *selected_game, char *url, size_t url_capacity,
                             uint8_t *modules, size_t modules_capacity,
                             int *module_size) {
     union net_ctl_info info;
@@ -392,8 +403,13 @@ int cm_cloudmoon_pair_start(char *url, size_t url_capacity,
         }
     }
     port = (unsigned)ntohs(address.sin_port);
-    rc = snprintf(candidate, sizeof(candidate), "http://%s:%u/?k=%s",
-                  info.ip_address, port, cm_pair_key);
+    if (cm_pair_expected_game[0]) {
+        rc = snprintf(candidate, sizeof(candidate), "http://%s:%u/?k=%s&game=%s",
+                      info.ip_address, port, cm_pair_key, cm_pair_expected_game);
+    } else {
+        rc = snprintf(candidate, sizeof(candidate), "http://%s:%u/?k=%s",
+                      info.ip_address, port, cm_pair_key);
+    }
     if (rc < 0 || (size_t)rc >= sizeof(candidate) ||
         strlen(candidate) >= url_capacity) {
         close(cm_pair_listen_fd);
@@ -425,6 +441,24 @@ int cm_cloudmoon_pair_start(char *url, size_t url_capacity,
     *module_size = qr_size;
     cm_pair_stop_requested = 0;
     cm_pair_linked = 0;
+    cm_pair_expected_game[0] = '\0';
+    if (selected_game && selected_game[0]) {
+        size_t i, n = strlen(selected_game);
+        if (n >= sizeof(cm_pair_expected_game)) {
+            close(cm_pair_listen_fd);
+            cm_pair_listen_fd = -1;
+            return -1;
+        }
+        for (i = 0; i < n; ++i) {
+            unsigned char c = (unsigned char)selected_game[i];
+            if (!(isalnum(c) || c == '.' || c == '_' || c == '-')) {
+                close(cm_pair_listen_fd);
+                cm_pair_listen_fd = -1;
+                return -1;
+            }
+        }
+        memcpy(cm_pair_expected_game, selected_game, n + 1);
+    }
     cm_pair_expire_at_ms = cm_pair_now_ms() + CM_PAIR_TTL_MS;
     if (cm_pair_expire_at_ms <= CM_PAIR_TTL_MS) {
         close(cm_pair_listen_fd);
