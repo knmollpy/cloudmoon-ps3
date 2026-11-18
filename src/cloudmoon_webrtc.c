@@ -59,8 +59,16 @@ static int cm_json_quote(char*out,size_t cap,const char*s) {
 
 static int cm_rtc_send_signal(cm_cloudmoon_webrtc_t*rtc,const char*type,
                               const char*value,const char*mid,int label) {
-    char qvalue[CM_RTC_SDP_MAX+256],qmid[128],json[CM_RTC_SDP_MAX+512];
-    int n,result;
+    /*
+     * SDP contains CR/LF control bytes. cm_json_quote expands each control
+     * byte to six characters, so reserve the worst-case escaped size.
+     * Keep these buffers off the small PS3 PPU callback/thread stacks.
+     */
+    const size_t qcap=(CM_RTC_SDP_MAX+256U)*6U+1U;
+    const size_t jcap=qcap+512U;
+    char qmid[128];
+    char *storage,*qvalue,*json;
+    int n,result=-1;
     cm_cloudmoon_client_t *client;
     if(!rtc||!type||!value)return -1;
     if(__sync_val_compare_and_swap(&rtc->signaling_detached,0,0))return -1;
@@ -70,16 +78,23 @@ static int cm_rtc_send_signal(cm_cloudmoon_webrtc_t*rtc,const char*type,
         return -1;
     }
     client=__sync_val_compare_and_swap(&rtc->client,(cm_cloudmoon_client_t*)0,(cm_cloudmoon_client_t*)0);
-    if(!client||cm_json_quote(qvalue,sizeof(qvalue),value)<0) {
-        __sync_sub_and_fetch(&rtc->signaling_users,1);
-        return -1;
-    }
+    if(!client)goto done;
+    storage=(char*)malloc(qcap+jcap);
+    if(!storage)goto done;
+    qvalue=storage;
+    json=storage+qcap;
+    if(cm_json_quote(qvalue,qcap,value)<0)goto cleanup;
     if(mid) {
-        if(cm_json_quote(qmid,sizeof(qmid),mid)<0){__sync_sub_and_fetch(&rtc->signaling_users,1);return -1;}
-        n=snprintf(json,sizeof(json),"{\"type\":\"%s\",\"candidate\":%s,\"label\":%d,\"id\":%s}",type,qvalue,label,qmid);
-    } else n=snprintf(json,sizeof(json),"{\"type\":\"%s\",\"sdp\":%s}",type,qvalue);
-    if(n<0||(size_t)n>=sizeof(json))result=-1;
-    else result=cm_cloudmoon_client_send_signal(client,json,(size_t)n);
+        if(cm_json_quote(qmid,sizeof(qmid),mid)<0)goto cleanup;
+        n=snprintf(json,jcap,"{\"type\":\"%s\",\"candidate\":%s,\"label\":%d,\"id\":%s}",type,qvalue,label,qmid);
+    } else {
+        n=snprintf(json,jcap,"{\"type\":\"%s\",\"sdp\":%s}",type,qvalue);
+    }
+    if(n>=0&&(size_t)n<jcap)
+        result=cm_cloudmoon_client_send_signal(client,json,(size_t)n);
+cleanup:
+    free(storage);
+done:
     __sync_sub_and_fetch(&rtc->signaling_users,1);
     return result;
 }
