@@ -36,7 +36,7 @@ La aplicación de PS3 genera su propio QR de un solo uso; no es un QR oficial de
 
 El proceso vincula una **sesión de juego activa**, no guarda un inicio de sesión permanente de CloudMoon. Para cambiar de juego, iniciá el nuevo juego en CloudMoon y repetí la vinculación. La exploración del catálogo y la selección del juego siguen ocurriendo en la página oficial del celular; el catálogo nativo de PS3 todavía no está implementado.
 
-La página local no solicita tu contraseña ni códigos de Google, y no envía la URL a servicios de terceros. La transferencia entre el celular y la PS3 usa HTTP dentro de la red local (no TLS): usá una Wi-Fi privada de confianza y no compartas el QR, la URL ni el archivo de sesión. El QR caduca al cancelar la pantalla o completar la vinculación.
+La página local no solicita tu contraseña ni códigos de Google, y no envía la URL a servicios de terceros. La transferencia entre el celular y la PS3 usa HTTP dentro de la red local (no TLS): usá una Wi-Fi privada de confianza y no compartas el QR, la URL ni el archivo de sesión. El QR caduca a los 10 minutos, al cancelar la pantalla o al completar la vinculación.
 
 ### Alternativa por FTP
 
