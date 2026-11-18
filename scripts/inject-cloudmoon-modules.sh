@@ -570,10 +570,10 @@ def replace_once(old, new, label):
     s = s.replace(old, new, 1)
 
 replace_once("#define MAIN_MENU_ITEM_COUNT 3",
-             "#define MAIN_MENU_ITEM_COUNT 3 /* CLOUDMOON_PS3_MENU_PATCH */",
+             "#define MAIN_MENU_ITEM_COUNT 4 /* CLOUDMOON_PS3_MENU_PATCH */",
              "main menu item count")
 replace_once("static int active_main_item = 0; // 0: Sunshine Host IP, 1: Configure Settings, 2: Connect/Pair",
-             "static int active_main_item = 0; // 0: Settings, 1: Link phone, 2: Connect CloudMoon",
+             "static int active_main_item = 0; // 0: Browse games, 1: Settings, 2: Link, 3: Connect",
              "main menu item mapping")
 
 # Replace the inherited Sunshine host-IP interaction with two real CloudMoon actions.
@@ -581,17 +581,36 @@ start = s.find("                // Action handling per main menu item")
 end = s.find("                // START button initiates connection", start)
 if start < 0 or end < 0:
     raise SystemExit("Could not locate the main-menu action handler")
-new_actions = """                // CloudMoon main actions: settings, phone link and connect.
+new_actions = """                // CloudMoon native catalog and session actions.
                 if (active_main_item == 0) {
+                    ps3_app_list_t catalog_list = {0};
+                    size_t catalog_count = cm_cloudmoon_catalog_count();
+                    size_t i;
+                    if (catalog_count > MAX_APP_ENTRIES) catalog_count = MAX_APP_ENTRIES;
+                    for (i = 0; i < catalog_count; ++i) {
+                        const cm_cloudmoon_game_t *game = cm_cloudmoon_catalog_at(i);
+                        if (!game) continue;
+                        catalog_list.apps[i].id = (int)i;
+                        strncpy(catalog_list.apps[i].name, game->name,
+                                sizeof(catalog_list.apps[i].name) - 1);
+                        catalog_list.apps[i].name[sizeof(catalog_list.apps[i].name) - 1] = '\\0';
+                        catalog_list.count++;
+                    }
+                    if (catalog_list.count > 0) {
+                        ui_set_app_list(&catalog_list);
+                        cloudmoon_catalog_mode = 1;
+                        ui_state = UI_STATE_APPLIST;
+                    } else {
+                        ui_push_log("CloudMoon: catalog is empty.");
+                    }
+                } else if (active_main_item == 1) {
                     if ((pad.buttons_pressed & A_FLAG) || (pad.buttons_pressed & RIGHT_FLAG)) {
                         ui_state = UI_STATE_SETTINGS;
                         active_settings_item = 0;
                     }
-                } else if (active_main_item == 1) {
-                    if (pad.buttons_pressed & A_FLAG) {
-                        ui_state = UI_STATE_LINKING;
-                    }
                 } else if (active_main_item == 2) {
+                    if (pad.buttons_pressed & A_FLAG) ui_state = UI_STATE_LINKING;
+                } else if (active_main_item == 3) {
                     if (pad.buttons_pressed & A_FLAG) {
                         ui_flush_settings_if_dirty();
                         ui_state = UI_STATE_PAIRING;
@@ -599,54 +618,49 @@ new_actions = """                // CloudMoon main actions: settings, phone link
                 }
 
 """
-s = s[:start] + new_actions + s[end:]
 
 # Replace the old Sunshine menu rows with a CloudMoon session landing screen.
 start = s.find("                // Row 0: Sunshine Host")
 end = s.find("            } else if (ui_state == UI_STATE_SETTINGS)", start)
 if start < 0 or end < 0:
     raise SystemExit("Could not locate the main-menu drawing block")
-new_rows = """                // Row 0: Stream settings
+new_rows = """                // Row 0: Native CloudMoon catalogue
                 SetFontSize(SF(24), SF(24));
-                SetFontColor((active_main_item == 0) ? 0xff82b1ff : 0xffffffff, 0);
-                DrawString(SX(60), SY(118), "[ CONFIGURE STREAM SETTINGS ]");
+                SetFontColor((active_main_item == 0) ? 0xff55c8ff : 0xffffffff, 0);
+                DrawString(SX(60), SY(104), "[ BROWSE CLOUDMOON GAMES ]");
+                SetFontSize(SF(17), SF(17));
+                SetFontColor(0xffa9bfd8, 0);
+                DrawString(SX(60), SY(135), "Explore verified titles from the public CloudMoon catalog.");
 
-                SetFontSize(SF(18), SF(18));
-                SetFontColor(0xff9e9e9e, 0);
-                int kbps = ui_bitrate_options[ui_bitrate_idx];
-                if (kbps % 1000 == 0) {
-                    DrawFormatString(SX(60), SY(154), "Current: %d FPS | %d Mbps | %s | %s | %s",
-                                     ui_fps, kbps / 1000,
-                                     ui_display_is_4_3 ? "4:3 Display" : "16:9 Display",
-                                     ui_get_stream_res_name(), ui_get_scaling_mode_name());
-                } else {
-                    DrawFormatString(SX(60), SY(154), "Current: %d FPS | %.1f Mbps | %s | %s | %s",
-                                     ui_fps, (float)kbps / 1000.0f,
-                                     ui_display_is_4_3 ? "4:3 Display" : "16:9 Display",
-                                     ui_get_stream_res_name(), ui_get_scaling_mode_name());
-                }
+                // Row 1: Stream settings
+                SetFontSize(SF(22), SF(22));
+                SetFontColor((active_main_item == 1) ? 0xff55c8ff : 0xffffffff, 0);
+                DrawString(SX(60), SY(188), "[ CONFIGURE STREAM SETTINGS ]");
+                SetFontSize(SF(16), SF(16));
+                SetFontColor(0xff7894b8, 0);
+                DrawFormatString(SX(60), SY(216), "%d FPS | %d Kbps | %s",
+                                 ui_fps, ui_get_bitrate(), ui_get_stream_res_name());
 
-                // Row 1: QR account linking from phone
-                SetFontSize(SF(24), SF(24));
-                SetFontColor((active_main_item == 1) ? 0xff82b1ff : 0xffffffff, 0);
-                DrawString(SX(60), SY(222), "[ LINK CLOUDMOON SESSION FROM PHONE ]");
-                SetFontSize(SF(18), SF(18));
-                SetFontColor(0xffb0bec5, 0);
-                DrawString(SX(60), SY(258), "Scan a QR and authorize a CloudMoon game session.");
+                // Row 2: Link selected game via phone
+                SetFontSize(SF(22), SF(22));
+                SetFontColor((active_main_item == 2) ? 0xff55c8ff : 0xffffffff, 0);
+                DrawString(SX(60), SY(270), "[ LINK GAME FROM PHONE ]");
+                SetFontSize(SF(16), SF(16));
+                SetFontColor(0xff7894b8, 0);
+                DrawString(SX(60), SY(298), "Scan the QR and import the active CloudMoon game session.");
 
-                // Row 2: start a linked CloudMoon session
-                SetFontSize(SF(24), SF(24));
-                SetFontColor((active_main_item == 2) ? 0xff82b1ff : 0xffffffff, 0);
-                DrawString(SX(60), SY(326), "[ CONNECT TO CLOUDMOON ]");
-                SetFontSize(SF(18), SF(18));
-                SetFontColor(0xffb0bec5, 0);
-                DrawString(SX(60), SY(362), "Use the active session saved from your phone.");
+                // Row 3: Connect
+                SetFontSize(SF(22), SF(22));
+                SetFontColor((active_main_item == 3) ? 0xff55c8ff : 0xffffffff, 0);
+                DrawString(SX(60), SY(354), "[ CONNECT TO CLOUDMOON ]");
+                SetFontSize(SF(16), SF(16));
+                SetFontColor(0xff7894b8, 0);
+                DrawString(SX(60), SY(382), "Connect using the game session linked to this PS3.");
 
-                SetFontSize(SF(18), SF(18));
-                SetFontColor(0xff9e9e9e, 0);
+                SetFontSize(SF(17), SF(17));
+                SetFontColor(0xff7894b8, 0);
                 DrawString(SX(60), SY(445), "\\x05 Navigate   |   \\x01 Select   |   \\x02 Exit to XMB");
 """
-s = s[:start] + new_rows + s[end:]
 
 replace_once('DrawString(SX(40), SY(18), "Moonlight PS3");',
              'DrawString(SX(40), SY(18), "CloudMoon PS3");',
