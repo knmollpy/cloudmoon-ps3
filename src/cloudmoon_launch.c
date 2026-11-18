@@ -69,20 +69,34 @@ static void cm_cloudmoon_worker(void *arg){
  }
  if(rtc_state.rtc){cm_cloudmoon_webrtc_close(rtc_state.rtc);rtc_state.rtc=NULL;}
  NLOG("CloudMoon: session ended with status %d",rc);
- if(rc!=0)ui_push_log("CloudMoon: connection failed. Check session data and CA bundle.");
- else ui_push_log("CloudMoon: stream disconnected.");
+ if(rc!=0){
+  ui_push_log("CloudMoon: connection failed. Check session data and CA bundle.");
+  if(ui_is_running())ui_set_state(UI_STATE_ERROR);
+ } else {
+  ui_push_log("CloudMoon: stream disconnected.");
+  if(ui_is_running())ui_set_state(UI_STATE_IP_ENTRY);
+ }
  free(cfg);cm_cloudmoon_thread_running=0;sysThreadExit(0);
 }
 int cm_cloudmoon_autostart(void){
  char game[192]={0},user[192]={0},instance[3072]={0};
  cm_launch_config *cfg;
- int rc=cm_read_config(game,sizeof(game),user,sizeof(user),instance,sizeof(instance));
- if(rc==0){ui_push_log("CloudMoon: edit USRDIR/cloudmoon.ini and restart.");return 0;}
- if(rc<0){ui_push_log("CloudMoon: cloudmoon.ini is incomplete or invalid.");return -1;}
+ int rc;
  if(cm_cloudmoon_thread_started){
   if(cm_cloudmoon_thread_running)return 0;
   {u64 result;sysThreadJoin(cm_cloudmoon_thread,&result);}
   cm_cloudmoon_thread_started=0;
+ }
+ rc=cm_read_config(game,sizeof(game),user,sizeof(user),instance,sizeof(instance));
+ if(rc==0){
+  ui_push_log("CloudMoon: edit USRDIR/cloudmoon.ini before connecting.");
+  ui_set_state(UI_STATE_IP_ENTRY);
+  return 0;
+ }
+ if(rc<0){
+  ui_push_log("CloudMoon: cloudmoon.ini is incomplete or invalid.");
+  ui_set_state(UI_STATE_ERROR);
+  return -1;
  }
  cfg=(cm_launch_config*)calloc(1,sizeof(*cfg));
  if(!cfg)return -1;
@@ -94,6 +108,7 @@ int cm_cloudmoon_autostart(void){
                     THREAD_JOINABLE,"CloudMoonNet")!=0){
   cm_cloudmoon_thread_running=0;free(cfg);
   ui_push_log("CloudMoon: could not start network worker.");
+  ui_set_state(UI_STATE_ERROR);
   return -1;
  }
  cm_cloudmoon_thread_started=1;

@@ -180,13 +180,17 @@ if 'NLOG("CloudMoon: network initialization result %d", net_rc);' not in s:
 replacement_main = """  ui_init(width, height, is_4_3);
   ps3input_start();
   NLOG("CloudMoon PS3 UI Initialized");
-  cm_cloudmoon_autostart();
+  NLOG("CloudMoon: waiting for Connect from the PS3 menu");
 """
 s = s.replace(needle, replacement_main, 1)
 # CloudMoon does not use Moonlight's blocking LiStartConnection loop.
 # Keep the upstream main thread draining VDEC while WebRTC owns the session.
 main_loop_patch = """    sysUtilCheckCallback();
-    if (ui_get_state() == UI_STATE_STREAMING) {
+    if (ui_get_state() == UI_STATE_PAIRING) {
+      cm_cloudmoon_autostart();
+      ps3perf_tick(5);
+      usleep(10000);
+    } else if (ui_get_state() == UI_STATE_STREAMING) {
       ps3_pad_state_t pad;
       ps3input_get_data(&pad);
       int combo = PLAY_FLAG | BACK_FLAG | LS_CLK_FLAG | RS_CLK_FLAG;

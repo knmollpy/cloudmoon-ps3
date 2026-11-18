@@ -117,7 +117,11 @@ static void cm_rtc_local_candidate(int pc,const char*candidate,const char*mid,vo
 
 static void cm_rtc_state(int pc,rtcState state,void*ptr) {
     cm_cloudmoon_webrtc_t*rtc=(cm_cloudmoon_webrtc_t*)ptr;
-    if(rtc&&!CM_ATOMIC_LOAD(&rtc->closing)&&pc==rtc->pc){CM_ATOMIC_STORE(&rtc->connected,(state==RTC_CONNECTED));if(state==RTC_CONNECTED)ui_set_state(UI_STATE_STREAMING);else if(state==RTC_DISCONNECTED||state==RTC_FAILED||state==RTC_CLOSED)ui_set_state(UI_STATE_ERROR);}
+    if(rtc&&!CM_ATOMIC_LOAD(&rtc->closing)&&pc==rtc->pc){
+        CM_ATOMIC_STORE(&rtc->connected,(state==RTC_CONNECTED));
+        if(state==RTC_DISCONNECTED||state==RTC_FAILED||state==RTC_CLOSED)
+            ui_set_state(UI_STATE_ERROR);
+    }
 }
 
 static void cm_rtc_channel_message(int id,const char*message,int size,void*ptr) {
@@ -125,7 +129,7 @@ static void cm_rtc_channel_message(int id,const char*message,int size,void*ptr) 
     (void)id;
     if(!rtc||CM_ATOMIC_LOAD(&rtc->closing)||!message||size<=0)return;
     if(size>=9&&!memcmp(message,"rotation>",9)) {
-        ui_set_state(UI_STATE_STREAMING);
+        /* Keep the PS3 menu visible until a valid SPS initializes VDEC. */
         return;
     }
     if(size>=8&&!memcmp(message,"kickout>",8)){
@@ -405,6 +409,7 @@ static void cm_rtc_video_frame(int track,const char*data,int size,
                 if(ps3video_cloudmoon_start(actual_width,actual_height)==0) {
                     CM_ATOMIC_STORE(&rtc->video_started,2);
                     CM_ATOMIC_STORE(&rtc->video_keyframe_requested,0);
+                    ui_set_state(UI_STATE_STREAMING);
                 } else {
                     cm_rtc_video_fail(rtc,"CloudMoon: PS3 H.264 decoder initialization failed.");
                 }
