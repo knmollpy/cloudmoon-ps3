@@ -76,7 +76,11 @@ def main() -> None:
     else:
         markers = (b"1 main", b"2 ui_init complete",
                    b"3 ps3input_start complete",
-                   b"CloudMoon transport is disabled in this safe build; catalogue browsing only.",
+                   b"CloudMoon QR: network initialization result %d",
+                   b"CloudMoon QR: local phone link ready at %s",
+                   b"SCAN THIS QR CODE WITH YOUR PHONE",
+                   b"SIGN IN WITH PHONE QR",
+                   b"cloudmoon-mobile-link.html",
                    b"USRDIR/cloudmoon_boot.log")
     for marker in markers:
         if marker not in elf:
