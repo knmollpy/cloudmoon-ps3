@@ -34,3 +34,4 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 # Re-run the isolated WebRTC-off B validation after packaging-script fixes.
+# Rebuild after enforcing visible navy/blue Tiny3D palette assertions.
