@@ -2,8 +2,8 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-PS3_BASE=\${1:-"$ROOT_DIR/vendor/PS3-Moonlight"}
-PS3DEV=\${PS3DEV:-"$PS3_BASE/ps3dev"}
+PS3_BASE=${1:-"$ROOT_DIR/vendor/PS3-Moonlight"}
+PS3DEV=${PS3DEV:-"$PS3_BASE/ps3dev"}
 TINY3D="$ROOT_DIR/vendor/tiny3D"
 
 if [ ! -f "$PS3DEV/ppu_rules" ]; then
