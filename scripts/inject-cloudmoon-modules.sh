@@ -291,8 +291,8 @@ p.write_text(s)
 ui = pathlib.Path(sys.argv[2])
 h = pathlib.Path(sys.argv[3])
 u = ui.read_text()
-if '#include "rsxutil.h"' not in u:
-    u = u.replace('#include "net_logger.h"', '#include "net_logger.h"\\n#include "rsxutil.h"')
+if 'extern videoResolution Video_Resolution;' not in u:
+    u = u.replace('#include <tiny3d.h>', '#include <tiny3d.h>\nextern videoResolution Video_Resolution;')
 header = h.read_text()
 
 # Scale the logical UI canvas to the actual, validated physical framebuffer.
