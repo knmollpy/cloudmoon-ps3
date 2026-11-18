@@ -70,6 +70,5 @@ jobs:
         with:
           name: cloudmoon-ps4-orbis-objects
           path: |
-            build-ps4-modules/libcloudmoon_ps4_ui.a
-            build-ps4-modules/libcloudmoon_ps4_orbis_platform.a
+            build-ps4-modules/**/*.a
           if-no-files-found: error
