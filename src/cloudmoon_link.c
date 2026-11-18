@@ -65,8 +65,23 @@ static int cm_link_host_allowed(const char *begin, const char *end) {
 
     /* Only accept URLs originating from CloudMoon's own HTTPS site. */
     if (!strcmp(host, "cloudmoonapp.com")) return 1;
-    if (host_len > 15 &&
-        !strcmp(host + host_len - 15, ".cloudmoonapp.com")) return 1;
+    {
+        static const char suffix[] = ".cloudmoonapp.com";
+        size_t suffix_len = sizeof(suffix) - 1;
+        if (host_len > suffix_len &&
+            !strcmp(host + host_len - suffix_len, suffix)) return 1;
+    }
+    if (colon) {
+        unsigned long port = 0;
+        const char *q = colon + 1;
+        if (q >= end) return 0;
+        for (; q < end; ++q) {
+            if (*q < '0' || *q > '9') return 0;
+            port = port * 10UL + (unsigned long)(*q - '0');
+            if (port > 65535UL) return 0;
+        }
+        if (!port) return 0;
+    }
     return 0;
 }
 
