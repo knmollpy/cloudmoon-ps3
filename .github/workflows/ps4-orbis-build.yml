@@ -48,8 +48,9 @@ jobs:
 
       - name: Configure PS4 platform modules
         run: |
-          cmake -S ps4 -B build-ps4-modules -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE=ps4/cmake/openorbis.cmake \
+          cmake -S ps4 -B build-ps4-modules -G "Unix Makefiles" \
+            -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/ps4/cmake/openorbis.cmake" \
+            -DCMAKE_MAKE_PROGRAM=/usr/bin/make \
             -DCM_UI_BUILD_TESTS=OFF
 
       - name: Cross-compile UI and Orbis hardware adapters
