@@ -242,7 +242,7 @@ if 'NLOG("CloudMoon: network initialization result %d", net_rc);' not in s:
         raise SystemExit("Could not locate network logger startup")
     s = s.replace(anchor, anchor + '  NLOG("CloudMoon: network initialization result %d", net_rc);\n', 1)
 
-replacement_main = """  ui_init(width, height, is_4_3);
+replacement_main = """  ui_init(1280, 720, is_4_3);
   ps3input_start();
   NLOG("CloudMoon PS3 UI Initialized");
   NLOG("CloudMoon: waiting for Connect from the PS3 menu");
