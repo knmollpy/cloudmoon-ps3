@@ -8,6 +8,10 @@
 #include <sys/time.h>
 #define CM_CLIENT_PACKET_MAX 32768
 
+#ifndef CM_CLIENT_PLATFORM_LABEL
+#define CM_CLIENT_PLATFORM_LABEL CM_CLIENT_PLATFORM_LABEL
+#endif
+
 static volatile int cm_client_stop_requested = 0;
 void cm_cloudmoon_client_request_stop(void) {
     __sync_lock_test_and_set(&cm_client_stop_requested, 1);
