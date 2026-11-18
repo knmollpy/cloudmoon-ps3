@@ -426,14 +426,60 @@ PY
 
 # Align the inherited Moonlight screen with the CloudMoon session workflow.
 # Keep the stream settings page, but remove the obsolete Sunshine host-IP action.
-python3 - "$DST/ui.c" <<'PY'
+python3 - "$DST/ui.c" "$DST/ui.h" <<'PY'
 import pathlib
 import sys
 
 p = pathlib.Path(sys.argv[1])
 s = p.read_text()
+header_path = pathlib.Path(sys.argv[2])
+h = header_path.read_text()
 if "CLOUDMOON_PS3_MENU_PATCH" in s:
     raise SystemExit(0)
+
+h = h.replace("    UI_STATE_ERROR\\n};",
+              "    UI_STATE_ERROR,\\n    UI_STATE_LINKING,\\n    UI_STATE_LINKED\\n};")
+if "ui_set_cloudmoon_link_qr" not in h:
+    h = h.replace("void ui_init(int width, int height, int is_4_3);",
+                  "void ui_set_cloudmoon_link_qr(const uint8_t *modules, int size, const char *url);\\nvoid ui_clear_cloudmoon_link_qr(void);\\nvoid ui_init(int width, int height, int is_4_3);")
+header_path.write_text(h)
+
+state_anchor = "static volatile int ui_state = UI_STATE_IP_ENTRY;"
+qr_globals = """#define UI_CLOUDMOON_QR_MAX 3249
+static uint8_t ui_cloudmoon_qr[UI_CLOUDMOON_QR_MAX];
+static int ui_cloudmoon_qr_size = 0;
+static volatile int ui_cloudmoon_qr_ready = 0;
+static char ui_cloudmoon_pair_url[160];
+"""
+if "UI_CLOUDMOON_QR_MAX" not in s:
+    if state_anchor not in s:
+        raise SystemExit("Could not locate UI state for QR data")
+    s = s.replace(state_anchor, state_anchor + "\\n" + qr_globals, 1)
+
+setter_anchor = "void ui_set_state(int state) { ui_state = state; }"
+qr_setters = """void ui_set_cloudmoon_link_qr(const uint8_t *modules, int size, const char *url) {
+    size_t count;
+    if (!modules || size <= 0 || size > 57 || !url) return;
+    count = (size_t)size * (size_t)size;
+    if (count > sizeof(ui_cloudmoon_qr)) return;
+    memcpy(ui_cloudmoon_qr, modules, count);
+    strncpy(ui_cloudmoon_pair_url, url, sizeof(ui_cloudmoon_pair_url) - 1);
+    ui_cloudmoon_pair_url[sizeof(ui_cloudmoon_pair_url) - 1] = '\\0';
+    ui_cloudmoon_qr_size = size;
+    __sync_synchronize();
+    ui_cloudmoon_qr_ready = 1;
+}
+void ui_clear_cloudmoon_link_qr(void) {
+    ui_cloudmoon_qr_ready = 0;
+    ui_cloudmoon_qr_size = 0;
+    ui_cloudmoon_pair_url[0] = '\\0';
+    memset(ui_cloudmoon_qr, 0, sizeof(ui_cloudmoon_qr));
+}
+"""
+if "ui_set_cloudmoon_link_qr(const uint8_t *modules" not in s:
+    if setter_anchor not in s:
+        raise SystemExit("Could not locate ui_set_state for QR setters")
+    s = s.replace(setter_anchor, setter_anchor + "\\n" + qr_setters, 1)
 
 def replace_once(old, new, label):
     global s
