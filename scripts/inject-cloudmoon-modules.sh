@@ -738,17 +738,17 @@ replace_once('"ERROR: Target unreachable or Pairing failed."',
              "error message")
 replace_once('\"Press \\x01 to return.\"',
              '\"Press \\x01 to return to the menu.\"',
-             \"error hint\")
+             "error hint")
 
 replace_once('DrawString(SX(40), SY(18), \"Moonlight PS3  -  Host Applications\");',
              'DrawString(SX(40), SY(18), \"CloudMoon PS3  -  Game Catalog\");',
-             \"catalog title\")
+             "catalog title")
 replace_once('DrawString(SX(60), SY(95), \"Select Game or Application to Stream:\");',
              'DrawString(SX(60), SY(95), \"Choose a CloudMoon game to link from your phone:\");',
-             \"catalog subtitle\")
+             "catalog subtitle")
 replace_once('DrawString(SX(60), SY(445), \"\\\\x05 Navigate   |   \\\\x01 Launch Game   |   \\\\x02 Cancel\");',
              'DrawString(SX(60), SY(445), \"\\\\x05 Browse titles   |   \\\\x01 Select and link   |   \\\\x02 Back\");',
-             \"catalog legend\")
+             "catalog legend")
 
 # Replace Moonlight's PIN/pairing page with a CloudMoon coordinator connection page.
 # The UI_STATE_PAIRING value is used only as the internal "connecting" state.
