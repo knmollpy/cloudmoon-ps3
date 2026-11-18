@@ -161,7 +161,93 @@ import pathlib
 import sys
 p = pathlib.Path(sys.argv[1])
 s = p.read_text()
-# Preserve upstream ps3_net_init() and ps3_net_shutdown() exactly.
+start = s.find("/* PSL1GHT libnet gatekeeper:")
+end = s.find("static void ps3_net_shutdown", start)
+if start < 0 or end < 0:
+    raise SystemExit("Could not locate PS3 network initialization block")
+replacement = """/* PSL1GHT socket calls require __netMemory when using custom pools. */
+extern void *__netMemory;
+static void *g_net_memory_pool = NULL;
+static int g_net_initialized = 0;
+
+static int ps3_net_init(void) {
+  int ret = sysModuleLoad(SYSMODULE_NET);
+  if (ret != 0) return ret;
+
+  static const uint32_t pool_sizes[] = {
+    4 * 1024 * 1024, 2 * 1024 * 1024, 1024 * 1024, 512 * 1024
+  };
+  for (size_t i = 0; i < sizeof(pool_sizes) / sizeof(pool_sizes[0]); i++) {
+    uint32_t sz = pool_sizes[i];
+    g_net_memory_pool = memalign(4096, sz);
+    if (!g_net_memory_pool) continue;
+    netInitParam param;
+    memset(&param, 0, sizeof(param));
+    param.memory = (u32)(uintptr_t)g_net_memory_pool;
+    param.memory_size = sz;
+    param.flags = 0;
+    ret = netInitializeNetworkEx(&param);
+    if (ret == 0) {
+      __netMemory = g_net_memory_pool;
+      ret = netCtlInit();
+      if (ret == 0) {
+        g_net_initialized = 1;
+        return 0;
+      }
+      __netMemory = NULL;
+      netFinalizeNetwork();
+    }
+    free(g_net_memory_pool);
+    g_net_memory_pool = NULL;
+  }
+
+  /* Last-resort 128 KiB fallback only if every custom pool fails. */
+  ret = netInitialize();
+  if (ret != 0) {
+    sysModuleUnload(SYSMODULE_NET);
+    return ret;
+  }
+  ret = netCtlInit();
+  if (ret != 0) {
+    netDeinitialize();
+    sysModuleUnload(SYSMODULE_NET);
+    return ret;
+  }
+  g_net_initialized = 1;
+  return 0;
+}
+
+"""
+s = s[:start] + replacement + s[end:]
+old_shutdown = """static void ps3_net_shutdown(void) {
+  netCtlTerm();
+  if (g_net_memory_pool) {
+    __netMemory = NULL;
+    netFinalizeNetwork();
+    free(g_net_memory_pool);
+    g_net_memory_pool = NULL;
+  } else {
+    netDeinitialize();
+  }
+  sysModuleUnload(SYSMODULE_NET);
+}"""
+new_shutdown = """static void ps3_net_shutdown(void) {
+  if (!g_net_initialized) return;
+  netCtlTerm();
+  if (g_net_memory_pool) {
+    __netMemory = NULL;
+    netFinalizeNetwork();
+    free(g_net_memory_pool);
+    g_net_memory_pool = NULL;
+  } else {
+    netDeinitialize();
+  }
+  sysModuleUnload(SYSMODULE_NET);
+  g_net_initialized = 0;
+}"""
+if old_shutdown not in s:
+    raise SystemExit("Could not locate legacy network shutdown block")
+s = s.replace(old_shutdown, new_shutdown, 1)
 needle = "  ui_init(width, height, is_4_3);\n  ps3input_start();\n"
 if needle not in s:
     raise SystemExit("Could not locate UI startup sequence")
@@ -185,15 +271,9 @@ replacement_main = """  ui_init(width, height, is_4_3);
 s = s.replace(needle, replacement_main, 1)
 # CloudMoon does not use Moonlight's blocking LiStartConnection loop.
 # Keep the upstream main thread draining VDEC while WebRTC owns the session.
-main_loop_patch = """    sysUtilCheckCallback();
+main_loop_patch = """  while (ui_is_running()) {
+    sysUtilCheckCallback();
     if (ui_get_state() == UI_STATE_STREAMING) {
-      ps3_pad_state_t pad;
-      ps3input_get_data(&pad);
-      int combo = PLAY_FLAG | BACK_FLAG | LS_CLK_FLAG | RS_CLK_FLAG;
-      if ((pad.buttons_down & combo) == combo) {
-        cm_cloudmoon_stop();
-        ui_set_state(UI_STATE_IP_ENTRY);
-      }
       vdec_poll();
       ps3perf_tick(5);
       usleep(1000);
@@ -204,20 +284,10 @@ main_loop_patch = """    sysUtilCheckCallback();
   }
 """
 if "CloudMoon main-loop VDEC polling patch" not in s:
-    anchor_loop = """    sysUtilCheckCallback();
-    ps3perf_tick(5);
-    usleep(50000);
-  }
-
-  NLOG("Terminating Moonlight PS3 application...");
-"""
+    anchor_loop = "  while (ui_is_running()) {\n    sysUtilCheckCallback();\n    ps3perf_tick(5);\n    usleep(50000);\n  }"
     if s.count(anchor_loop) != 1:
-        raise SystemExit("Could not uniquely locate the original main-loop idle tail")
-    replacement_loop = main_loop_patch + """
-  NLOG("Terminating Moonlight PS3 application...");
-  cm_cloudmoon_stop();
-"""
-    s = s.replace(anchor_loop, replacement_loop, 1)
+        raise SystemExit("Could not uniquely locate idle main loop for VDEC polling patch")
+    s = s.replace(anchor_loop, main_loop_patch + "  /* CloudMoon main-loop VDEC polling patch */", 1)
 
 p.write_text(s)
 
