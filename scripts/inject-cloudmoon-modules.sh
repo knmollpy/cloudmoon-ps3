@@ -162,7 +162,72 @@ import sys
 p = pathlib.Path(sys.argv[1])
 s = p.read_text()
 # Preserve upstream ps3_net_init() and ps3_net_shutdown() exactly.
-needle = "  ui_init(width, height, is_4_3);\n  ps3input_start();\n"
+# The video API only reports selected standard resolution IDs; never use unchecked
+# videoGetResolution output as a render surface size. Keep a fixed 720p logical
+# canvas and let Tiny3D scale it into the GameOS-selected physical output mode.
+old_display = """  // Çözünürlük Tespiti
+  videoState vstate;
+  videoResolution vres;
+  videoGetState(VIDEO_PRIMARY, 0, &vstate);
+  videoGetResolution(vstate.displayMode.resolution, &vres);
+
+  int width = vres.width;
+  int height = vres.height;
+
+  // Eğer çözünürlük tanımsızsa varsayılan 720p kullan
+  if (width == 0 || height == 0) {
+    width = 1280;
+    height = 720;
+  }
+
+  int is_4_3 = 0;
+  if (vstate.displayMode.aspect == VIDEO_ASPECT_4_3) {
+    is_4_3 = 1;
+  } else if (vstate.displayMode.aspect == VIDEO_ASPECT_16_9) {
+    is_4_3 = 0;
+  } else if (height > 0 && ((float)width / (float)height) < 1.5f) {
+    is_4_3 = 1;
+  }
+
+  NLOG("Detected Display: %dx%d (%s)", width, height, is_4_3 ? "4:3 Standard/CRT" : "16:9 Widescreen");
+
+  ui_init(width, height, is_4_3);
+"""
+new_display = """  videoState vstate = {0};
+  int video_state_rc = videoGetState(VIDEO_PRIMARY, 0, &vstate);
+  int is_4_3 = 0;
+
+  if (video_state_rc == 0) {
+    if (vstate.displayMode.aspect == VIDEO_ASPECT_4_3) {
+      is_4_3 = 1;
+    } else if (vstate.displayMode.aspect == VIDEO_ASPECT_16_9) {
+      is_4_3 = 0;
+    }
+  }
+
+  NLOG("Display query=%d mode=%u scan=%u aspect=%u; using 1280x720 logical canvas (%s)",
+       video_state_rc,
+       (unsigned int)vstate.displayMode.resolution,
+       (unsigned int)vstate.displayMode.scanMode,
+       (unsigned int)vstate.displayMode.aspect,
+       is_4_3 ? "4:3" : "16:9");
+
+  /* Logical coordinates only: do not call videoConfigure or force 720p/1080p. */
+  ui_init(1280, 720, is_4_3);
+"""
+if old_display not in s:
+    raise SystemExit("Could not match original unsafe display detection block")
+s = s.replace(old_display, new_display, 1)
+needle = "  ui_init(1280, 720, is_4_3);\n  ps3input_start();\n"
+replacement_main = """  ui_init(1280, 720, is_4_3);
+  ps3input_start();
+  NLOG("CloudMoon PS3 UI Initialized");
+  NLOG("CloudMoon: waiting for Connect from the PS3 menu");
+"""
+if needle not in s:
+    raise SystemExit("Could not locate startup sequence after safe display patch")
+s = s.replace(needle, replacement_main, 1)
+
 if needle not in s:
     raise SystemExit("Could not locate UI startup sequence")
 # Preserve the upstream network-init call, but capture its result so the
