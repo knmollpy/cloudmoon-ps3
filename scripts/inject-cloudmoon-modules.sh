@@ -245,8 +245,6 @@ if needle not in s:
     raise SystemExit("Could not locate startup sequence after safe display patch")
 s = s.replace(needle, replacement_main, 1)
 
-if needle not in s:
-    raise SystemExit("Could not locate UI startup sequence")
 # Preserve the upstream network-init call, but capture its result so the
 # runtime log reports whether the PS3 network pool actually initialized.
 if "int net_rc = ps3_net_init();" not in s:
@@ -259,12 +257,6 @@ if 'NLOG("CloudMoon: network initialization result %d", net_rc);' not in s:
         raise SystemExit("Could not locate network logger startup")
     s = s.replace(anchor, anchor + '  NLOG("CloudMoon: network initialization result %d", net_rc);\n', 1)
 
-replacement_main = """  ui_init(width, height, is_4_3);
-  ps3input_start();
-  NLOG("CloudMoon PS3 UI Initialized");
-  NLOG("CloudMoon: waiting for Connect from the PS3 menu");
-"""
-s = s.replace(needle, replacement_main, 1)
 # CloudMoon replaces Moonlight's blocking pairing/stream state machine.
 # Do not leave the legacy Sunshine handshake ahead of the CloudMoon Connect action.
 main_loop_patch = """  while (ui_is_running()) {
