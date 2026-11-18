@@ -6,6 +6,7 @@
  * Certificate-chain and hostname verification are always mandatory.
  */
 #include "cloudmoon_tls_polarssl.h"
+#include "cloudmoon_mbedtls_entropy.h"
 
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/entropy.h>
@@ -169,6 +170,9 @@ int cm_tls_connect_polarssl(cm_tls_connection **out, const char *hostname,
     mbedtls_entropy_init(&connection->entropy);
     mbedtls_ctr_drbg_init(&connection->drbg);
     connection->initialized = 1;
+
+    rc = cm_orbis_entropy_add(&connection->entropy);
+    if (rc != 0) goto fail;
 
     rc = mbedtls_x509_crt_parse_file(&connection->trusted_cas,
                                      ca_bundle_path);
