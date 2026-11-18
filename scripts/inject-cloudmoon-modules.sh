@@ -264,6 +264,11 @@ main_loop_patch = """  int cloudmoon_connect_started = 0;
   uint8_t cloudmoon_pair_qr[CM_PAIR_QR_MAX_MODULES];
   char cloudmoon_pair_url[CM_PAIR_URL_CAP];
   int cloudmoon_pair_qr_size = 0;
+  int cloudmoon_link_started = 0;
+  int cloudmoon_net_initialized = 0;
+  uint8_t cloudmoon_pair_qr[CM_PAIR_QR_MAX_MODULES];
+  char cloudmoon_pair_url[CM_PAIR_URL_CAP];
+  int cloudmoon_pair_qr_size = 0;
   while (ui_is_running()) {
     sysUtilCheckCallback();
     if (ui_get_state() == UI_STATE_LINKING) {
@@ -464,7 +469,7 @@ if '#include <stdio.h>' not in main:
     include_anchor = '#include "input.h"'
     if include_anchor not in main:
         raise SystemExit("Could not locate main include for boot logger")
-    main = main.replace(include_anchor, include_anchor + '\n#include <stdio.h>', 1)
+    main = main.replace(include_anchor, include_anchor + '\n#include <stdio.h>\n#include "cloudmoon_pairing.h"\n#include "cloudmoon_catalog.h"', 1)
 logger_code = r"""static void cm_boot_log_write(const char *message) {
     FILE *f = fopen("/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon_boot.log", "a");
     if (f) {
@@ -503,10 +508,53 @@ if os.environ.get("CLOUDMOON_WEBRTC") != "1":
         raise SystemExit("Could not isolate the legacy Sunshine main loop for safe mode")
     safe_loop = """  while (ui_is_running()) {
     sysUtilCheckCallback();
-    if (ui_get_state() == UI_STATE_PAIRING) {
+    if (ui_get_state() == UI_STATE_LINKING) {
+      if (!cloudmoon_net_initialized) {
+        int net_rc = ps3_net_init();
+        NLOG("CloudMoon QR: network initialization result %d", net_rc);
+        if (net_rc != 0) {
+          ui_push_log("CloudMoon: no se pudo iniciar la red de PS3. Revisá la conexión Wi-Fi/Ethernet.");
+          ui_set_state(UI_STATE_ERROR);
+          ps3perf_tick(5);
+          usleep(50000);
+          continue;
+        }
+        cloudmoon_net_initialized = 1;
+      }
+      if (!cloudmoon_link_started) {
+        const cm_cloudmoon_game_t *selected = cm_cloudmoon_catalog_selected();
+        const char *game_id = selected ? selected->package_id : NULL;
+        if (cm_cloudmoon_pair_start(game_id, cloudmoon_pair_url,
+                                    sizeof(cloudmoon_pair_url), cloudmoon_pair_qr,
+                                    sizeof(cloudmoon_pair_qr), &cloudmoon_pair_qr_size) == 0) {
+          ui_set_cloudmoon_link_qr(cloudmoon_pair_qr, cloudmoon_pair_qr_size,
+                                   cloudmoon_pair_url);
+          cloudmoon_link_started = 1;
+          NLOG("CloudMoon QR: local phone link ready at %s", cloudmoon_pair_url);
+          ui_push_log("CloudMoon: escaneá el QR con tu teléfono para iniciar sesión.");
+        } else {
+          ui_set_state(UI_STATE_ERROR);
+        }
+      } else if (!cm_cloudmoon_pair_is_running() &&
+                 ui_get_state() == UI_STATE_LINKING) {
+        ui_clear_cloudmoon_link_qr();
+        cloudmoon_link_started = 0;
+        ui_set_state(UI_STATE_ERROR);
+      }
+    } else if (ui_get_state() == UI_STATE_PAIRING) {
       NLOG("CloudMoon SAFE: blocked legacy Sunshine pairing request.");
-      ui_push_log("Streaming is disabled in this safety build. No Sunshine host will be contacted.");
+      ui_push_log("El streaming aún no está habilitado. No se contactó ningún host Sunshine.");
       ui_set_state(UI_STATE_ERROR);
+    } else {
+      if (cloudmoon_link_started) {
+        cm_cloudmoon_pair_stop();
+        ui_clear_cloudmoon_link_qr();
+        cloudmoon_link_started = 0;
+      }
+      if (cloudmoon_net_initialized) {
+        ps3_net_shutdown();
+        cloudmoon_net_initialized = 0;
+      }
     }
     ps3perf_tick(5);
     usleep(50000);
@@ -701,14 +749,10 @@ app_list_input_replacement = """        } else if (ui_state == UI_STATE_APPLIST)
                         int catalog_id = current_app_list.apps[active_app_idx].id;
                         const cm_cloudmoon_game_t *selected = cm_cloudmoon_catalog_at((size_t)catalog_id);
                         if (selected && cm_cloudmoon_catalog_select(catalog_id) == 0) {
-#if CLOUDMOON_WEBRTC_ENABLED
-                            cloudmoon_catalog_mode = 0;
+cloudmoon_catalog_mode = 0;
                             app_selection_confirmed = 0;
-                            ui_push_log("CloudMoon: selected game; scan QR to link its active session.");
+                            ui_push_log("CloudMoon: selected game; scan QR with your phone to link its active session.");
                             ui_state = UI_STATE_LINKING;
-#else
-                            ui_push_log("CloudMoon transport is disabled in this safe build; catalogue browsing only.");
-#endif
                         }
                     } else {
                         app_selection_confirmed = 1;
@@ -777,11 +821,7 @@ new_actions = """                // CloudMoon native catalog and session actions
                     }
                 } else if (active_main_item == 2) {
                     if (pad.buttons_pressed & A_FLAG) {
-#if CLOUDMOON_WEBRTC_ENABLED
-                        ui_state = UI_STATE_LINKING;
-#else
-                        ui_push_log("Phone linking is unavailable in this safe build.");
-#endif
+ui_state = UI_STATE_LINKING;
                     }
                 } else if (active_main_item == 3) {
                     if (pad.buttons_pressed & A_FLAG) {
