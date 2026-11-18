@@ -428,6 +428,21 @@ if "  // Çözünürlük Tespiti" in main:
     main = main[:start] + safe_main + main[end:]
 elif "int video_state_rc = videoGetState(VIDEO_PRIMARY, 0, &vstate);" not in main:
     raise SystemExit("Display detection is neither original nor safely patched")
+# The original Moonlight loop used vres.height to detect PAL timing.
+# vres is intentionally removed with the unsafe display query above; use the
+# already-validated active GameOS resolution ID instead.
+if "if (vres.height == 576)" in main:
+    main = main.replace(
+        "if (vres.height == 576)",
+        "if (video_state_rc == 0 and vstate.displayMode.resolution == VIDEO_RESOLUTION_576)"
+    )
+    # Correct C syntax in the generated main.c condition.
+    main = main.replace(
+        "if (video_state_rc == 0 and vstate.displayMode.resolution == VIDEO_RESOLUTION_576)",
+        "if (video_state_rc == 0 && vstate.displayMode.resolution == VIDEO_RESOLUTION_576)"
+    )
+elif "vres.height" in main:
+    raise SystemExit("Unexpected leftover vres use in main.c after safe display patch")
 main_path.write_text(main)
 
 old_viewport = "        tiny3d_UserViewportSurface(1, (float)ui_width, (float)ui_height);"
