@@ -1,4 +1,4 @@
-name: CloudMoon PS4 UI tests
+name: CloudMoon PS4 UI and protocol tests
 
 on:
   push:
@@ -12,14 +12,16 @@ on:
   workflow_dispatch:
 
 jobs:
-  ui-smoke:
-    runs-on: ubuntu-latest
+  host-tests:
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Compile UI test
-        run: |
-          cc -std=c11 -Wall -Wextra -Werror -pedantic \
-            ps4/src/ui/cloudmoon_ui.c ps4/tests/ui_smoke.c \
-            -o /tmp/cloudmoon-ps4-ui-test
-      - name: Run UI test
-        run: /tmp/cloudmoon-ps4-ui-test
+
+      - name: Configure host test build
+        run: cmake -S ps4 -B build-ps4-host -DCM_UI_BUILD_TESTS=ON
+
+      - name: Compile CloudMoon UI, protocol and session modules
+        run: cmake --build build-ps4-host --parallel 2
+
+      - name: Run all smoke tests
+        run: ctest --test-dir build-ps4-host --output-on-failure
