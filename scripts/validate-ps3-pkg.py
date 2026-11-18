@@ -34,6 +34,8 @@ def main() -> None:
                         help="PS3-Moonlight/build/pkg staging directory")
     parser.add_argument("--elf", required=True, type=Path,
                         help="unstripped PPU ELF from PS3-Moonlight")
+    parser.add_argument("--mode", choices=("full", "safe"), default="full",
+                        help="full static-WebRTC build or safe UI-only build")
     args = parser.parse_args()
 
     if not args.pkg.is_file():
@@ -60,10 +62,9 @@ def main() -> None:
     entry = int.from_bytes(elf[24:32], "big")
     if machine != 21 or entry != 0x10000000:
         fail(f"unexpected PPU ELF machine/entry: machine={machine}, entry=0x{entry:x}")
-    # Validate strings emitted by the current startup and connection paths.
-    # The UI logs initialization from main.c; there is no separate
-    # "first UI frame rendered" marker in the tested stock-Tiny3D path.
-    for marker in (b"CloudMoon: network initialization result %d",
+    # Validate the exact runtime mode that was requested for this artifact.
+    if args.mode == "full":
+        markers = (b"CloudMoon: network initialization result %d",
                    b"CloudMoon PS3 UI Initialized",
                    b"CloudMoon: Connect to CloudMoon selected",
                    b"CONNECTING TO CLOUDMOON",
@@ -71,9 +72,17 @@ def main() -> None:
                    b"CloudMoon: phone pairing page ready at %s",
                    b"SCAN THIS QR CODE WITH YOUR PHONE",
                    b"CLOUDMOON SESSION LINKED",
-                   b"USRDIR/cloudmoon.ini"):
+                   b"USRDIR/cloudmoon.ini")
+    else:
+        markers = (b"1 main", b"2 ui_init complete",
+                   b"3 ps3input_start complete",
+                   b"CloudMoon transport is disabled in this safe build; catalogue browsing only.",
+                   b"Phone linking is unavailable in this safe build.",
+                   b"CloudMoon streaming transport is not loaded in this safe build.",
+                   b"USRDIR/cloudmoon_boot.log")
+    for marker in markers:
         if marker not in elf:
-            fail(f"PPU ELF is missing required CloudMoon connection marker: {marker.decode()}")
+            fail(f"PPU ELF is missing required {args.mode} build marker: {marker.decode()}")
     for forbidden in (b"Sunshine Pairing Required",
                       b"Open Sunshine Web UI (PIN Tab)",
                       b"PIN:  %s"):
