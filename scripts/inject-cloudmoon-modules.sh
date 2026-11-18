@@ -735,7 +735,7 @@ cloudmoon_connect_view = """            } else if (ui_state == UI_STATE_LINKING)
                 DrawString(SX(60), SY(310), "Negotiating WebRTC media and controller data channels.");
                 DrawString(SX(60), SY(445), "CIRCLE  CANCEL CLOUDMOON CONNECTION");
             } else if (ui_state == UI_STATE_APPLIST) {
-""""""
+"""
 s = s[:pair_start] + cloudmoon_connect_view + s[pair_end + len("            } else if (ui_state == UI_STATE_APPLIST) {\n"):]
 # Fail the build if any legacy Sunshine PIN instructions remain in the compiled UI.
 for forbidden in ("Sunshine Pairing Required", "Open Sunshine Web UI", "PIN:  %s"):
