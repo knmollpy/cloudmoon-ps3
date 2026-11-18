@@ -639,23 +639,23 @@ new_actions = """                // CloudMoon native catalog and session actions
                     if (pad.buttons_pressed & A_FLAG) {
                         ps3_app_list_t catalog_list = {0};
                         size_t catalog_count = cm_cloudmoon_catalog_count();
-                    size_t i;
-                    if (catalog_count > MAX_APP_ENTRIES) catalog_count = MAX_APP_ENTRIES;
-                    for (i = 0; i < catalog_count; ++i) {
-                        const cm_cloudmoon_game_t *game = cm_cloudmoon_catalog_at(i);
-                        if (!game) continue;
-                        catalog_list.apps[i].id = (int)i;
-                        strncpy(catalog_list.apps[i].name, game->name,
-                                sizeof(catalog_list.apps[i].name) - 1);
-                        catalog_list.apps[i].name[sizeof(catalog_list.apps[i].name) - 1] = '\\0';
-                        catalog_list.count++;
-                    }
-                    if (catalog_list.count > 0) {
-                        ui_set_app_list(&catalog_list);
-                        cloudmoon_catalog_mode = 1;
-                        ui_state = UI_STATE_APPLIST;
-                    } else {
-                        ui_push_log("CloudMoon: catalog is empty.");
+                        size_t i;
+                        if (catalog_count > MAX_APP_ENTRIES) catalog_count = MAX_APP_ENTRIES;
+                        for (i = 0; i < catalog_count; ++i) {
+                            const cm_cloudmoon_game_t *game = cm_cloudmoon_catalog_at(i);
+                            if (!game) continue;
+                            catalog_list.apps[i].id = (int)i;
+                            strncpy(catalog_list.apps[i].name, game->name,
+                                    sizeof(catalog_list.apps[i].name) - 1);
+                            catalog_list.apps[i].name[sizeof(catalog_list.apps[i].name) - 1] = '\\0';
+                            catalog_list.count++;
+                        }
+                        if (catalog_list.count > 0) {
+                            ui_set_app_list(&catalog_list);
+                            cloudmoon_catalog_mode = 1;
+                            ui_state = UI_STATE_APPLIST;
+                        } else {
+                            ui_push_log("CloudMoon: catalog is empty.");
                         }
                     }
                 } else if (active_main_item == 1) {
@@ -672,7 +672,7 @@ new_actions = """                // CloudMoon native catalog and session actions
                     }
                 }
 
-"""
+""""""
 
 # Replace the old Sunshine menu rows with a CloudMoon session landing screen.
 start = s.find("                // Row 0: Sunshine Host")
