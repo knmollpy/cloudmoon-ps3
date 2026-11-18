@@ -130,10 +130,10 @@ PY
 if ! grep -q 'src/cloudmoon_webrtc.c' "$PS3_BASE/Makefile"; then
     sed -i 's#src/cloudmoon_ws_tls.c#src/cloudmoon_ws_tls.c src/cloudmoon_mbedtls_entropy.c src/cloudmoon_clock_compat.c src/cloudmoon_time_compat.c src/cloudmoon_webrtc.c src/cloudmoon_launch.c#' "$PS3_BASE/Makefile"
     # Put the freshly built Mbed TLS headers before PSL1GHT's older bundled headers.
-    sed -i 's#COMMON_INCLUDES[[:space:]]*:=[[:space:]]*#COMMON_INCLUDES := -D__PS3__ -I'"$ROOT_DIR"'/build/ps3deps/include -I'"$ROOT_DIR"'/vendor/tiny3D/lib/include #' "$PS3_BASE/Makefile"
+    sed -i 's#COMMON_INCLUDES[[:space:]]*:=[[:space:]]*#COMMON_INCLUDES := -D__PS3__ -I'"$ROOT_DIR"'/build/ps3deps/include #' "$PS3_BASE/Makefile"
     sed -i 's#-I./src -I./src/spu/include#-I./src -I./src/spu/include -DCM_ENABLE_WEBRTC -DRTC_STATIC#' "$PS3_BASE/Makefile"
     # Prefer the just-built Mbed TLS 3.x archives over older SDK portlibs.
-    sed -i 's#-L./third_party/moonlight-common-c#-L'"$ROOT_DIR"'/build/ps3deps/lib -L'"$ROOT_DIR"'/vendor/tiny3D/lib -L./third_party/moonlight-common-c#' "$PS3_BASE/Makefile"
+    sed -i 's#-L./third_party/moonlight-common-c#-L'"$ROOT_DIR"'/build/ps3deps/lib -L./third_party/moonlight-common-c#' "$PS3_BASE/Makefile"
     # Only the Mbed TLS entropy object opts out of the legacy PolarSSL aliases.
     sed -i '/$(BUILD)\/obj\/%.o: src\/%.c/i $(BUILD)/obj/cloudmoon_mbedtls_entropy.o: CFLAGS += -DCLOUDMOON_MBEDTLS_ENTROPY' "$PS3_BASE/Makefile"
     sed -i 's#-lpolarssl#-lpolarssl -L'"$ROOT_DIR"'/build/ps3deps/lib -ldatachannel -lsrtp2 -lusrsctp -ljuice -lmbedtls -lmbedx509 -lmbedcrypto -lpthread -lstdc++#g' "$PS3_BASE/Makefile"
@@ -193,27 +193,29 @@ old_display = """  // Çözünürlük Tespiti
 
   ui_init(width, height, is_4_3);
 """
-new_display = """  videoState vstate = {0};
+new_display = """  /* Query the GameOS-selected mode without changing the HDMI output. */
+  videoState vstate = {0};
+  videoResolution vres = {0};
   int video_state_rc = videoGetState(VIDEO_PRIMARY, 0, &vstate);
+  int video_resolution_rc = -1;
+  int width = 1280;
+  int height = 720;
   int is_4_3 = 0;
 
-  if (video_state_rc == 0) {
-    if (vstate.displayMode.aspect == VIDEO_ASPECT_4_3) {
-      is_4_3 = 1;
-    } else if (vstate.displayMode.aspect == VIDEO_ASPECT_16_9) {
-      is_4_3 = 0;
+  if (video_state_rc == 0 && vstate.state == VIDEO_STATE_ENABLED) {
+    video_resolution_rc = videoGetResolution(vstate.displayMode.resolution, &vres);
+    if (video_resolution_rc == 0 && vres.width >= 320 && vres.height >= 200) {
+      width = (int)vres.width;
+      height = (int)vres.height;
     }
+    if (vstate.displayMode.aspect == VIDEO_ASPECT_4_3) is_4_3 = 1;
+    else if (vstate.displayMode.aspect == VIDEO_ASPECT_16_9) is_4_3 = 0;
   }
 
-  NLOG("Display query=%d mode=%u scan=%u aspect=%u; UI will adapt to active framebuffer (%s)",
-       video_state_rc,
-       (unsigned int)vstate.displayMode.resolution,
-       (unsigned int)vstate.displayMode.scanMode,
-       (unsigned int)vstate.displayMode.aspect,
+  NLOG("CloudMoon display query=%d resolution=%d -> %dx%d aspect=%s",
+       video_state_rc, video_resolution_rc, width, height,
        is_4_3 ? "4:3" : "16:9");
-
-  /* Placeholder design canvas; ui_loop replaces it with actual RSX dimensions. */
-  ui_init(1280, 720, is_4_3);
+  ui_init(width, height, is_4_3);
 """
 if old_display not in s:
     raise SystemExit("Could not match original unsafe display detection block")
@@ -294,114 +296,22 @@ if "CloudMoon complete main-loop replacement" not in s:
 p.write_text(s)
 
 ui = pathlib.Path(sys.argv[2])
-h = pathlib.Path(sys.argv[3])
 u = ui.read_text()
-if 'extern videoResolution Video_Resolution;' not in u:
-    u = u.replace('#include <tiny3d.h>', '#include <tiny3d.h>\nextern videoResolution Video_Resolution;')
-header = h.read_text()
-
-# Scale the logical UI canvas to the actual, validated physical framebuffer.
-# UserViewportSurface is only for render-to-texture surfaces; the menu is
-# rendered directly to the display and therefore needs UserViewport.
-old_viewport = "        tiny3d_UserViewportSurface(1, (float)ui_width, (float)ui_height);"
-new_viewport = """        tiny3d_UserViewport(1, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f);"""
-if old_viewport in u:
-    u = u.replace(old_viewport, new_viewport, 1)
-elif "tiny3d_UserViewport(1, 0.0f, 0.0f," not in u:
-    raise SystemExit("Could not locate the UI display viewport call")
-ready_decl = "static volatile int ui_first_frame_ready = 0;"
-if ready_decl not in u:
-    anchor = "static volatile int ui_running = 1;"
-    if anchor not in u:
-        raise SystemExit("Could not locate UI running state")
-    u = u.replace(anchor, anchor + "\n" + ready_decl, 1)
-ready_fn = """int ui_wait_ready(uint32_t timeout_ms) {
-    const u64 start = sysGetSystemTime();
-    const u64 timeout_us = (u64)timeout_ms * 1000ULL;
-    while (!ui_first_frame_ready && ui_running) {
-        if (sysGetSystemTime() - start >= timeout_us) return 0;
-        usleep(10000);
-    }
-    return ui_first_frame_ready ? 1 : 0;
-}
-"""
-if "int ui_wait_ready(uint32_t timeout_ms)" not in u:
-    anchor = "int ui_is_running() { return ui_running; }"
-    if anchor not in u:
-        raise SystemExit("Could not locate UI status accessors")
-    u = u.replace(anchor, anchor + "\n" + ready_fn, 1)
-if "    ui_first_frame_ready = 0;" not in u:
-    anchor = "void ui_init(int width, int height, int is_4_3) {\n"
-    if anchor not in u:
-        raise SystemExit("Could not locate ui_init")
-    u = u.replace(anchor, anchor + "    ui_first_frame_ready = 0;\n", 1)
-if "ui_first_frame_ready = 1;" not in u:
-    anchor = "        tiny3d_Flip();\n"
-    if anchor not in u:
-        raise SystemExit("Could not locate first frame flip")
-    u = u.replace(anchor, anchor + "        ui_first_frame_ready = 1;\n        NLOG(\"CloudMoon PS3 first UI frame rendered\");\n", 1)
-elif 'NLOG("CloudMoon PS3 first UI frame rendered")' not in u:
-    u = u.replace("        ui_first_frame_ready = 1;\n",
-                  "        ui_first_frame_ready = 1;\n        NLOG(\"CloudMoon PS3 first UI frame rendered\");\n", 1)
-if "int ui_wait_ready(uint32_t timeout_ms);" not in header:
-    anchor = "void ui_init(int width, int height, int is_4_3);"
-    if anchor not in header:
-        raise SystemExit("Could not locate ui_init declaration")
-    header = header.replace(anchor, anchor + "\nint ui_wait_ready(uint32_t timeout_ms);", 1)
+# Preserve upstream Tiny3D setup and direct-display viewport.
+if "tiny3d_Init(1024 * 1024); // 1MB vertex buffer" not in u:
+    raise SystemExit("Upstream Tiny3D initialization call is missing")
+if "tiny3d_UserViewportSurface(1, (float)ui_width, (float)ui_height);" not in u:
+    raise SystemExit("Upstream Tiny3D display viewport call is missing")
+if "sysThreadCreate(&ui_thread, ui_loop, 0, 500, 0x10000," not in u:
+    raise SystemExit("Unexpected UI thread stack configuration")
 ui.write_text(u)
-
-# Never continue drawing if the patched Tiny3D/RSX initializer rejects the
-# active GameOS display mode. Exit the title cleanly so XMB remains usable.
-ui_init_call = "    tiny3d_Init(1024 * 1024); // 1MB vertex buffer"
-ui_init_safe = """    int tiny3d_init_rc = tiny3d_Init(1024 * 1024);
-    if (tiny3d_init_rc != TINY3D_OK) {
-        NLOG("CloudMoon: Tiny3D/RSX initialization failed (%d); returning safely.", tiny3d_init_rc);
-        ui_running = 0;
-        sysThreadExit(0);
-        return;
-    }
-    /* Use the framebuffer dimensions resolved from the active GameOS mode.
-       1280x720 is only the UI design coordinate system, never an output mode. */
-    if (Video_Resolution.width < 320 || Video_Resolution.width > 2048 ||
-        Video_Resolution.height < 200 || Video_Resolution.height > 2048) {
-        NLOG("CloudMoon: invalid active framebuffer dimensions %ux%u",
-             (unsigned int)Video_Resolution.width,
-             (unsigned int)Video_Resolution.height);
-        ui_running = 0;
-        sysThreadExit(0);
-        return;
-    }
-    ui_width = (int)Video_Resolution.width;
-    ui_height = (int)Video_Resolution.height;
-    scale_x = (float)ui_width / 1280.0f;
-    scale_y = (float)ui_height / 720.0f;
-    scale_font = (scale_x < scale_y) ? scale_x : scale_y;
-    NLOG("CloudMoon: UI canvas adapted to active output %dx%d", ui_width, ui_height);
-    tiny3d_UserViewport(1, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f);
-"""
-if "int tiny3d_init_rc = tiny3d_Init(1024 * 1024);" not in u:
-    if u.count(ui_init_call) != 1:
-        raise SystemExit("Could not uniquely locate Tiny3D initialization in ui_loop")
-    u = u.replace(ui_init_call, ui_init_safe, 1)
-    ui.write_text(u)
-
-h.write_text(header)
-PY
   # Ship a real CA bundle inside the PKG so TLS certificate verification works.
   if ! grep -q 'cacert.pem' "$PS3_BASE/Makefile"; then
     sed -i '/mkdir -p $(BUILD)\/pkg\/USRDIR/a\	cp '"$ROOT_DIR"'/assets/cacert.pem $(BUILD)/pkg/USRDIR/cacert.pem' "$PS3_BASE/Makefile"
   fi
 fi
 
-# All CloudMoon variants (including B without WebRTC) must link the patched
-# Tiny3D archive. Otherwise the SDK's original libtiny3d silently wins and
-# the RSX display validation above is never used.
-if ! grep -q 'vendor/tiny3D/lib/include' "$PS3_BASE/Makefile"; then
-  sed -i 's#COMMON_INCLUDES[[:space:]]*:=[[:space:]]*#COMMON_INCLUDES := -I'"$ROOT_DIR"'/vendor/tiny3D/lib/include #' "$PS3_BASE/Makefile"
-fi
-if ! grep -q 'vendor/tiny3D/lib -L./third_party/moonlight-common-c' "$PS3_BASE/Makefile"; then
-  sed -i 's#-L./third_party/moonlight-common-c#-L'"$ROOT_DIR"'/vendor/tiny3D/lib -L./third_party/moonlight-common-c#' "$PS3_BASE/Makefile"
-fi
+# Use the unmodified Tiny3D library from the upstream PS3 SDK.
 
 # Apply screen/RSX safety to the no-WebRTC diagnostic build as well. The full
 # WebRTC branch above already patched these call sites; B must use the same
@@ -414,84 +324,46 @@ main_path, ui_path = map(pathlib.Path, sys.argv[1:])
 main = main_path.read_text()
 ui = ui_path.read_text()
 
-if "  // Çözünürlük Tespiti" in main:
+safe_main = """  /* Query the GameOS-selected mode without changing the HDMI output. */
+  videoState vstate = {0};
+  videoResolution vres = {0};
+  int video_state_rc = videoGetState(VIDEO_PRIMARY, 0, &vstate);
+  int video_resolution_rc = -1;
+  int width = 1280;
+  int height = 720;
+  int is_4_3 = 0;
+
+  if (video_state_rc == 0 && vstate.state == VIDEO_STATE_ENABLED) {
+    video_resolution_rc = videoGetResolution(vstate.displayMode.resolution, &vres);
+    if (video_resolution_rc == 0 && vres.width >= 320 && vres.height >= 200) {
+      width = (int)vres.width;
+      height = (int)vres.height;
+    }
+    if (vstate.displayMode.aspect == VIDEO_ASPECT_4_3) is_4_3 = 1;
+    else if (vstate.displayMode.aspect == VIDEO_ASPECT_16_9) is_4_3 = 0;
+  }
+
+  NLOG("CloudMoon display query=%d resolution=%d -> %dx%d aspect=%s",
+       video_state_rc, video_resolution_rc, width, height,
+       is_4_3 ? "4:3" : "16:9");
+  ui_init(width, height, is_4_3);
+"""
+
+if "CLOUDMOON_STOCK_DISPLAY_QUERY" not in main:
     start = main.find("  // Çözünürlük Tespiti")
     end = main.find("  ps3input_start();", start)
     if start < 0 or end < 0:
-        raise SystemExit("Could not locate original PS3 display detection block")
-    safe_main = """  videoState vstate = {0};
-  int video_state_rc = videoGetState(VIDEO_PRIMARY, 0, &vstate);
-  int is_4_3 = 0;
-
-  if (video_state_rc == 0) {
-    if (vstate.displayMode.aspect == VIDEO_ASPECT_4_3) {
-      is_4_3 = 1;
-    } else if (vstate.displayMode.aspect == VIDEO_ASPECT_16_9) {
-      is_4_3 = 0;
-    }
-  }
-
-  NLOG("Display query=%d mode=%u scan=%u aspect=%u; using 1280x720 logical canvas (%s)",
-       video_state_rc,
-       (unsigned int)vstate.displayMode.resolution,
-       (unsigned int)vstate.displayMode.scanMode,
-       (unsigned int)vstate.displayMode.aspect,
-       is_4_3 ? "4:3" : "16:9");
-
-  /* Logical coordinates only. Keep the GameOS-selected HDMI mode unchanged. */
-  ui_init(1280, 720, is_4_3);
-"""
-    main = main[:start] + safe_main + main[end:]
-elif "int video_state_rc = videoGetState(VIDEO_PRIMARY, 0, &vstate);" not in main:
-    raise SystemExit("Display detection is neither original nor safely patched")
-# The original Moonlight loop used vres.height to detect PAL timing.
-# vres is intentionally removed with the unsafe display query above; use the
-# already-validated active GameOS resolution ID instead.
-if "if (vres.height == 576)" in main:
-    main = main.replace(
-        "if (vres.height == 576)",
-        "if (video_state_rc == 0 and vstate.displayMode.resolution == VIDEO_RESOLUTION_576)"
-    )
-    # Correct C syntax in the generated main.c condition.
-    main = main.replace(
-        "if (video_state_rc == 0 and vstate.displayMode.resolution == VIDEO_RESOLUTION_576)",
-        "if (video_state_rc == 0 && vstate.displayMode.resolution == VIDEO_RESOLUTION_576)"
-    )
-elif "vres.height" in main:
-    raise SystemExit("Unexpected leftover vres use in main.c after safe display patch")
+        raise SystemExit("Could not locate upstream PS3 display detection block")
+    main = main[:start] + "  /* CLOUDMOON_STOCK_DISPLAY_QUERY */\n" + safe_main + main[end:]
 main_path.write_text(main)
 
-old_viewport = "        tiny3d_UserViewportSurface(1, (float)ui_width, (float)ui_height);"
-new_viewport = """        if (ui_width <= 0 || ui_height <= 0 ||
-            Video_Resolution.width == 0 || Video_Resolution.height == 0) {
-            NLOG("CloudMoon: invalid viewport dimensions; stopping UI safely.");
-            ui_running = 0;
-            sysThreadExit(0);
-            return;
-        }
-        tiny3d_UserViewport(1, 0.0f, 0.0f,
-            (float)Video_Resolution.width / (float)ui_width,
-            (float)Video_Resolution.height / (float)ui_height,
-            1.0f, 1.0f);
-"""
-if old_viewport in ui:
-    ui = ui.replace(old_viewport, new_viewport, 1)
-elif "tiny3d_UserViewport(1, 0.0f, 0.0f," not in ui:
-    raise SystemExit("Could not locate the UI display viewport call")
-
-old_init = "    tiny3d_Init(1024 * 1024); // 1MB vertex buffer"
-new_init = """    int tiny3d_init_rc = tiny3d_Init(1024 * 1024);
-    if (tiny3d_init_rc != TINY3D_OK) {
-        NLOG("CloudMoon: Tiny3D/RSX initialization failed (%d); returning safely.", tiny3d_init_rc);
-        ui_running = 0;
-        sysThreadExit(0);
-        return;
-    }
-"""
-if old_init in ui:
-    ui = ui.replace(old_init, new_init, 1)
-elif "int tiny3d_init_rc = tiny3d_Init(1024 * 1024);" not in ui:
-    raise SystemExit("Could not locate Tiny3D initialization in ui_loop")
+# Tiny3D is deliberately untouched to match the upstream, working UI path.
+if "    tiny3d_Init(1024 * 1024); // 1MB vertex buffer" not in ui:
+    raise SystemExit("Upstream Tiny3D initialization call is missing")
+if "        tiny3d_UserViewportSurface(1, (float)ui_width, (float)ui_height);" not in ui:
+    raise SystemExit("Upstream Tiny3D direct-display viewport is missing")
+if "sysThreadCreate(&ui_thread, ui_loop, 0, 500, 0x10000," not in ui:
+    raise SystemExit("Upstream UI thread stack is missing")
 
 ui_path.write_text(ui)
 PY
@@ -611,10 +483,9 @@ replace_once('"Press \\x01 to return."',
              '"Press \\x01 to return to the menu."',
              "error hint")
 
-# FreeType + Tiny3D setup runs on this dedicated thread; give it a 256 KiB stack.
-replace_once('sysThreadCreate(&ui_thread, ui_loop, 0, 500, 0x10000,',
-             'sysThreadCreate(&ui_thread, ui_loop, 0, 500, 0x40000,',
-             "UI thread stack")
+# Keep the upstream 64 KiB UI thread stack unchanged.
+if "sysThreadCreate(&ui_thread, ui_loop, 0, 500, 0x10000," not in s:
+    raise SystemExit("Upstream UI thread stack is missing")
 
 p.write_text(s)
 PY

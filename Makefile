@@ -25,7 +25,6 @@ webrtc-stack: prepare
 	cmake --build build/libdatachannel --parallel 2
 	cmake --install build/libdatachannel
 compile-cloudmoon-modules: prepare
-	./scripts/build-safe-tiny3d.sh "$(PS3_BASE)"
 	./scripts/inject-cloudmoon-modules.sh "$(PS3_BASE)"
 	$(MAKE) -C $(PS3_BASE) cloudmoon-ps3.elf
 prototype-pkg: compile-cloudmoon-modules
