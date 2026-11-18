@@ -659,7 +659,7 @@ static void cm_rtc_input_loop(void*arg) {
 
 int cm_cloudmoon_webrtc_create(cm_cloudmoon_webrtc_t**out,
                                cm_cloudmoon_client_t*client,int width,int height) {
-    static const char*ice_servers[]={"stun:stun.ipfire.org:3478","stun:global.stun.twilio.com:3478","stun:stun.l.google.com:19302"};
+    static const char*ice_servers[]={"stun:stun.nenly.cn:53006","stun:stun.l.google.com:19302"};
     rtcConfiguration config;
     cm_cloudmoon_webrtc_t*rtc;
     if(!out||!client||width<=0||height<=0)return -1;
@@ -669,7 +669,7 @@ int cm_cloudmoon_webrtc_create(cm_cloudmoon_webrtc_t**out,
     rtc->pc=-1;rtc->data_channel=-1;rtc->video_track=-1;rtc->audio_track=-1;rtc->client=client;rtc->width=width;rtc->height=height;rtc->remote_rotation=-1;
     cm_layout_default(&rtc->layout,width,height);cm_input_reset(&rtc->input_state);
     memset(&config,0,sizeof(config));
-    config.iceServers=ice_servers;config.iceServersCount=3;
+    config.iceServers=ice_servers;config.iceServersCount=2;
     config.enableIceUdpMux=true;config.disableAutoNegotiation=true;config.forceMediaTransport=true;
     rtc->pc=rtcCreatePeerConnection(&config);
     if(rtc->pc<0)goto fail;
