@@ -437,11 +437,11 @@ h = header_path.read_text()
 if "CLOUDMOON_PS3_MENU_PATCH" in s:
     raise SystemExit(0)
 
-h = h.replace("    UI_STATE_ERROR\\n};",
-              "    UI_STATE_ERROR,\\n    UI_STATE_LINKING,\\n    UI_STATE_LINKED\\n};")
+h = h.replace("    UI_STATE_ERROR\n};",
+              "    UI_STATE_ERROR,\n    UI_STATE_LINKING,\n    UI_STATE_LINKED\n};")
 if "ui_set_cloudmoon_link_qr" not in h:
     h = h.replace("void ui_init(int width, int height, int is_4_3);",
-                  "void ui_set_cloudmoon_link_qr(const uint8_t *modules, int size, const char *url);\\nvoid ui_clear_cloudmoon_link_qr(void);\\nvoid ui_init(int width, int height, int is_4_3);")
+                  "void ui_set_cloudmoon_link_qr(const uint8_t *modules, int size, const char *url);\nvoid ui_clear_cloudmoon_link_qr(void);\nvoid ui_init(int width, int height, int is_4_3);")
 header_path.write_text(h)
 
 state_anchor = "static volatile int ui_state = UI_STATE_IP_ENTRY;"
@@ -454,7 +454,7 @@ static char ui_cloudmoon_pair_url[160];
 if "UI_CLOUDMOON_QR_MAX" not in s:
     if state_anchor not in s:
         raise SystemExit("Could not locate UI state for QR data")
-    s = s.replace(state_anchor, state_anchor + "\\n" + qr_globals, 1)
+    s = s.replace(state_anchor, state_anchor + "\n" + qr_globals, 1)
 
 setter_anchor = "void ui_set_state(int state) { ui_state = state; }"
 qr_setters = """void ui_set_cloudmoon_link_qr(const uint8_t *modules, int size, const char *url) {
@@ -479,7 +479,7 @@ void ui_clear_cloudmoon_link_qr(void) {
 if "ui_set_cloudmoon_link_qr(const uint8_t *modules" not in s:
     if setter_anchor not in s:
         raise SystemExit("Could not locate ui_set_state for QR setters")
-    s = s.replace(setter_anchor, setter_anchor + "\\n" + qr_setters, 1)
+    s = s.replace(setter_anchor, setter_anchor + "\n" + qr_setters, 1)
 
 def replace_once(old, new, label):
     global s
