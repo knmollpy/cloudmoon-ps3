@@ -21,13 +21,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify runner build tools
+      - name: Install missing LLVM linker tools
         run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends lld llvm
           clang --version
           ld.lld --version
+          llvm-ar --version
+          llvm-ranlib --version
           cmake --version
           make --version
-          curl --version | head -n 1
 
       - name: Download and verify OpenOrbis v0.5.4
         env:
