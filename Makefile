@@ -9,6 +9,7 @@ all: cloudmoon-pkg
 prepare:
 	@git submodule update --init --recursive
 	$(MAKE) -C $(PS3_BASE) prepare
+	./scripts/build-safe-tiny3d.sh "$(PS3_BASE)"
 	@mkdir -p assets
 	@if [ ! -s assets/cacert.pem ]; then curl -fsSL https://curl.se/ca/cacert.pem -o assets/cacert.pem; fi
 baseline-pkg: prepare

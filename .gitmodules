@@ -7,3 +7,7 @@
 [submodule "vendor/mbedtls"]
 	path = vendor/mbedtls
 	url = https://github.com/Mbed-TLS/mbedtls.git
+
+[submodule "vendor/tiny3D"]
+	path = vendor/tiny3D
+	url = https://github.com/wargio/tiny3D.git
