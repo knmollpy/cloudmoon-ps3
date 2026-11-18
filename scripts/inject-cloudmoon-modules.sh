@@ -504,7 +504,7 @@ for required_include in ('#include "cloudmoon_pairing.h"', '#include "cloudmoon_
         include_anchor = '#include "input.h"'
         if include_anchor not in main:
             raise SystemExit("Could not locate main input include for QR pairing")
-        main = main.replace(include_anchor, include_anchor + '\\n' + required_include, 1)
+        main = main.replace(include_anchor, include_anchor + '\n' + required_include, 1)
 # In the safe build, never execute Moonlight's legacy Sunshine pairing loop.
 # Keep the UI alive, but explicitly reject any stale START/Connect action without
 # opening sockets, generating a Sunshine PIN, or attempting host discovery.
