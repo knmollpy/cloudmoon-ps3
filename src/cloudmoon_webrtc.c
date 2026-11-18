@@ -3,6 +3,7 @@
  * Requires ICE, DTLS, SRTP, SCTP and media support.
  */
 #include "cloudmoon_webrtc.h"
+extern void cm_boot_log(const char *message);
 #include "cloudmoon_session.h"
 #include "cloudmoon_input.h"
 #include "cloudmoon_video_limits.h"
@@ -671,7 +672,9 @@ int cm_cloudmoon_webrtc_create(cm_cloudmoon_webrtc_t**out,
     memset(&config,0,sizeof(config));
     config.iceServers=ice_servers;config.iceServersCount=2;
     config.enableIceUdpMux=true;config.disableAutoNegotiation=true;config.forceMediaTransport=true;
+    cm_boot_log("6 creating WebRTC peer");
     rtc->pc=rtcCreatePeerConnection(&config);
+    cm_boot_log(rtc->pc ? "7 WebRTC peer created" : "7 WebRTC peer creation failed");
     if(rtc->pc<0)goto fail;
     rtcSetUserPointer(rtc->pc,rtc);
     rtcSetLocalDescriptionCallback(rtc->pc,cm_rtc_local_description);
