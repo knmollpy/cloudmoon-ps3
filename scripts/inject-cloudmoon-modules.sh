@@ -376,6 +376,17 @@ PY
     sed -i '/mkdir -p $(BUILD)\/pkg\/USRDIR/a\	cp '"$ROOT_DIR"'/assets/cacert.pem $(BUILD)/pkg/USRDIR/cacert.pem' "$PS3_BASE/Makefile"
   fi
 fi
+
+# All CloudMoon variants (including B without WebRTC) must link the patched
+# Tiny3D archive. Otherwise the SDK's original libtiny3d silently wins and
+# the RSX display validation above is never used.
+if ! grep -q 'vendor/tiny3D/lib/include' "$PS3_BASE/Makefile"; then
+  sed -i 's#COMMON_INCLUDES[[:space:]]*:=[[:space:]]*#COMMON_INCLUDES := -I'"$ROOT_DIR"'/vendor/tiny3D/lib/include #' "$PS3_BASE/Makefile"
+fi
+if ! grep -q 'vendor/tiny3D/lib -L./third_party/moonlight-common-c' "$PS3_BASE/Makefile"; then
+  sed -i 's#-L./third_party/moonlight-common-c#-L'"$ROOT_DIR"'/vendor/tiny3D/lib -L./third_party/moonlight-common-c#' "$PS3_BASE/Makefile"
+fi
+
 # Give the generated package CloudMoon identity instead of the upstream Moonlight label.
 python3 - "$PS3_BASE/Makefile" "$PS3_BASE/sfo.xml" "$PS3_BASE/sfo_debug.xml" <<'PY'
 import pathlib, sys
