@@ -624,7 +624,7 @@ if "cloudmoon_draw_panel" not in s or "01  /  STREAM PROFILE" not in s:
     raise SystemExit("CloudMoon redesigned home screen verification failed")
 
 # Verify strong blue colors are present in the final patched UI source.
-for token in ("tiny3d_Clear(0x07142600", "0.025f, 0.300f, 0.720f", "0xff55c8ff"):
+for token in ("tiny3d_Clear(0x07142600", "0.025f, 0.300f, 0.720f", "0x44b8ffff", "0xb4cbe4ff", "0x61d2ffff", "CLOUDMOON_HOME_CARDS"):
     if token not in s:
         raise SystemExit("CloudMoon blue theme verification failed: " + token)
 
