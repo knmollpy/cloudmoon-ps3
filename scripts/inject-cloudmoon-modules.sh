@@ -852,6 +852,7 @@ ui_state = UI_STATE_LINKING;
                 }
 
 """
+s = s[:start] + new_actions + s[end:]
 
 # Replace the old Sunshine menu rows with a CloudMoon session landing screen.
 start = s.find("                // Row 0: Sunshine Host")
@@ -895,6 +896,7 @@ new_rows = """                // Row 0: Native CloudMoon catalogue
                 SetFontColor(0xff7894b8, 0);
                 DrawString(SX(60), SY(445), "\\x05 Navigate   |   \\x01 Select   |   \\x02 Exit to XMB");
 """
+s = s[:start] + new_rows + s[end:]
 
 replace_once('DrawString(SX(40), SY(18), "Moonlight PS3");',
              'DrawString(SX(40), SY(18), "CloudMoon PS3");',
