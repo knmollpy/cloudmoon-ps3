@@ -124,25 +124,14 @@ int init_screen(int command_buffer, int z_method) {
     Video_aspect = vconfig.aspect = state.displayMode.aspect;
 
     /* Preserve the current XMB-selected mode; only set the RSX framebuffer format/pitch. */
-    rc = videoConfigure(VIDEO_PRIMARY, &vconfig, NULL, 1);
+    rc = videoConfigure(VIDEO_PRIMARY, &vconfig, NULL, 0);
     if (rc != 0) {
         printf("Tiny3D: videoConfigure for existing mode failed (rc=%d)\n", rc);
         return -1;
     }
 
-    memset(&state, 0, sizeof(state));
-    rc = videoGetState(VIDEO_PRIMARY, 0, &state);
-    if (rc != 0 || state.state != VIDEO_STATE_ENABLED ||
-        state.displayMode.resolution != vconfig.resolution) {
-        printf("Tiny3D: display mode changed/invalid after framebuffer setup (rc=%d)\n", rc);
-        return -1;
-    }
-
-    /* Re-resolve after configure in case the system reports a different mode. */
-    if (cloudmoon_resolve_display_resolution(&state, &Video_Resolution) != 0) {
-        printf("Tiny3D: could not verify the configured display resolution\n");
-        return -1;
-    }
+    /* Keep dimensions from the successful initial GameOS query. The
+       non-blocking framebuffer configuration preserves the selected mode. */
 
     rsxtiny_MakeCmdSpace(context, 0x4000);
     rsxtiny_MemAlign(-1, 0);

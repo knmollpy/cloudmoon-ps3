@@ -205,14 +205,14 @@ new_display = """  videoState vstate = {0};
     }
   }
 
-  NLOG("Display query=%d mode=%u scan=%u aspect=%u; using 1280x720 logical canvas (%s)",
+  NLOG("Display query=%d mode=%u scan=%u aspect=%u; UI will adapt to active framebuffer (%s)",
        video_state_rc,
        (unsigned int)vstate.displayMode.resolution,
        (unsigned int)vstate.displayMode.scanMode,
        (unsigned int)vstate.displayMode.aspect,
        is_4_3 ? "4:3" : "16:9");
 
-  /* Logical coordinates only: do not call videoConfigure or force 720p/1080p. */
+  /* Placeholder design canvas; ui_loop replaces it with actual RSX dimensions. */
   ui_init(1280, 720, is_4_3);
 """
 if old_display not in s:
@@ -291,23 +291,15 @@ p.write_text(s)
 ui = pathlib.Path(sys.argv[2])
 h = pathlib.Path(sys.argv[3])
 u = ui.read_text()
+if '#include "rsxutil.h"' not in u:
+    u = u.replace('#include "net_logger.h"', '#include "net_logger.h"\\n#include "rsxutil.h"')
 header = h.read_text()
 
 # Scale the logical UI canvas to the actual, validated physical framebuffer.
 # UserViewportSurface is only for render-to-texture surfaces; the menu is
 # rendered directly to the display and therefore needs UserViewport.
 old_viewport = "        tiny3d_UserViewportSurface(1, (float)ui_width, (float)ui_height);"
-new_viewport = """        if (ui_width <= 0 || ui_height <= 0 ||
-            Video_Resolution.width == 0 || Video_Resolution.height == 0) {
-            NLOG("CloudMoon: invalid viewport dimensions; stopping UI safely.");
-            ui_running = 0;
-            sysThreadExit(0);
-            return;
-        }
-        tiny3d_UserViewport(1, 0.0f, 0.0f,
-            (float)Video_Resolution.width / (float)ui_width,
-            (float)Video_Resolution.height / (float)ui_height,
-            1.0f, 1.0f);"""
+new_viewport = """        tiny3d_UserViewport(1, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f);"""
 if old_viewport in u:
     u = u.replace(old_viewport, new_viewport, 1)
 elif "tiny3d_UserViewport(1, 0.0f, 0.0f," not in u:
@@ -362,7 +354,26 @@ ui_init_safe = """    int tiny3d_init_rc = tiny3d_Init(1024 * 1024);
         ui_running = 0;
         sysThreadExit(0);
         return;
-    }"""
+    }
+    /* Use the framebuffer dimensions resolved from the active GameOS mode.
+       1280x720 is only the UI design coordinate system, never an output mode. */
+    if (Video_Resolution.width < 320 || Video_Resolution.width > 2048 ||
+        Video_Resolution.height < 200 || Video_Resolution.height > 2048) {
+        NLOG("CloudMoon: invalid active framebuffer dimensions %ux%u",
+             (unsigned int)Video_Resolution.width,
+             (unsigned int)Video_Resolution.height);
+        ui_running = 0;
+        sysThreadExit(0);
+        return;
+    }
+    ui_width = (int)Video_Resolution.width;
+    ui_height = (int)Video_Resolution.height;
+    scale_x = (float)ui_width / 1280.0f;
+    scale_y = (float)ui_height / 720.0f;
+    scale_font = (scale_x < scale_y) ? scale_x : scale_y;
+    NLOG("CloudMoon: UI canvas adapted to active output %dx%d", ui_width, ui_height);
+    tiny3d_UserViewport(1, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f);
+"""
 if "int tiny3d_init_rc = tiny3d_Init(1024 * 1024);" not in u:
     if u.count(ui_init_call) != 1:
         raise SystemExit("Could not uniquely locate Tiny3D initialization in ui_loop")
