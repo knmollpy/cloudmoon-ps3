@@ -378,8 +378,42 @@ if "CloudMoon complete main-loop replacement" not in s:
     s = s[:start_loop] + main_loop_patch + "  /* CloudMoon complete main-loop replacement */\n\n" + s[end_loop:]
     s = s.replace(anchor_end, anchor_end + "\n  cm_cloudmoon_stop();\n  cm_cloudmoon_pair_stop();", 1)
 
-# Do not tear down sys_net on app exit if the user never opened Link/Connect.
-s = s.replace("  ps3_net_shutdown();", "  if (cloudmoon_net_initialized) {\n    ps3_net_shutdown();\n    cloudmoon_net_initialized = 0;\n  }", 1)
+# Protect only the final main() shutdown. The loop's guarded shutdown is
+# already part of main_loop_patch and must not be rewritten or nested.
+old_exit = "  ps3_net_shutdown();\\n  return 0;"
+new_exit = "  if (cloudmoon_net_initialized) {\\n    ps3_net_shutdown();\\n    cloudmoon_net_initialized = 0;\\n  }\\n  return 0;"
+if s.count(old_exit) != 1:
+    raise SystemExit("Could not uniquely locate final main() network shutdown")
+s = s.replace(old_exit, new_exit, 1)
+
+# Early boot log, independent of NLOG, UI and network initialization.
+if "void cm_boot_log(const char *message)" not in s:
+    include_anchor = '#include "cloudmoon_launch.h"'
+    if include_anchor not in s:
+        raise SystemExit("Could not locate CloudMoon include anchor for boot logger")
+    boot_logger = """#include <stdio.h>
+static void cm_boot_log_write(const char *message) {
+  FILE *f = fopen("/dev_hdd0/tmp/cloudmoon_boot.log", "a");
+  if (f) { fprintf(f, "%s\\n", message ? message : "(null)"); fclose(f); }
+}
+__attribute__((constructor(101))) static void cm_boot_log_constructor(void) {
+  cm_boot_log_write("0 constructor");
+}
+void cm_boot_log(const char *message) { cm_boot_log_write(message); }
+
+"""
+    s = s.replace(include_anchor, include_anchor + "\\n" + boot_logger, 1)
+main_anchor = "int main("
+if 'cm_boot_log("1 main")' not in s:
+    pos = s.find(main_anchor)
+    if pos < 0: raise SystemExit("Could not locate main() for boot logging")
+    brace = s.find("{", pos)
+    if brace < 0: raise SystemExit("Could not locate main() opening brace")
+    s = s[:brace+1] + '\\n  cm_boot_log("1 main");' + s[brace+1:]
+s = s.replace('ui_init(width, height, is_4_3);', 'ui_init(width, height, is_4_3);\\n  cm_boot_log("3 ui_init complete");', 1)
+s = s.replace('ps3input_start();', 'ps3input_start();\\n  cm_boot_log("4 ps3input_start complete");', 1)
+s = s.replace('NLOG("CloudMoon: deferred network initialization result %d", net_rc);', 'NLOG("CloudMoon: deferred network initialization result %d", net_rc);\\n        cm_boot_log("2 network init attempted");')
+s = s.replace('NLOG("CloudMoon: Connect to CloudMoon selected; starting coordinator session.");', 'NLOG("CloudMoon: Connect to CloudMoon selected; starting coordinator session.");\\n        cm_boot_log("5 Connect selected");')
 p.write_text(s)
 
 ui = pathlib.Path(sys.argv[2])
