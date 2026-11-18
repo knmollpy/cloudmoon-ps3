@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #define CM_PAIR_CONFIG_PATH "/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon.ini"
 #define CM_PAIR_PAGE_PATH "/dev_hdd0/game/MNLT00001/USRDIR/cloudmoon-mobile-link.html"
