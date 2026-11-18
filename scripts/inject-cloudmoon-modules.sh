@@ -183,9 +183,10 @@ replacement_main = """  ui_init(width, height, is_4_3);
   NLOG("CloudMoon: waiting for Connect from the PS3 menu");
 """
 s = s.replace(needle, replacement_main, 1)
-# CloudMoon does not use Moonlight's blocking LiStartConnection loop.
-# Keep the upstream main thread draining VDEC while WebRTC owns the session.
-main_loop_patch = """    sysUtilCheckCallback();
+# CloudMoon replaces Moonlight's blocking pairing/stream state machine.
+# Do not leave the legacy Sunshine handshake ahead of the CloudMoon Connect action.
+main_loop_patch = """  while (ui_is_running()) {
+    sysUtilCheckCallback();
     if (ui_get_state() == UI_STATE_PAIRING) {
       cm_cloudmoon_autostart();
       ps3perf_tick(5);
@@ -206,22 +207,19 @@ main_loop_patch = """    sysUtilCheckCallback();
       usleep(50000);
     }
   }
-"""
-if "CloudMoon main-loop VDEC polling patch" not in s:
-    anchor_loop = """    sysUtilCheckCallback();
-    ps3perf_tick(5);
-    usleep(50000);
-  }
 
-  NLOG("Terminating Moonlight PS3 application...");
 """
-    if s.count(anchor_loop) != 1:
-        raise SystemExit("Could not uniquely locate the original main-loop idle tail")
-    replacement_loop = main_loop_patch + """
-  NLOG("Terminating Moonlight PS3 application...");
-  cm_cloudmoon_stop();
-"""
-    s = s.replace(anchor_loop, replacement_loop, 1)
+if "CloudMoon complete main-loop replacement" not in s:
+    anchor_start = "  while (ui_is_running()) {"
+    anchor_end = '  NLOG("Terminating Moonlight PS3 application...");'
+    if s.count(anchor_start) != 1:
+        raise SystemExit("Could not uniquely locate the original main loop")
+    start_loop = s.find(anchor_start)
+    end_loop = s.find(anchor_end, start_loop)
+    if end_loop < 0:
+        raise SystemExit("Could not locate application termination after main loop")
+    s = s[:start_loop] + main_loop_patch + "  /* CloudMoon complete main-loop replacement */\n\n" + s[end_loop:]
+    s = s.replace(anchor_end, anchor_end + "\n  cm_cloudmoon_stop();", 1)
 
 p.write_text(s)
 
