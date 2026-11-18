@@ -14,6 +14,7 @@ add_library(cloudmoon_protocol_core STATIC
     ../src/cloudmoon_session.c
     ../src/cloudmoon_discovery.c
     ../src/cloudmoon_ws.c
+    ../src/cloudmoon_ws_tls.c
     ../src/cloudmoon_client.c
 )
 target_include_directories(cloudmoon_protocol_core PUBLIC ../src)
@@ -27,6 +28,38 @@ target_link_libraries(cloudmoon_account_core PUBLIC cloudmoon_protocol_core)
 target_compile_options(cloudmoon_account_core PRIVATE -Wall -Wextra -Werror)
 target_include_directories(cloudmoon_ps4_ui PUBLIC src/ui)
 target_compile_options(cloudmoon_ps4_ui PRIVATE -Wall -Wextra -Werror)
+
+
+if(PS4)
+    # Mbed TLS is pinned as a repository submodule. Build it statically for
+    # Orbis; TLS 1.2 verification is performed by cloudmoon_tls_mbedtls.c.
+    set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
+    set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+    set(GEN_FILES OFF CACHE BOOL "" FORCE)
+    set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
+    set(USE_STATIC_MBEDTLS_LIBRARY ON CACHE BOOL "" FORCE)
+    set(USE_SHARED_MBEDTLS_LIBRARY OFF CACHE BOOL "" FORCE)
+
+    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../vendor/mbedtls/framework/CMakeLists.txt")
+        message(FATAL_ERROR "Mbed TLS framework submodule is missing; initialize vendor/mbedtls recursively")
+    endif()
+
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../vendor/mbedtls"
+                     "${CMAKE_CURRENT_BINARY_DIR}/mbedtls")
+
+    add_library(cloudmoon_tls_mbedtls STATIC
+        src/net/cloudmoon_tls_mbedtls.c
+    )
+    target_include_directories(cloudmoon_tls_mbedtls PUBLIC
+        src/net ../src
+    )
+    target_link_libraries(cloudmoon_tls_mbedtls PUBLIC
+        mbedtls mbedx509 mbedcrypto
+    )
+    target_compile_options(cloudmoon_tls_mbedtls PRIVATE -Wall -Wextra)
+
+    target_link_libraries(cloudmoon_protocol_core PUBLIC cloudmoon_tls_mbedtls)
+endif()
 
 option(CM_UI_BUILD_TESTS "Build host-side dashboard tests" ON)
 if(CM_UI_BUILD_TESTS)
