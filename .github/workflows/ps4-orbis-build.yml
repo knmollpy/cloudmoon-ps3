@@ -21,11 +21,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install host build tools
+      - name: Verify runner build tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            clang lld llvm cmake ninja-build ca-certificates curl
+          clang --version
+          ld.lld --version
+          cmake --version
+          make --version
+          curl --version | head -n 1
 
       - name: Download and verify OpenOrbis v0.5.4
         env:
