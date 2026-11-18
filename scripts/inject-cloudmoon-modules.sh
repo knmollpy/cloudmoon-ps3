@@ -193,7 +193,8 @@ old_display = """  // Çözünürlük Tespiti
 
   ui_init(width, height, is_4_3);
 """
-new_display = """  /* Query the GameOS-selected mode without changing the HDMI output. */
+new_display = """  /* CLOUDMOON_STOCK_DISPLAY_QUERY */
+  /* Query the GameOS-selected mode without changing the HDMI output. */
   videoState vstate = {0};
   videoResolution vres = {0};
   int video_state_rc = videoGetState(VIDEO_PRIMARY, 0, &vstate);
