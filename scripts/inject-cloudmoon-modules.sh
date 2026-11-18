@@ -556,6 +556,16 @@ fi
 python3 "$ROOT_DIR/scripts/generate-cloudmoon-art.py" "$ROOT_DIR/assets"
 cp "$ROOT_DIR/assets/ICON0.PNG" "$PS3_BASE/ICON0.PNG"
 cp "$ROOT_DIR/assets/PIC1.PNG" "$PS3_BASE/PIC1.PNG"
-if ! grep -Fq 'cp PIC1.PNG $(BUILD)/pkg/PIC1.PNG' "$PS3_BASE/Makefile"; then
-  sed -i '/cp $(ICON0) $(BUILD)\/pkg\/ICON0.PNG/a\\\tcp PIC1.PNG $(BUILD)/pkg/PIC1.PNG' "$PS3_BASE/Makefile"
-fi
+python3 - "$PS3_BASE/Makefile" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+lines = p.read_text().splitlines()
+if not any("cp PIC1.PNG $(BUILD)/pkg/PIC1.PNG" in line for line in lines):
+    for i, line in enumerate(lines):
+        if "cp $(ICON0) $(BUILD)/pkg/ICON0.PNG" in line:
+            lines.insert(i + 1, "\tcp PIC1.PNG $(BUILD)/pkg/PIC1.PNG")
+            break
+    else:
+        raise SystemExit("Could not locate the upstream ICON0 package-copy recipe")
+p.write_text("\n".join(lines) + "\n")
+PY
