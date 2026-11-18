@@ -28,7 +28,6 @@ jobs:
 
       - name: Install missing LLVM linker tools
         run: |
-          sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends lld llvm
           clang --version
           ld.lld --version
