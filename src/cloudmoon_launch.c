@@ -1,6 +1,7 @@
 #include "cloudmoon_launch.h"
 #include "cloudmoon_client.h"
 #include "cloudmoon_discovery.h"
+#include "cloudmoon_link.h"
 #include "cloudmoon_ps3_random.h"
 #include "cloudmoon_webrtc.h"
 #include "ui.h"
@@ -24,14 +25,25 @@ static void cm_launch_signal(void *context,cm_cloudmoon_client_t *client,const c
 }
 static void cm_trim(char*s){size_t n;while(*s&&isspace((unsigned char)*s))memmove(s,s+1,strlen(s));n=strlen(s);while(n&&isspace((unsigned char)s[n-1]))s[--n]=0;}
 static int cm_read_config(char*game,size_t gc,char*user,size_t uc,char*instance,size_t ic){
- FILE*f=fopen(CM_CONFIG_PATH,"r");char line[4096];
- if(!f){f=fopen(CM_CONFIG_PATH,"w");if(f){fputs("# Copy these values from your active CloudMoon browser session URL.\n",f);fputs("game=\nuser_id=\nandroid_instance_id=\n",f);fclose(f);}return 0;}
+ FILE*f=fopen(CM_CONFIG_PATH,"r");char line[16384],session_url[16384]={0};
+ if(!f){f=fopen(CM_CONFIG_PATH,"w");if(f){fputs("# Import a CloudMoon session URL copied after launching a game on your phone.\\n",f);fputs("# Or fill the three fields manually. Keep this file private.\\n",f);fputs("game=\\nuser_id=\\nandroid_instance_id=\\nsession_url=\\n",f);fclose(f);}return 0;}
  while(fgets(line,sizeof(line),f)){char*eq;cm_trim(line);if(!line[0]||line[0]=='#'||line[0]==';')continue;eq=strchr(line,'=');if(!eq)continue;*eq++=0;cm_trim(line);cm_trim(eq);
   if(!strcmp(line,"game")){if(strlen(eq)>=gc){fclose(f);return -1;}strcpy(game,eq);}
   else if(!strcmp(line,"user_id")){if(strlen(eq)>=uc){fclose(f);return -1;}strcpy(user,eq);}
   else if(!strcmp(line,"android_instance_id")){if(strlen(eq)>=ic){fclose(f);return -1;}strcpy(instance,eq);}
+  else if(!strcmp(line,"session_url")){if(strlen(eq)>=sizeof(session_url)){fclose(f);return -1;}strcpy(session_url,eq);}
  }
- fclose(f);return game[0]&&user[0]&&instance[0]?1:-1;
+ fclose(f);
+ if(session_url[0]){
+  cm_cloudmoon_link_t link;
+  if(cm_cloudmoon_parse_session_url(session_url,&link)!=0)return -1;
+  if(strlen(link.game)>=gc||strlen(link.user_id)>=uc||
+     strlen(link.android_instance_id)>=ic)return -1;
+  strcpy(game,link.game);strcpy(user,link.user_id);
+  strcpy(instance,link.android_instance_id);
+  return 1;
+ }
+ return game[0]&&user[0]&&instance[0]?1:-1;
 }
 typedef struct { char game[192],user[192],instance[3072]; } cm_launch_config;
 static sys_ppu_thread_t cm_cloudmoon_thread;
@@ -40,21 +52,18 @@ static volatile int cm_cloudmoon_stop_requested=0;
 static int cm_cloudmoon_thread_started=0;
 static void cm_cloudmoon_worker(void *arg){
  cm_launch_config *cfg=(cm_launch_config*)arg;
- char normalized[3072]={0};
  cm_cloudmoon_registration_t registration;
  cm_launch_rtc_context rtc_state={0};
  int rc;
  if(!cfg)sysThreadExit(0);
- if(cm_cloudmoon_decode_instance_id(cfg->instance,normalized,sizeof(normalized))<0){
-  ui_push_log("CloudMoon: invalid android_instance_id encoding.");
-  free(cfg);cm_cloudmoon_thread_running=0;sysThreadExit(0);
- }
  registration.width=ui_get_stream_width();registration.height=ui_get_stream_height();
  rtc_state.width=registration.width;rtc_state.height=registration.height;
- registration.game=cfg->game;registration.user_id=cfg->user;registration.instance_id=normalized;
+ /* Keep the original Base64 URL parameter for both registration and discovery.
+    The discovery helper performs URL decoding and Base64 decoding exactly once. */
+ registration.game=cfg->game;registration.user_id=cfg->user;registration.instance_id=cfg->instance;
  ui_push_log("CloudMoon: connecting directly to coordinator...");
  NLOG("CloudMoon: coordinator session starting for package %s at %dx%d (%d FPS, %d Kbps)",cfg->game,registration.width,registration.height,ui_get_fps(),ui_get_bitrate());
- rc=cm_cloudmoon_client_run_from_instance_id(normalized,CM_CA_PATH,20,&registration,
+ rc=cm_cloudmoon_client_run_from_instance_id(cfg->instance,CM_CA_PATH,20,&registration,
       cm_ps3_random_source,NULL,cm_launch_signal,&rtc_state);
  /* CloudMoon closes Socket.IO with getout/errorCode=10 after WebRTC setup.
     Keep the independent media peer alive after the signaling socket exits. */
@@ -95,7 +104,7 @@ int cm_cloudmoon_autostart(void){
   return 0;
  }
  if(rc<0){
-  ui_push_log("CloudMoon: cloudmoon.ini is incomplete or invalid.");
+  ui_push_log("CloudMoon: cloudmoon.ini is incomplete or its session URL is invalid.");
   ui_set_state(UI_STATE_ERROR);
   return -1;
  }
