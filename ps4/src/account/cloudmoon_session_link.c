@@ -1,6 +1,6 @@
 #include "cloudmoon_session_link.h"
 
-#include "../../src/cloudmoon_discovery.h"
+#include "cloudmoon_discovery.h"
 
 #include <ctype.h>
 #include <string.h>
