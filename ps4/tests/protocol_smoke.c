@@ -42,7 +42,7 @@ int main(void) {
     assert(session.state == CM_SESSION_CLIENT_REGISTER_SENT);
 
     assert(cm_cloudmoon_decode_instance_id("eyJ4IjoxfQ%3D%3D",
-                                           decoded, sizeof(decoded)) == 16);
+                                           decoded, sizeof(decoded)) == 12);
     assert(strcmp(decoded, base64) == 0);
     assert(cm_base64_decode(decoded, (uint8_t *)packet, sizeof(packet),
                             &decoded_len) == 0);
@@ -61,9 +61,15 @@ int main(void) {
 
     n = cm_ws_encode_client_frame(frame, sizeof(frame), CM_WS_TEXT, 1,
                                   (const uint8_t *)"hello", 5, key);
-    assert(n > 0);
-    assert(cm_ws_decode_server_frame(frame, (size_t)n, &frame_info,
-                                     payload, sizeof(payload)) == n);
+    assert(n == 11);
+    assert((frame[1] & 0x80u) != 0);
+    assert((uint8_t)(frame[6] ^ key[0]) == (uint8_t)'h');
+
+    frame[0] = 0x81;
+    frame[1] = 5;
+    memcpy(frame + 2, "hello", 5);
+    assert(cm_ws_decode_server_frame(frame, 7, &frame_info,
+                                     payload, sizeof(payload)) == 7);
     assert(frame_info.opcode == CM_WS_TEXT);
     assert(frame_info.payload_len == 5);
     assert(memcmp(payload, "hello", 5) == 0);
