@@ -272,10 +272,33 @@ s = s.replace(needle, replacement_main, 1)
 # CloudMoon replaces Moonlight's blocking pairing/stream state machine.
 # Do not leave the legacy Sunshine handshake ahead of the CloudMoon Connect action.
 main_loop_patch = """  int cloudmoon_connect_started = 0;
+  int cloudmoon_link_started = 0;
+  uint8_t cloudmoon_pair_qr[CM_PAIR_QR_MAX_MODULES];
+  char cloudmoon_pair_url[CM_PAIR_URL_CAP];
+  int cloudmoon_pair_qr_size = 0;
   while (ui_is_running()) {
     sysUtilCheckCallback();
-    if (ui_get_state() == UI_STATE_PAIRING) {
-      /* Connect is a CloudMoon session action, never a Sunshine pairing flow. */
+    if (ui_get_state() == UI_STATE_LINKING) {
+      if (!cloudmoon_link_started) {
+        if (cm_cloudmoon_pair_start(cloudmoon_pair_url, sizeof(cloudmoon_pair_url),
+                                    cloudmoon_pair_qr, sizeof(cloudmoon_pair_qr),
+                                    &cloudmoon_pair_qr_size) == 0) {
+          ui_set_cloudmoon_link_qr(cloudmoon_pair_qr, cloudmoon_pair_qr_size,
+                                   cloudmoon_pair_url);
+          cloudmoon_link_started = 1;
+          NLOG("CloudMoon: phone pairing page ready at %s", cloudmoon_pair_url);
+        } else {
+          ui_set_state(UI_STATE_ERROR);
+        }
+      }
+      ps3perf_tick(5);
+      usleep(20000);
+    } else if (ui_get_state() == UI_STATE_PAIRING) {
+      if (cloudmoon_link_started) {
+        cm_cloudmoon_pair_stop();
+        ui_clear_cloudmoon_link_qr();
+        cloudmoon_link_started = 0;
+      }
       if (!cloudmoon_connect_started) {
         cloudmoon_connect_started = 1;
         NLOG("CloudMoon: Connect to CloudMoon selected; starting coordinator session.");
@@ -296,7 +319,11 @@ main_loop_patch = """  int cloudmoon_connect_started = 0;
       usleep(1000);
     } else {
       cloudmoon_connect_started = 0;
-      /* Circle cancels the pending coordinator/WebRTC session cleanly. */
+      if (cloudmoon_link_started) {
+        cm_cloudmoon_pair_stop();
+        ui_clear_cloudmoon_link_qr();
+        cloudmoon_link_started = 0;
+      }
       if (cm_cloudmoon_is_running()) {
         NLOG("CloudMoon: menu cancellation requested; stopping active session.");
         cm_cloudmoon_stop();
