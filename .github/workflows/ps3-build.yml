@@ -17,6 +17,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-pil
+      - name: Test CloudMoon signaling, WebSocket and session protocol
+        run: make host-test
       - name: Build native WebRTC stack and PS3 HEN package
         run: make cloudmoon-pkg
       - name: Validate PS3 package before upload
