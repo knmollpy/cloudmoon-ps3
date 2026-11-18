@@ -332,6 +332,23 @@ if "int ui_wait_ready(uint32_t timeout_ms);" not in header:
         raise SystemExit("Could not locate ui_init declaration")
     header = header.replace(anchor, anchor + "\nint ui_wait_ready(uint32_t timeout_ms);", 1)
 ui.write_text(u)
+
+# Never continue drawing if the patched Tiny3D/RSX initializer rejects the
+# active GameOS display mode. Exit the title cleanly so XMB remains usable.
+ui_init_call = "    tiny3d_Init(1024 * 1024); // 1MB vertex buffer"
+ui_init_safe = """    int tiny3d_init_rc = tiny3d_Init(1024 * 1024);
+    if (tiny3d_init_rc != TINY3D_OK) {
+        NLOG("CloudMoon: Tiny3D/RSX initialization failed (%d); returning safely.", tiny3d_init_rc);
+        ui_running = 0;
+        sysThreadExit(0);
+        return;
+    }"""
+if "int tiny3d_init_rc = tiny3d_Init(1024 * 1024);" not in u:
+    if u.count(ui_init_call) != 1:
+        raise SystemExit("Could not uniquely locate Tiny3D initialization in ui_loop")
+    u = u.replace(ui_init_call, ui_init_safe, 1)
+    ui.write_text(u)
+
 h.write_text(header)
 PY
   # Ship a real CA bundle inside the PKG so TLS certificate verification works.
