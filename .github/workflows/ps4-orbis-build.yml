@@ -28,12 +28,19 @@ jobs:
           OO_URL: https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz
           OO_SHA256: 3c7cd5bb593ca74fa1c13fd59f3938dc0fc07985167f7275063019e63abe4526
         run: |
+          set -euxo pipefail
           mkdir -p "$HOME/ps4dev/OpenOrbis/PS4Toolchain"
           curl --fail --location --retry 3 "$OO_URL" -o /tmp/openorbis.tar.gz
           echo "$OO_SHA256  /tmp/openorbis.tar.gz" | sha256sum --check -
+          echo "Archive size:"; ls -lh /tmp/openorbis.tar.gz
+          echo "Archive checksum:"; sha256sum /tmp/openorbis.tar.gz
+          echo "Checking archive members..."
+          tar -tzf /tmp/openorbis.tar.gz | head -30
           tar -xzf /tmp/openorbis.tar.gz \
             -C "$HOME/ps4dev/OpenOrbis/PS4Toolchain" \
             bin/data bin/linux include lib scripts LICENSE link.x
+          test -f "$HOME/ps4dev/OpenOrbis/PS4Toolchain/link.x"
+          test -d "$HOME/ps4dev/OpenOrbis/PS4Toolchain/include/orbis"
           echo "OO_PS4_TOOLCHAIN=$HOME/ps4dev/OpenOrbis/PS4Toolchain" >> "$GITHUB_ENV"
 
       - name: Configure PS4 platform modules
