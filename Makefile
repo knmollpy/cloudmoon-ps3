@@ -5,7 +5,7 @@ PS3DEPS := $(CURDIR)/build/ps3deps
 CLOUDMOON_WEBRTC ?= 0
 export PS3DEV CLOUDMOON_WEBRTC
 .PHONY: all prepare baseline-pkg compile-cloudmoon-modules prototype-pkg cloudmoon-pkg cloudmoon-safe-pkg webrtc-stack pkg host-test clean
-all: cloudmoon-pkg
+all: cloudmoon-safe-pkg
 prepare:
 	@git submodule update --init --recursive
 	$(MAKE) -C $(PS3_BASE) prepare
@@ -35,7 +35,7 @@ cloudmoon-pkg:
 	$(MAKE) CLOUDMOON_WEBRTC=1 prototype-pkg
 cloudmoon-safe-pkg:
 	$(MAKE) CLOUDMOON_WEBRTC=0 prototype-pkg
-pkg: cloudmoon-pkg
+pkg: cloudmoon-safe-pkg
 host-test:
 	$(MAKE) -f Makefile.host-test clean test
 clean:
