@@ -602,8 +602,8 @@ replace_once('"Do you want to quit Moonlight and return to the PS3 XMB?"',
 replace_once('"ERROR: Target unreachable or Pairing failed."',
              '"ERROR: CloudMoon connection failed. Check cloudmoon.ini and network."',
              "error message")
-replace_once('"Press \\\\x01 to return."',
-             '"Press \\\\x01 to return to the menu."',
+replace_once('"Press \\x01 to return."',
+             '"Press \\x01 to return to the menu."',
              "error hint")
 
 # FreeType + Tiny3D setup runs on this dedicated thread; give it a 256 KiB stack.
