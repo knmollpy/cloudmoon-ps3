@@ -481,6 +481,73 @@ if "ui_set_cloudmoon_link_qr(const uint8_t *modules" not in s:
         raise SystemExit("Could not locate ui_set_state for QR setters")
     s = s.replace(setter_anchor, setter_anchor + "\n" + qr_setters, 1)
 
+draw_anchor = "// FreeType font engine state"
+draw_helper = """static void ui_draw_pair_qr_rect(float x, float y, float w, float h,
+                                    float red, float green, float blue) {
+    tiny3d_SetPolygon(TINY3D_TRIANGLE_STRIP);
+    tiny3d_VertexPos(x, y, 65535);
+    tiny3d_VertexFcolor(red, green, blue, 1.0f);
+    tiny3d_VertexPos(x + w, y, 65535);
+    tiny3d_VertexFcolor(red, green, blue, 1.0f);
+    tiny3d_VertexPos(x, y + h, 65535);
+    tiny3d_VertexFcolor(red, green, blue, 1.0f);
+    tiny3d_VertexPos(x + w, y + h, 65535);
+    tiny3d_VertexFcolor(red, green, blue, 1.0f);
+    tiny3d_End();
+}
+
+static void ui_draw_cloudmoon_pair_qr(void) {
+    int x, y, size;
+    float cell, total, origin_x, origin_y;
+    if (!ui_cloudmoon_qr_ready) return;
+    size = ui_cloudmoon_qr_size;
+    if (size <= 0 || size > 57) return;
+    total = SY(260);
+    cell = total / (float)(size + 8);
+    origin_x = (float)ui_width - SX(340);
+    origin_y = SY(104);
+    ui_draw_pair_qr_rect(origin_x, origin_y, total, total, 1.0f, 1.0f, 1.0f);
+    for (y = 0; y < size; ++y) {
+        x = 0;
+        while (x < size) {
+            int run_start;
+            while (x < size && !ui_cloudmoon_qr[(size_t)y * (size_t)size + (size_t)x]) ++x;
+            if (x >= size) break;
+            run_start = x;
+            while (x < size && ui_cloudmoon_qr[(size_t)y * (size_t)size + (size_t)x]) ++x;
+            ui_draw_pair_qr_rect(origin_x + (float)(run_start + 4) * cell,
+                origin_y + (float)(y + 4) * cell,
+                (float)(x - run_start) * cell, cell, 0.0f, 0.0f, 0.0f);
+        }
+    }
+}
+
+"""
+if "ui_draw_cloudmoon_pair_qr" not in s:
+    if draw_anchor not in s:
+        raise SystemExit("Could not locate QR renderer insertion point")
+    s = s.replace(draw_anchor, draw_helper + draw_anchor, 1)
+
+cancel_anchor = """        } else if (ui_state == UI_STATE_PAIRING) {
+            // Circle button to cancel pairing attempt
+            if (pad.buttons_pressed & B_FLAG) {
+                ui_state = UI_STATE_IP_ENTRY;
+            }
+"""
+cancel_replacement = """        } else if (ui_state == UI_STATE_LINKING) {
+            if (pad.buttons_pressed & B_FLAG) ui_state = UI_STATE_IP_ENTRY;
+        } else if (ui_state == UI_STATE_LINKED) {
+            if ((pad.buttons_pressed & A_FLAG) || (pad.buttons_pressed & B_FLAG))
+                ui_state = UI_STATE_IP_ENTRY;
+        } else if (ui_state == UI_STATE_PAIRING) {
+            if (pad.buttons_pressed & B_FLAG) {
+                ui_state = UI_STATE_IP_ENTRY;
+            }
+"""
+if cancel_anchor not in s:
+    raise SystemExit("Could not locate input pairing handler")
+s = s.replace(cancel_anchor, cancel_replacement, 1)
+
 def replace_once(old, new, label):
     global s
     if old not in s:
@@ -600,7 +667,55 @@ pair_start = s.find("            } else if (ui_state == UI_STATE_PAIRING) {",
 pair_end = s.find("            } else if (ui_state == UI_STATE_APPLIST) {", pair_start)
 if pair_start < 0 or pair_end < 0:
     raise SystemExit("Could not locate the legacy Sunshine PIN screen")
-cloudmoon_connect_view = """            } else if (ui_state == UI_STATE_PAIRING) {
+cloudmoon_connect_view = """            } else if (ui_state == UI_STATE_LINKING) {
+                SetFontSize(SF(26), SF(26));
+                SetFontColor(0xffffffff, 0);
+                DrawString(SX(40), SY(18), "CloudMoon PS3  -  Link Account");
+
+                SetFontSize(SF(23), SF(23));
+                SetFontColor(0xff55c8ff, 0);
+                DrawString(SX(55), SY(100), "SCAN THIS QR CODE WITH YOUR PHONE");
+
+                SetFontSize(SF(17), SF(17));
+                SetFontColor(0xffb4cbe4, 0);
+                DrawString(SX(55), SY(150), "1. Scan it while your phone is on the same Wi-Fi.");
+                DrawString(SX(55), SY(184), "2. Sign in to CloudMoon in the new browser tab.");
+                DrawString(SX(55), SY(218), "3. Start a game, then copy its full session URL.");
+                DrawString(SX(55), SY(252), "4. Return here, paste the URL and tap Link to PS3.");
+
+                SetFontSize(SF(15), SF(15));
+                SetFontColor(0xff8ca6c6, 0);
+                DrawString(SX(55), SY(325), "Only the active game session is sent to this PS3.");
+                DrawString(SX(55), SY(350), "Your Google password is never sent to this application.");
+                if (ui_cloudmoon_pair_url[0]) {
+                    DrawString(SX(55), SY(388), "Local address:");
+                    DrawString(SX(55), SY(410), ui_cloudmoon_pair_url);
+                } else {
+                    DrawString(SX(55), SY(388), "Starting local pairing service...");
+                }
+                ui_draw_cloudmoon_pair_qr();
+
+                SetFontSize(SF(18), SF(18));
+                SetFontColor(0xff7894b8, 0);
+                DrawString(SX(55), SY(445), "CIRCLE  CANCEL PHONE LINK");
+            } else if (ui_state == UI_STATE_LINKED) {
+                SetFontSize(SF(26), SF(26));
+                SetFontColor(0xffffffff, 0);
+                DrawString(SX(40), SY(18), "CloudMoon PS3  -  Account Linked");
+
+                SetFontSize(SF(30), SF(30));
+                SetFontColor(0xff72e0a0, 0);
+                DrawString(SX(60), SY(145), "CLOUDMOON SESSION LINKED");
+
+                SetFontSize(SF(20), SF(20));
+                SetFontColor(0xffb4cbe4, 0);
+                DrawString(SX(60), SY(210), "The active game session was saved to this PS3.");
+                DrawString(SX(60), SY(250), "Return to the main menu and choose CONNECT TO CLOUDMOON.");
+
+                SetFontSize(SF(18), SF(18));
+                SetFontColor(0xff7894b8, 0);
+                DrawString(SX(60), SY(445), "CROSS  RETURN TO MAIN MENU");
+            } else if (ui_state == UI_STATE_PAIRING) {
                 SetFontSize(SF(26), SF(26));
                 SetFontColor(0xffffffff, 0);
                 DrawString(SX(40), SY(18), "CloudMoon PS3  -  Cloud Session");
@@ -620,7 +735,7 @@ cloudmoon_connect_view = """            } else if (ui_state == UI_STATE_PAIRING)
                 DrawString(SX(60), SY(310), "Negotiating WebRTC media and controller data channels.");
                 DrawString(SX(60), SY(445), "CIRCLE  CANCEL CLOUDMOON CONNECTION");
             } else if (ui_state == UI_STATE_APPLIST) {
-"""
+""""""
 s = s[:pair_start] + cloudmoon_connect_view + s[pair_end + len("            } else if (ui_state == UI_STATE_APPLIST) {\n"):]
 # Fail the build if any legacy Sunshine PIN instructions remain in the compiled UI.
 for forbidden in ("Sunshine Pairing Required", "Open Sunshine Web UI", "PIN:  %s"):
