@@ -7,6 +7,16 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 add_library(cloudmoon_ps4_ui STATIC
     src/ui/cloudmoon_ui.c
 )
+
+# Platform-independent CloudMoon signalling/protocol code reused by the PS4 port.
+add_library(cloudmoon_protocol_core STATIC
+    ../src/cloudmoon_protocol.c
+    ../src/cloudmoon_session.c
+    ../src/cloudmoon_discovery.c
+    ../src/cloudmoon_ws.c
+)
+target_include_directories(cloudmoon_protocol_core PUBLIC ../src)
+target_compile_options(cloudmoon_protocol_core PRIVATE -Wall -Wextra -Werror)
 target_include_directories(cloudmoon_ps4_ui PUBLIC src/ui)
 target_compile_options(cloudmoon_ps4_ui PRIVATE -Wall -Wextra -Werror)
 
@@ -17,6 +27,11 @@ if(CM_UI_BUILD_TESTS)
     target_link_libraries(cloudmoon_ps4_ui_smoke PRIVATE cloudmoon_ps4_ui)
     target_compile_options(cloudmoon_ps4_ui_smoke PRIVATE -Wall -Wextra -Werror)
     add_test(NAME cloudmoon_ps4_ui_smoke COMMAND cloudmoon_ps4_ui_smoke)
+
+    add_executable(cloudmoon_protocol_smoke tests/protocol_smoke.c)
+    target_link_libraries(cloudmoon_protocol_smoke PRIVATE cloudmoon_protocol_core)
+    target_compile_options(cloudmoon_protocol_smoke PRIVATE -Wall -Wextra -Werror)
+    add_test(NAME cloudmoon_protocol_smoke COMMAND cloudmoon_protocol_smoke)
 endif()
 
 if(PS4)
@@ -26,6 +41,6 @@ if(PS4)
         src/platform/orbis_dashboard.c
     )
     target_include_directories(cloudmoon_ps4_orbis_platform PUBLIC src/platform)
-    target_link_libraries(cloudmoon_ps4_orbis_platform PUBLIC cloudmoon_ps4_ui)
+    target_link_libraries(cloudmoon_ps4_orbis_platform PUBLIC cloudmoon_ps4_ui cloudmoon_protocol_core)
     target_compile_options(cloudmoon_ps4_orbis_platform PRIVATE -Wall -Wextra)
 endif()
