@@ -420,6 +420,7 @@ fi
 # Apply the same GameOS display-mode query to the no-WebRTC diagnostic build.
 # Both variants retain upstream Tiny3D initialization and viewport code.
 python3 - "$DST/main.c" "$DST/ui.c" <<'PY'
+import os
 import pathlib
 import sys
 
@@ -491,6 +492,32 @@ main_body = main_body.replace('ui_init(width, height, is_4_3);',
 main_body = main_body.replace('ps3input_start();',
                               'ps3input_start();\n    cm_boot_log("3 ps3input_start complete");', 1)
 main = main_head + main_body
+# In the safe build, never execute Moonlight's legacy Sunshine pairing loop.
+# Keep the UI alive, but explicitly reject any stale START/Connect action without
+# opening sockets, generating a Sunshine PIN, or attempting host discovery.
+if os.environ.get("CLOUDMOON_WEBRTC") != "1":
+    legacy_loop = "  while (ui_is_running()) {"
+    loop_start = main.find(legacy_loop)
+    loop_end = main.find('  NLOG("Terminating Moonlight PS3 application...");', loop_start)
+    if loop_start < 0 or loop_end < 0:
+        raise SystemExit("Could not isolate the legacy Sunshine main loop for safe mode")
+    safe_loop = """  while (ui_is_running()) {
+    sysUtilCheckCallback();
+    if (ui_get_state() == UI_STATE_PAIRING) {
+      NLOG("CloudMoon SAFE: blocked legacy Sunshine pairing request.");
+      ui_push_log("Streaming is disabled in this safety build. No Sunshine host will be contacted.");
+      ui_set_state(UI_STATE_ERROR);
+    }
+    ps3perf_tick(5);
+    usleep(50000);
+  }
+
+"""
+    main = main[:loop_start] + safe_loop + main[loop_end:]
+    # This diagnostic package needs no sys_net pool at all.
+    main = main.replace("  ps3_net_init();", "  /* Safe build: network initialization is intentionally disabled. */", 1)
+    main = main.replace("  ps3_net_shutdown();\n  return 0;", "  return 0;", 1)
+
 main_path.write_text(main)
 
 # Tiny3D is deliberately untouched to match the upstream, working UI path.
