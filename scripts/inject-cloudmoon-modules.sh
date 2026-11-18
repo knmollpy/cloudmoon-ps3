@@ -672,7 +672,7 @@ new_actions = """                // CloudMoon native catalog and session actions
                     }
                 }
 
-""""""
+"""
 
 # Replace the old Sunshine menu rows with a CloudMoon session landing screen.
 start = s.find("                // Row 0: Sunshine Host")
