@@ -124,7 +124,7 @@ int init_screen(int command_buffer, int z_method) {
     Video_aspect = vconfig.aspect = state.displayMode.aspect;
 
     /* Preserve the current XMB-selected mode; only set the RSX framebuffer format/pitch. */
-    rc = videoConfigure(VIDEO_PRIMARY, &vconfig, NULL, 0);
+    rc = videoConfigure(VIDEO_PRIMARY, &vconfig, NULL, 1);
     if (rc != 0) {
         printf("Tiny3D: videoConfigure for existing mode failed (rc=%d)\n", rc);
         return -1;
