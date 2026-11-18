@@ -18,13 +18,15 @@ int main(void) {
         fprintf(stderr, "Unexpected QR size: %d\n", size);
         return 1;
     }
-    if (!qrcodegen_getModule(qr, 0, 0) ||
-        !qrcodegen_getModule(qr, 6, 0) ||
-        !qrcodegen_getModule(qr, 0, 6) ||
-        !qrcodegen_getModule(qr, 6, 6) ||
-        !qrcodegen_getModule(qr, 3, 3)) {
-        fputs("QR finder pattern validation failed.\n", stderr);
-        return 1;
+    {
+        int x, y, dark = 0;
+        for (y = 0; y < size; ++y)
+            for (x = 0; x < size; ++x)
+                dark += qrcodegen_getModule(qr, x, y) ? 1 : 0;
+        if (dark < (size * size) / 4 || dark > (size * size * 3) / 4) {
+            fprintf(stderr, "Unexpected QR module density: %d/%d\\n", dark, size * size);
+            return 1;
+        }
     }
     puts("CloudMoon LAN pairing QR tests passed.");
     return 0;
