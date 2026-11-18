@@ -387,6 +387,84 @@ if ! grep -q 'vendor/tiny3D/lib -L./third_party/moonlight-common-c' "$PS3_BASE/M
   sed -i 's#-L./third_party/moonlight-common-c#-L'"$ROOT_DIR"'/vendor/tiny3D/lib -L./third_party/moonlight-common-c#' "$PS3_BASE/Makefile"
 fi
 
+# Apply screen/RSX safety to the no-WebRTC diagnostic build as well. The full
+# WebRTC branch above already patched these call sites; B must use the same
+# display detection, UI scaling and Tiny3D failure handling to be a valid test.
+python3 - "$DST/main.c" "$DST/ui.c" <<'PY'
+import pathlib
+import sys
+
+main_path, ui_path = map(pathlib.Path, sys.argv[1:])
+main = main_path.read_text()
+ui = ui_path.read_text()
+
+if "  // Çözünürlük Tespiti" in main:
+    start = main.find("  // Çözünürlük Tespiti")
+    end = main.find("  ps3input_start();", start)
+    if start < 0 or end < 0:
+        raise SystemExit("Could not locate original PS3 display detection block")
+    safe_main = """  videoState vstate = {0};
+  int video_state_rc = videoGetState(VIDEO_PRIMARY, 0, &vstate);
+  int is_4_3 = 0;
+
+  if (video_state_rc == 0) {
+    if (vstate.displayMode.aspect == VIDEO_ASPECT_4_3) {
+      is_4_3 = 1;
+    } else if (vstate.displayMode.aspect == VIDEO_ASPECT_16_9) {
+      is_4_3 = 0;
+    }
+  }
+
+  NLOG("Display query=%d mode=%u scan=%u aspect=%u; using 1280x720 logical canvas (%s)",
+       video_state_rc,
+       (unsigned int)vstate.displayMode.resolution,
+       (unsigned int)vstate.displayMode.scanMode,
+       (unsigned int)vstate.displayMode.aspect,
+       is_4_3 ? "4:3" : "16:9");
+
+  /* Logical coordinates only. Keep the GameOS-selected HDMI mode unchanged. */
+  ui_init(1280, 720, is_4_3);
+"""
+    main = main[:start] + safe_main + main[end:]
+elif "int video_state_rc = videoGetState(VIDEO_PRIMARY, 0, &vstate);" not in main:
+    raise SystemExit("Display detection is neither original nor safely patched")
+main_path.write_text(main)
+
+old_viewport = "        tiny3d_UserViewportSurface(1, (float)ui_width, (float)ui_height);"
+new_viewport = """        if (ui_width <= 0 || ui_height <= 0 ||
+            Video_Resolution.width == 0 || Video_Resolution.height == 0) {
+            NLOG("CloudMoon: invalid viewport dimensions; stopping UI safely.");
+            ui_running = 0;
+            sysThreadExit(0);
+            return;
+        }
+        tiny3d_UserViewport(1, 0.0f, 0.0f,
+            (float)Video_Resolution.width / (float)ui_width,
+            (float)Video_Resolution.height / (float)ui_height,
+            1.0f, 1.0f);
+"""
+if old_viewport in ui:
+    ui = ui.replace(old_viewport, new_viewport, 1)
+elif "tiny3d_UserViewport(1, 0.0f, 0.0f," not in ui:
+    raise SystemExit("Could not locate the UI display viewport call")
+
+old_init = "    tiny3d_Init(1024 * 1024); // 1MB vertex buffer"
+new_init = """    int tiny3d_init_rc = tiny3d_Init(1024 * 1024);
+    if (tiny3d_init_rc != TINY3D_OK) {
+        NLOG("CloudMoon: Tiny3D/RSX initialization failed (%d); returning safely.", tiny3d_init_rc);
+        ui_running = 0;
+        sysThreadExit(0);
+        return;
+    }
+"""
+if old_init in ui:
+    ui = ui.replace(old_init, new_init, 1)
+elif "int tiny3d_init_rc = tiny3d_Init(1024 * 1024);" not in ui:
+    raise SystemExit("Could not locate Tiny3D initialization in ui_loop")
+
+ui_path.write_text(ui)
+PY
+
 # Give the generated package CloudMoon identity instead of the upstream Moonlight label.
 python3 - "$PS3_BASE/Makefile" "$PS3_BASE/sfo.xml" "$PS3_BASE/sfo_debug.xml" <<'PY'
 import pathlib, sys
