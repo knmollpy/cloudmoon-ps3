@@ -482,44 +482,50 @@ if "ui_set_cloudmoon_link_qr(const uint8_t *modules" not in s:
     s = s.replace(setter_anchor, setter_anchor + "\n" + qr_setters, 1)
 
 draw_anchor = "// FreeType font engine state"
-draw_helper = """static void ui_draw_pair_qr_rect(float x, float y, float w, float h,
-                                    float red, float green, float blue) {
-    tiny3d_SetPolygon(TINY3D_TRIANGLE_STRIP);
-    tiny3d_VertexPos(x, y, 65535);
-    tiny3d_VertexFcolor(red, green, blue, 1.0f);
-    tiny3d_VertexPos(x + w, y, 65535);
-    tiny3d_VertexFcolor(red, green, blue, 1.0f);
-    tiny3d_VertexPos(x, y + h, 65535);
-    tiny3d_VertexFcolor(red, green, blue, 1.0f);
-    tiny3d_VertexPos(x + w, y + h, 65535);
-    tiny3d_VertexFcolor(red, green, blue, 1.0f);
-    tiny3d_End();
-}
-
-static void ui_draw_cloudmoon_pair_qr(void) {
+draw_helper = """static void ui_draw_cloudmoon_pair_qr(void) {
     int x, y, size;
     float cell, total, origin_x, origin_y;
     if (!ui_cloudmoon_qr_ready) return;
     size = ui_cloudmoon_qr_size;
     if (size <= 0 || size > 57) return;
+
     total = SY(260);
     cell = total / (float)(size + 8);
     origin_x = (float)ui_width - SX(340);
     origin_y = SY(104);
-    ui_draw_pair_qr_rect(origin_x, origin_y, total, total, 1.0f, 1.0f, 1.0f);
+
+    /* Batch the entire static QR into one QUADS submission instead of
+       hundreds of Tiny3D calls on every UI frame. */
+    tiny3d_SetPolygon(TINY3D_QUADS);
+    tiny3d_VertexPos(origin_x, origin_y, 65535);
+    tiny3d_VertexColor(0xffffffff);
+    tiny3d_VertexPos(origin_x + total, origin_y, 65535);
+    tiny3d_VertexPos(origin_x + total, origin_y + total, 65535);
+    tiny3d_VertexPos(origin_x, origin_y + total, 65535);
+
     for (y = 0; y < size; ++y) {
         x = 0;
         while (x < size) {
             int run_start;
+            float left, top, right, bottom;
             while (x < size && !ui_cloudmoon_qr[(size_t)y * (size_t)size + (size_t)x]) ++x;
             if (x >= size) break;
             run_start = x;
             while (x < size && ui_cloudmoon_qr[(size_t)y * (size_t)size + (size_t)x]) ++x;
-            ui_draw_pair_qr_rect(origin_x + (float)(run_start + 4) * cell,
-                origin_y + (float)(y + 4) * cell,
-                (float)(x - run_start) * cell, cell, 0.0f, 0.0f, 0.0f);
+
+            left = origin_x + (float)(run_start + 4) * cell;
+            top = origin_y + (float)(y + 4) * cell;
+            right = origin_x + (float)(x + 4) * cell;
+            bottom = top + cell;
+
+            tiny3d_VertexPos(left, top, 65535);
+            tiny3d_VertexColor(0xff000000);
+            tiny3d_VertexPos(right, top, 65535);
+            tiny3d_VertexPos(right, bottom, 65535);
+            tiny3d_VertexPos(left, bottom, 65535);
         }
     }
+    tiny3d_End();
 }
 
 """
