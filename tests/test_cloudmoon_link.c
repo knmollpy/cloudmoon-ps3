@@ -7,7 +7,7 @@ static int failures;
 
 #define CHECK(expr) do { \
     if (!(expr)) { \
-        fprintf(stderr, "FAIL %s:%d: %s\\n", __FILE__, __LINE__, #expr); \
+        fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #expr); \
         failures++; \
     } \
 } while (0)
@@ -52,7 +52,7 @@ int main(void) {
         &link) < 0);
 
     if (failures) {
-        fprintf(stderr, "%d CloudMoon session URL test(s) failed.\\n", failures);
+        fprintf(stderr, "%d CloudMoon session URL test(s) failed.\n", failures);
         return 1;
     }
     puts("CloudMoon session URL parser tests passed.");
