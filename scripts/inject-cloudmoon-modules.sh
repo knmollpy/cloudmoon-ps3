@@ -490,10 +490,10 @@ def replace_once(old, new, label):
     s = s.replace(old, new, 1)
 
 replace_once("#define MAIN_MENU_ITEM_COUNT 3",
-             "#define MAIN_MENU_ITEM_COUNT 2 /* CLOUDMOON_PS3_MENU_PATCH */",
+             "#define MAIN_MENU_ITEM_COUNT 3 /* CLOUDMOON_PS3_MENU_PATCH */",
              "main menu item count")
 replace_once("static int active_main_item = 0; // 0: Sunshine Host IP, 1: Configure Settings, 2: Connect/Pair",
-             "static int active_main_item = 0; // 0: Configure Settings, 1: Connect to CloudMoon",
+             "static int active_main_item = 0; // 0: Settings, 1: Link phone, 2: Connect CloudMoon",
              "main menu item mapping")
 
 # Replace the inherited Sunshine host-IP interaction with two real CloudMoon actions.
@@ -501,13 +501,17 @@ start = s.find("                // Action handling per main menu item")
 end = s.find("                // START button initiates connection", start)
 if start < 0 or end < 0:
     raise SystemExit("Could not locate the main-menu action handler")
-new_actions = """                // CloudMoon main actions: stream settings and session connect.
+new_actions = """                // CloudMoon main actions: settings, phone link and connect.
                 if (active_main_item == 0) {
                     if ((pad.buttons_pressed & A_FLAG) || (pad.buttons_pressed & RIGHT_FLAG)) {
                         ui_state = UI_STATE_SETTINGS;
                         active_settings_item = 0;
                     }
                 } else if (active_main_item == 1) {
+                    if (pad.buttons_pressed & A_FLAG) {
+                        ui_state = UI_STATE_LINKING;
+                    }
+                } else if (active_main_item == 2) {
                     if (pad.buttons_pressed & A_FLAG) {
                         ui_flush_settings_if_dirty();
                         ui_state = UI_STATE_PAIRING;
@@ -525,35 +529,39 @@ if start < 0 or end < 0:
 new_rows = """                // Row 0: Stream settings
                 SetFontSize(SF(24), SF(24));
                 SetFontColor((active_main_item == 0) ? 0xff82b1ff : 0xffffffff, 0);
-                DrawString(SX(60), SY(125), "[ CONFIGURE STREAM SETTINGS ]");
+                DrawString(SX(60), SY(118), "[ CONFIGURE STREAM SETTINGS ]");
 
-                // Active settings summary preview
                 SetFontSize(SF(18), SF(18));
                 SetFontColor(0xff9e9e9e, 0);
                 int kbps = ui_bitrate_options[ui_bitrate_idx];
                 if (kbps % 1000 == 0) {
-                    DrawFormatString(SX(60), SY(165), "Current: %d FPS | %d Mbps | %s | %s | %s",
+                    DrawFormatString(SX(60), SY(154), "Current: %d FPS | %d Mbps | %s | %s | %s",
                                      ui_fps, kbps / 1000,
                                      ui_display_is_4_3 ? "4:3 Display" : "16:9 Display",
                                      ui_get_stream_res_name(), ui_get_scaling_mode_name());
                 } else {
-                    DrawFormatString(SX(60), SY(165), "Current: %d FPS | %.1f Mbps | %s | %s | %s",
+                    DrawFormatString(SX(60), SY(154), "Current: %d FPS | %.1f Mbps | %s | %s | %s",
                                      ui_fps, (float)kbps / 1000.0f,
                                      ui_display_is_4_3 ? "4:3 Display" : "16:9 Display",
                                      ui_get_stream_res_name(), ui_get_scaling_mode_name());
                 }
 
-                // Row 1: CloudMoon session connect
+                // Row 1: QR account linking from phone
                 SetFontSize(SF(24), SF(24));
                 SetFontColor((active_main_item == 1) ? 0xff82b1ff : 0xffffffff, 0);
-                DrawString(SX(60), SY(235), "[ CONNECT TO CLOUDMOON ]");
-
+                DrawString(SX(60), SY(222), "[ LINK ACCOUNT FROM PHONE ]");
                 SetFontSize(SF(18), SF(18));
                 SetFontColor(0xffb0bec5, 0);
-                DrawString(SX(60), SY(280), "Session file: USRDIR/cloudmoon.ini");
-                DrawString(SX(60), SY(312), "Set game, user_id and android_instance_id before connecting.");
+                DrawString(SX(60), SY(258), "Scan a QR and authorize a CloudMoon game session.");
 
-                // Controls legend
+                // Row 2: start a linked CloudMoon session
+                SetFontSize(SF(24), SF(24));
+                SetFontColor((active_main_item == 2) ? 0xff82b1ff : 0xffffffff, 0);
+                DrawString(SX(60), SY(326), "[ CONNECT TO CLOUDMOON ]");
+                SetFontSize(SF(18), SF(18));
+                SetFontColor(0xffb0bec5, 0);
+                DrawString(SX(60), SY(362), "Use the active session saved from your phone.");
+
                 SetFontSize(SF(18), SF(18));
                 SetFontColor(0xff9e9e9e, 0);
                 DrawString(SX(60), SY(445), "\\x05 Navigate   |   \\x01 Select   |   \\x02 Exit to XMB");
