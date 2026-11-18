@@ -320,6 +320,9 @@ PY
   if ! grep -q 'cacert.pem' "$PS3_BASE/Makefile"; then
     sed -i '/mkdir -p $(BUILD)\/pkg\/USRDIR/a\	cp '"$ROOT_DIR"'/assets/cacert.pem $(BUILD)/pkg/USRDIR/cacert.pem' "$PS3_BASE/Makefile"
   fi
+  if ! grep -q 'resize-ps3-icon.py' "$PS3_BASE/Makefile"; then
+    sed -i '/cp $(ICON0) $(BUILD)\/pkg\/ICON0.PNG/a\	python3 $(abspath ../scripts/resize-ps3-icon.py) $(BUILD)/pkg/ICON0.PNG' "$PS3_BASE/Makefile"
+  fi
 fi
 # Give the generated package CloudMoon identity instead of the upstream Moonlight label.
 python3 - "$PS3_BASE/Makefile" "$PS3_BASE/sfo.xml" "$PS3_BASE/sfo_debug.xml" <<'PY'
