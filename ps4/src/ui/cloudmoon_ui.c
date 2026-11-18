@@ -211,7 +211,7 @@ static void draw_header(const cm_ui_surface_t *s, cm_ui_view_t view,
     text(s, 74, 29, 3, C_TEXT, "CLOUDMOON");
     text(s, 278, 40, 1, C_CYAN, "PS4 EDITION");
     for (i = 0; i < CM_UI_VIEW_COUNT; ++i) {
-        int x = 610 + i * 142;
+        int x = 490 + i * 135;
         int active = (i == (int)view);
         text(s, x, 40, 2, active ? C_CYAN : C_MUTED, view_name((cm_ui_view_t)i));
         if (active) rect(s, x, 62, (int)strlen(view_name((cm_ui_view_t)i)) * 12, 3, C_CYAN);
