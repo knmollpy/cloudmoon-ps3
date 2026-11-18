@@ -1,4 +1,5 @@
 #include "cloudmoon_random_mbedtls.h"
+#include "cloudmoon_mbedtls_entropy.h"
 
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/entropy.h>
@@ -19,6 +20,14 @@ static void cm_orbis_random_once(void) {
 
     mbedtls_entropy_init(&s_entropy);
     mbedtls_ctr_drbg_init(&s_drbg);
+
+    rc = cm_orbis_entropy_add(&s_entropy);
+    if (rc != 0) {
+        mbedtls_ctr_drbg_free(&s_drbg);
+        mbedtls_entropy_free(&s_entropy);
+        s_init_result = rc;
+        return;
+    }
 
     rc = mbedtls_ctr_drbg_seed(&s_drbg, mbedtls_entropy_func, &s_entropy,
                                personalization,
