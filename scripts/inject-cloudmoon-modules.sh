@@ -268,6 +268,11 @@ main_loop_patch = """  while (ui_is_running()) {
       ps3perf_tick(5);
       usleep(1000);
     } else {
+      /* Circle cancels the pending coordinator/WebRTC session cleanly. */
+      if (cm_cloudmoon_is_running()) {
+        NLOG("CloudMoon: menu cancellation requested; stopping active session.");
+        cm_cloudmoon_stop();
+      }
       ps3perf_tick(5);
       usleep(50000);
     }

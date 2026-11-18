@@ -115,6 +115,10 @@ int cm_cloudmoon_autostart(void){
  return 0;
 }
 
+int cm_cloudmoon_is_running(void){
+ return cm_cloudmoon_thread_started && cm_cloudmoon_thread_running;
+}
+
 void cm_cloudmoon_stop(void){
  __sync_lock_test_and_set(&cm_cloudmoon_stop_requested,1);
  cm_cloudmoon_client_request_stop();
