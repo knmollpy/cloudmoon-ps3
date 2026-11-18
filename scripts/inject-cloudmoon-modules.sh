@@ -143,7 +143,7 @@ if assignment not in lines:
             break
     else:
         raise SystemExit("Could not locate upstream COMMON_INCLUDES assignment")
-p.write_text("\\n".join(lines) + "\\n")
+p.write_text("\n".join(lines) + "\n")
 PY
     sed -i 's#-I./src -I./src/spu/include#-I./src -I./src/spu/include -DCM_ENABLE_WEBRTC -DRTC_STATIC#' "$PS3_BASE/Makefile"
     # Prefer the just-built Mbed TLS 3.x archives over older SDK portlibs.
