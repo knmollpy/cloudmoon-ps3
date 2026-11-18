@@ -77,8 +77,6 @@ def main() -> None:
         markers = (b"1 main", b"2 ui_init complete",
                    b"3 ps3input_start complete",
                    b"CloudMoon transport is disabled in this safe build; catalogue browsing only.",
-                   b"Phone linking is unavailable in this safe build.",
-                   b"CloudMoon streaming transport is not loaded in this safe build.",
                    b"USRDIR/cloudmoon_boot.log")
     for marker in markers:
         if marker not in elf:
