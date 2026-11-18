@@ -5,7 +5,7 @@ test: tests/test_cloudmoon tests/test_cloudmoon_ws_tls tests/test_cloudmoon_clie
 	./tests/test_cloudmoon
 	./tests/test_cloudmoon_ws_tls
 	./tests/test_cloudmoon_client
-	./tests/test_cloudmoon_discovery tests/test_cloudmoon_link
+	./tests/test_cloudmoon_discovery
 	./tests/test_cloudmoon_link
 tests/test_cloudmoon: tests/test_cloudmoon.c src/cloudmoon_input.c src/cloudmoon_protocol.c src/cloudmoon_session.c src/cloudmoon_ws.c src/cloudmoon_upgrade.c src/cloudmoon_random.c
 	$(CC) $(CFLAGS) -Isrc -o $@ $^
@@ -18,4 +18,4 @@ tests/test_cloudmoon_discovery: tests/test_cloudmoon_discovery.c src/cloudmoon_d
 tests/test_cloudmoon_link: tests/test_cloudmoon_link.c src/cloudmoon_link.c
 	$(CC) $(CFLAGS) -Isrc -o $@ $^
 clean:
-	rm -f tests/test_cloudmoon tests/test_cloudmoon_ws_tls tests/test_cloudmoon_client tests/test_cloudmoon_discovery
+	rm -f tests/test_cloudmoon tests/test_cloudmoon_ws_tls tests/test_cloudmoon_client tests/test_cloudmoon_discovery tests/test_cloudmoon_link
