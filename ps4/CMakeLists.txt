@@ -49,6 +49,7 @@ if(PS4)
 
     add_library(cloudmoon_tls_mbedtls STATIC
         src/net/cloudmoon_tls_mbedtls.c
+        src/net/cloudmoon_random_mbedtls.c
     )
     target_include_directories(cloudmoon_tls_mbedtls PUBLIC
         src/net ../src
