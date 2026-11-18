@@ -32,6 +32,7 @@
 #define CM_PAIR_HTTP_LIMIT 24576
 #define CM_PAIR_BODY_LIMIT 16384
 #define CM_PAIR_HEADER_LIMIT 4096
+#define CM_PAIR_TTL_MS 600000ULL
 
 static sys_ppu_thread_t cm_pair_thread;
 static volatile int cm_pair_running;
@@ -41,6 +42,13 @@ static int cm_pair_thread_started;
 static int cm_pair_listen_fd = -1;
 static char cm_pair_key[33];
 static char cm_pair_address[16];
+static uint64_t cm_pair_expire_at_ms;
+
+static uint64_t cm_pair_now_ms(void) {
+    struct timeval tv;
+    if (gettimeofday(&tv, NULL) != 0) return 0;
+    return (uint64_t)tv.tv_sec * 1000ULL + (uint64_t)tv.tv_usec / 1000ULL;
+}
 
 static int cm_pair_send_all(int fd, const void *data, size_t length) {
     const char *p = (const char *)data;
@@ -281,7 +289,13 @@ static void cm_pair_worker(void *unused) {
     (void)unused;
     cm_pair_running = 1;
     while (!cm_pair_stop_requested && !cm_pair_linked) {
+        uint64_t now = cm_pair_now_ms();
         fd_set readfds;
+        if (!now || now >= cm_pair_expire_at_ms) {
+            ui_push_log("CloudMoon: phone link QR expired. Open a new QR from the PS3 menu.");
+            if (ui_is_running()) ui_set_state(UI_STATE_ERROR);
+            break;
+        }
         struct timeval timeout;
         int ready, client;
         FD_ZERO(&readfds);
@@ -411,6 +425,13 @@ int cm_cloudmoon_pair_start(char *url, size_t url_capacity,
     *module_size = qr_size;
     cm_pair_stop_requested = 0;
     cm_pair_linked = 0;
+    cm_pair_expire_at_ms = cm_pair_now_ms() + CM_PAIR_TTL_MS;
+    if (cm_pair_expire_at_ms <= CM_PAIR_TTL_MS) {
+        close(cm_pair_listen_fd);
+        cm_pair_listen_fd = -1;
+        ui_push_log("CloudMoon: could not start a timed QR session.");
+        return -1;
+    }
     cm_pair_running = 1;
     if (sysThreadCreate(&cm_pair_thread, cm_pair_worker, NULL, 200, 0x30000,
                         THREAD_JOINABLE, "CloudMoonPair") != 0) {
@@ -437,6 +458,7 @@ void cm_cloudmoon_pair_stop(void) {
     }
     cm_pair_running = 0;
     cm_pair_stop_requested = 0;
+    cm_pair_expire_at_ms = 0;
 }
 
 int cm_cloudmoon_pair_is_running(void) {
