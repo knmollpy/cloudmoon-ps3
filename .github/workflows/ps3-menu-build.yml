@@ -33,3 +33,4 @@ jobs:
           path: vendor/PS3-Moonlight/build/*.pkg
           if-no-files-found: error
           retention-days: 14
+# Re-run the isolated WebRTC-off B validation after packaging-script fixes.
