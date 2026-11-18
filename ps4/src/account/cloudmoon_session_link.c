@@ -40,19 +40,21 @@ static int decode_component(const char *src, size_t len,
 
 static int copy_query_value(const char *url, const char *key,
                             char *out, size_t out_cap) {
-    const char *query, *p, *end;
+    const char *query, *query_end, *p, *end;
     size_t key_len;
     int found = 0;
     if (!url || !key || !out || !out_cap) return -1;
     query = strchr(url, '?');
     if (!query) return -1;
     ++query;
+    query_end = strchr(query, '#');
+    if (!query_end) query_end = query + strlen(query);
     key_len = strlen(key);
     p = query;
-    while (*p && *p != '#') {
-        const char *pair_end = strchr(p, '&');
+    while (p < query_end) {
+        const char *pair_end = memchr(p, '&', (size_t)(query_end - p));
         const char *equals;
-        if (!pair_end) pair_end = p + strlen(p);
+        if (!pair_end) pair_end = query_end;
         end = pair_end;
         equals = memchr(p, '=', (size_t)(end - p));
         if (equals && (size_t)(equals - p) == key_len &&
