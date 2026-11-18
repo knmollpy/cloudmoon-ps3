@@ -267,10 +267,16 @@ replacement_main = """  ui_init(width, height, is_4_3);
 s = s.replace(needle, replacement_main, 1)
 # CloudMoon replaces Moonlight's blocking pairing/stream state machine.
 # Do not leave the legacy Sunshine handshake ahead of the CloudMoon Connect action.
-main_loop_patch = """  while (ui_is_running()) {
+main_loop_patch = """  int cloudmoon_connect_started = 0;
+  while (ui_is_running()) {
     sysUtilCheckCallback();
     if (ui_get_state() == UI_STATE_PAIRING) {
-      cm_cloudmoon_autostart();
+      /* Connect is a CloudMoon session action, never a Sunshine pairing flow. */
+      if (!cloudmoon_connect_started) {
+        cloudmoon_connect_started = 1;
+        NLOG("CloudMoon: Connect to CloudMoon selected; starting coordinator session.");
+        cm_cloudmoon_autostart();
+      }
       ps3perf_tick(5);
       usleep(10000);
     } else if (ui_get_state() == UI_STATE_STREAMING) {
@@ -285,6 +291,7 @@ main_loop_patch = """  while (ui_is_running()) {
       ps3perf_tick(5);
       usleep(1000);
     } else {
+      cloudmoon_connect_started = 0;
       /* Circle cancels the pending coordinator/WebRTC session cleanly. */
       if (cm_cloudmoon_is_running()) {
         NLOG("CloudMoon: menu cancellation requested; stopping active session.");
@@ -497,6 +504,40 @@ replace_once('"ERROR: Target unreachable or Pairing failed."',
 replace_once('"Press \\x01 to return."',
              '"Press \\x01 to return to the menu."',
              "error hint")
+
+# Replace Moonlight's PIN/pairing page with a CloudMoon coordinator connection page.
+# The UI_STATE_PAIRING value is used only as the internal "connecting" state.
+pair_start = s.find("            } else if (ui_state == UI_STATE_PAIRING) {",
+                    s.find("// 1. Draw UI / Video"))
+pair_end = s.find("            } else if (ui_state == UI_STATE_APPLIST) {", pair_start)
+if pair_start < 0 or pair_end < 0:
+    raise SystemExit("Could not locate the legacy Sunshine PIN screen")
+cloudmoon_connect_view = """            } else if (ui_state == UI_STATE_PAIRING) {
+                SetFontSize(SF(26), SF(26));
+                SetFontColor(0xffffffff, 0);
+                DrawString(SX(40), SY(18), "CloudMoon PS3  -  Cloud Session");
+
+                SetFontSize(SF(25), SF(25));
+                SetFontColor(0xff55c8ff, 0);
+                DrawString(SX(60), SY(118), "CONNECTING TO CLOUDMOON");
+
+                SetFontSize(SF(19), SF(19));
+                SetFontColor(0xffb4cbe4, 0);
+                DrawString(SX(60), SY(168), "Opening a secure connection to the CloudMoon coordinator.");
+                DrawString(SX(60), SY(205), "Loading game, user_id and android_instance_id from:");
+                DrawString(SX(60), SY(240), "USRDIR/cloudmoon.ini");
+
+                SetFontSize(SF(18), SF(18));
+                SetFontColor(0xff8ca6c6, 0);
+                DrawString(SX(60), SY(310), "Negotiating WebRTC media and controller data channels.");
+                DrawString(SX(60), SY(445), "CIRCLE  CANCEL CLOUDMOON CONNECTION");
+            } else if (ui_state == UI_STATE_APPLIST) {
+"""
+s = s[:pair_start] + cloudmoon_connect_view + s[pair_end + len("            } else if (ui_state == UI_STATE_APPLIST) {\n"):]
+# Fail the build if any legacy Sunshine PIN instructions remain in the compiled UI.
+for forbidden in ("Sunshine Pairing Required", "Open Sunshine Web UI", "PIN:  %s"):
+    if forbidden in s:
+        raise SystemExit("Legacy Sunshine PIN UI survived: " + forbidden)
 
 # Apply CloudMoon's restrained navy/metallic-blue visual palette.
 # This changes UI colors only; Tiny3D initialization, viewport, thread and loop stay untouched.
