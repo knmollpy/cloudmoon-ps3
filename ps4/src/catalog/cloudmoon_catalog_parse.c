@@ -269,6 +269,7 @@ int cm_catalog_parse_json(const char *json, size_t length,
     if (!p || p >= json + length) return -1;
     list_end = json + length;
 
+    ++p; /* consume the opening '[' of data.list */
     while (p < list_end && count < CM_CATALOG_MAX_GAMES) {
         const char *object_start, *object_end;
         int depth = 0, in_string = 0, escaped = 0;
