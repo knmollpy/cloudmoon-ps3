@@ -5,6 +5,7 @@
 #include <orbis/Sysmodule.h>
 
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 
 #define CM_NET_POOL_SIZE (2 * 1024 * 1024)
@@ -20,11 +21,11 @@ int cm_orbis_network_init(void) {
         return 0;
 
     rc = sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_NET);
-    if (rc < 0 && rc != (int)0x809A0000)
+    if (rc < 0)
         return -1;
 
     rc = sceNetInit();
-    if (rc < 0 && (uint32_t)rc != 0x80410101u)
+    if (rc < 0)
         return -2;
 
     s_net_started = 1;
@@ -37,7 +38,7 @@ int cm_orbis_network_init(void) {
     if (rc < 0)
         return -4;
     rc = sceNetCtlInit();
-    if (rc < 0 && (uint32_t)rc != 0x80410101u)
+    if (rc < 0)
         return -5;
 
     s_netctl_started = 1;
