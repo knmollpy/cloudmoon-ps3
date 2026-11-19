@@ -34,6 +34,12 @@ int main(void) {
     cm_ui_draw(&surface, &state, &model);
     assert(pixels[0] != 0u);
 
+    /* The in-stream menu is composited over the decoded frame, not a
+       touch-control layer. Its central panel must be rendered visibly. */
+    pixels[260u * 1280u + 640u] = 0xFF606060u;
+    cm_ui_draw_game_menu_overlay(&surface);
+    assert(pixels[260u * 1280u + 640u] == 0xFF111B2Cu);
+
     result = cm_ui_input(&state, CM_UI_KEY_CROSS, &model);
     assert(result.type == CM_UI_ACTION_OPEN_LIBRARY);
     assert(state.view == CM_UI_LIBRARY);
