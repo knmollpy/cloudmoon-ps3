@@ -1,5 +1,7 @@
-cmake_minimum_required(VERSION 3.16)
-project(cloudmoon_ps4_ui C)
+cmake_minimum_required(VERSION 3.21)
+project(cloudmoon_ps4 C CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
