@@ -313,9 +313,10 @@ static void draw_link(const cm_ui_surface_t *s, const cm_ui_model_t *m) {
     text(s, 62, 170, 2, C_MUTED, "USA UNA SESION AUTENTICADA DE CLOUDMOON.");
     panel(s, 62, 220, 690, 320, 0);
     text(s, 100, 260, 2, C_CYAN, "ACCESO SEGURO");
-    text(s, 100, 315, 2, C_TEXT, "EL ENLACE SE GENERARA CON EL SERVICIO");
-    text(s, 100, 350, 2, C_TEXT, "REAL DE VINCULACION, NO CON UN QR FALSO.");
-    text(s, 100, 415, 1, C_MUTED, m && m->status_text ? m->status_text : "ESPERANDO SOLICITUD DE ENLACE");
+    text(s, 100, 310, 2, C_TEXT, "1. ESCANEA EL QR CON TU TELEFONO.");
+    text(s, 100, 345, 2, C_TEXT, "2. INICIA SESION EN CLOUDMOON.");
+    text(s, 100, 380, 2, C_TEXT, "3. PEGA EL ENLACE DE UNA SESION ACTIVA.");
+    text(s, 100, 430, 1, C_MUTED, m && m->status_text ? m->status_text : "ESPERANDO SOLICITUD DE ENLACE");
     if (m && m->link_code && m->link_code[0]) {
         text(s, 100, 465, 2, C_CYAN, "CODIGO DE VINCULACION:");
         text(s, 100, 500, 3, C_TEXT, m->link_code);
