@@ -273,7 +273,7 @@ int cm_catalog_parse_json(const char *json, size_t length,
         const char *object_start, *object_end;
         int depth = 0, in_string = 0, escaped = 0;
         cm_catalog_game_t game;
-        ++p;
+
         while (p < list_end && (*p == ' ' || *p == '\n' ||
                *p == '\r' || *p == '\t' || *p == ',')) ++p;
         if (p >= list_end || *p == ']') break;
