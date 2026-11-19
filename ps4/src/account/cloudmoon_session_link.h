@@ -18,6 +18,7 @@ typedef struct {
     int server_id;
     char language[8];
     char locale[8];
+    char device_id[37];
 } cm_account_session_t;
 
 /* Legacy sid parser retained for compatibility tests; the PS4 pairing flow now
