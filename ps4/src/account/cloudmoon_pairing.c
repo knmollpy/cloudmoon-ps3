@@ -318,8 +318,15 @@ static void handle_client(cm_pairing_service_t *service, int fd) {
     }
 
     if (strcmp(method, "GET") == 0) {
+        char page[8192];
+        int page_length = build_pair_page(service, page, sizeof(page));
+        if (page_length < 0) {
+            (void)send_response(fd, 500, "Internal Server Error", "text/plain",
+                                "Could not prepare pairing page", 31);
+            return;
+        }
         (void)send_response(fd, 200, "OK", "text/html; charset=utf-8",
-                            s_pair_page, sizeof(s_pair_page) - 1);
+                            page, (size_t)page_length);
         return;
     }
 
