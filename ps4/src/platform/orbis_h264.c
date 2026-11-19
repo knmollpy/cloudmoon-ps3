@@ -393,7 +393,7 @@ int cm_orbis_h264_start(int width, int height) {
     return 0;
 }
 
-int cm_orbis_h264_submit(const uint8_t *annex_b, size_t length) {
+int cm_orbis_h264_submit(const uint8_t *annex_b, size_t length, uint64_t pts_us) {
     cm_vdec_input_t input;
     cm_vdec_frame_buffer_t frame_buffer;
     cm_vdec_output_t output;
@@ -415,8 +415,8 @@ int cm_orbis_h264_submit(const uint8_t *annex_b, size_t length) {
     input.thisSize = sizeof(input);
     input.auData = au;
     input.auSize = length;
-    input.ptsData = 0;
-    input.dtsData = 0;
+    input.ptsData = pts_us;
+    input.dtsData = pts_us;
 
     memset(&frame_buffer, 0, sizeof(frame_buffer));
     frame_buffer.thisSize = sizeof(frame_buffer);
@@ -443,10 +443,15 @@ int cm_orbis_h264_submit(const uint8_t *annex_b, size_t length) {
 
     (void)sceGnmFlushGarlic();
     read_ptr = (const uint8_t *)output.frameBuffer;
-    offset = (ptrdiff_t)((uintptr_t)read_ptr - (uintptr_t)s_frame_mem.ptr);
-    if (s_frame_read_alias && offset >= 0 &&
-        (size_t)offset < s_frame_mem.size)
-        read_ptr = (const uint8_t *)s_frame_read_alias + offset;
+    {
+        uintptr_t out_addr = (uintptr_t)read_ptr;
+        uintptr_t base_addr = (uintptr_t)s_frame_mem.ptr;
+        if (s_frame_read_alias && out_addr >= base_addr &&
+            out_addr - base_addr < s_frame_mem.size) {
+            offset = (ptrdiff_t)(out_addr - base_addr);
+            read_ptr = (const uint8_t *)s_frame_read_alias + offset;
+        }
+    }
     pitch = output.framePitchInBytes ? (int)output.framePitchInBytes :
                                        (int)output.framePitch;
     frame_width = output.frameWidth ? (int)output.frameWidth : s_width;
