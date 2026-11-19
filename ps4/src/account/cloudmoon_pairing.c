@@ -78,7 +78,7 @@ static const char s_pair_page[] =
 "return JSON.stringify({iv:ivHex,ciphertext:cipherHex,mac:mac});}"
 "async function sendCredential(token,button){button.disabled=true;result.textContent='Comprobando tu cuenta con CloudMoon…';"
 "try{const response=await fetch(location.pathname,{method:'POST',headers:{'Content-Type':'application/json'},"
-"body:encryptPayload({google_id_token:token,server_id:Number(server.value),language:'es',locale:'ar'})});"
+"body:encryptPayload({google_id_token:token,server_id:Number(server.value),language:'es',locale:'AR'})});"
 "const message=await response.text();if(!response.ok)throw new Error(message);"
 "result.textContent=message;result.style.color='#5ce0b2';}catch(error){"
 "result.textContent='No se pudo vincular: '+error.message;result.style.color='#ff9b9b';button.disabled=false;}}"
@@ -344,7 +344,7 @@ static void handle_client(cm_pairing_service_t *service, int fd) {
             (void)snprintf(language, sizeof(language), "es");
         if (cm_json_get_string(plaintext, (size_t)plain_length,
                                "locale", locale, sizeof(locale)) < 0)
-            (void)snprintf(locale, sizeof(locale), "ar");
+            (void)snprintf(locale, sizeof(locale), "AR");
 
         auth_rc = cm_account_session_authenticate(
             service->ca_bundle_path, service->timeout_seconds,
