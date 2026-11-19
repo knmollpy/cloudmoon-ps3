@@ -1,6 +1,6 @@
 #include "orbis_audio.h"
 
-#include <opus/opus.h>
+#include <opus.h>
 #include <orbis/AudioOut.h>
 #include <orbis/Sysmodule.h>
 #include <orbis/UserService.h>
