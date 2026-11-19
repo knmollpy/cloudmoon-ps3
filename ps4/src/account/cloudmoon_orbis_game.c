@@ -30,13 +30,15 @@ static void cm_orbis_game_signal(void *context,
 }
 
 int cm_orbis_cloudmoon_play_account(const cm_account_session_t *account,
+                                    const char *game_package,
                                     const char *ca_bundle_path,
                                     unsigned timeout_seconds) {
     cm_orbis_game_context_t game;
     int result;
 
     memset(&game, 0, sizeof(game));
-    result = cm_orbis_cloudmoon_run_account(account, ca_bundle_path,
+    result = cm_orbis_cloudmoon_run_account(account, game_package,
+                                            ca_bundle_path,
                                             timeout_seconds,
                                             cm_orbis_game_signal, &game);
 
