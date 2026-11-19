@@ -1,4 +1,5 @@
 #include "orbis_input.h"
+#include "../../../src/cloudmoon_input.h"
 
 #include <orbis/Pad.h>
 #include <orbis/UserService.h>
@@ -91,5 +92,46 @@ int cm_orbis_input_poll(unsigned int *pressed) {
 
     s_previous = held;
     *pressed = edges;
+    return 0;
+}
+
+
+static int16_t cm_axis_to_s16(uint8_t value) {
+    int v = (int)value - 128;
+    if (v < 0)
+        return (int16_t)((v * 32767) / 128);
+    return (int16_t)((v * 32767) / 127);
+}
+
+int cm_orbis_gamepad_read(cm_orbis_gamepad_state_t *state) {
+    OrbisPadData pad;
+    if (!state)
+        return -1;
+    memset(state, 0, sizeof(*state));
+    if (s_pad < 0 && cm_orbis_input_init() != 0)
+        return -1;
+    memset(&pad, 0, sizeof(pad));
+    if (scePadReadState(s_pad, &pad) < 0)
+        return -1;
+
+    state->connected = (uint8_t)!!pad.connected;
+    state->lx = cm_axis_to_s16(pad.leftStick.x);
+    state->ly = cm_axis_to_s16((uint8_t)(255u - pad.leftStick.y));
+    state->rx = cm_axis_to_s16(pad.rightStick.x);
+    state->ry = cm_axis_to_s16((uint8_t)(255u - pad.rightStick.y));
+
+    state->cross = (uint8_t)!!(pad.buttons & ORBIS_PAD_BUTTON_CROSS);
+    state->circle = (uint8_t)!!(pad.buttons & ORBIS_PAD_BUTTON_CIRCLE);
+    state->square = (uint8_t)!!(pad.buttons & ORBIS_PAD_BUTTON_SQUARE);
+    state->triangle = (uint8_t)!!(pad.buttons & ORBIS_PAD_BUTTON_TRIANGLE);
+    state->l1 = (uint8_t)!!(pad.buttons & ORBIS_PAD_BUTTON_L1);
+    state->r1 = (uint8_t)!!(pad.buttons & ORBIS_PAD_BUTTON_R1);
+    state->l2 = (uint8_t)(pad.analogButtons.l2 > 16);
+    state->r2 = (uint8_t)(pad.analogButtons.r2 > 16);
+    state->up = (uint8_t)!!(pad.buttons & ORBIS_PAD_BUTTON_UP);
+    state->down = (uint8_t)!!(pad.buttons & ORBIS_PAD_BUTTON_DOWN);
+    state->left = (uint8_t)!!(pad.buttons & ORBIS_PAD_BUTTON_LEFT);
+    state->right = (uint8_t)!!(pad.buttons & ORBIS_PAD_BUTTON_RIGHT);
+    state->options = (uint8_t)!!(pad.buttons & ORBIS_PAD_BUTTON_OPTIONS);
     return 0;
 }
