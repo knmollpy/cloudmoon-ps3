@@ -2,6 +2,7 @@
 
 #include <orbis/UserService.h>
 #include <orbis/libkernel.h>
+#include <orbis/GnmDriver.h>
 
 #include <stdint.h>
 #include <stddef.h>
