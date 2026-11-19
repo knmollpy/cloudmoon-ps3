@@ -179,8 +179,13 @@ cm_ui_action_t cm_ui_input(cm_ui_state_t *state, unsigned int keys,
             state->view = CM_UI_HOME;
             return action(CM_UI_ACTION_BACK, -1);
         }
-        if (keys & CM_UI_KEY_CROSS)
-            return action(CM_UI_ACTION_REQUEST_LINK, -1);
+        if (keys & CM_UI_KEY_UP) state->link_focus = (state->link_focus + 2) % 3;
+        if (keys & CM_UI_KEY_DOWN) state->link_focus = (state->link_focus + 1) % 3;
+        if (keys & CM_UI_KEY_CROSS) {
+            if (state->link_focus == 0) return action(CM_UI_ACTION_EDIT_EMAIL, -1);
+            if (state->link_focus == 1) return action(CM_UI_ACTION_EDIT_PASSWORD, -1);
+            return action(CM_UI_ACTION_LOGIN, -1);
+        }
         break;
     case CM_UI_SETTINGS:
         if (keys & CM_UI_KEY_CIRCLE) {
@@ -292,23 +297,34 @@ static void draw_library(const cm_ui_surface_t *s, const cm_ui_state_t *st,
     }
 }
 
-static void draw_link(const cm_ui_surface_t *s, const cm_ui_model_t *m) {
-    text(s, 62, 125, 3, C_TEXT, "INICIAR SESION EN CLOUDMOON");
-    text(s, 62, 170, 2, C_MUTED, "USA TU CORREO Y CONTRASENA, SIN QR NI TELEFONO.");
-    panel(s, 62, 220, 690, 320, 0);
-    text(s, 100, 260, 2, C_CYAN, "ACCESO DIRECTO");
-    text(s, 100, 315, 2, C_TEXT, "1. PULSA X PARA ABRIR EL TECLADO DE PS4.");
-    text(s, 100, 355, 2, C_TEXT, "2. ESCRIBE TU CORREO DE CLOUDMOON.");
-    text(s, 100, 395, 2, C_TEXT, "3. ESCRIBE TU CONTRASENA.");
-    text(s, 100, 455, 1, C_MUTED,
-         m && m->status_text ? m->status_text : "ESPERANDO INICIO DE SESION");
-    panel(s, 790, 220, 360, 320, 0);
-    centered_text(s, 970, 280, 3, C_CYAN, "CLOUDMOON");
-    centered_text(s, 970, 340, 2, C_TEXT, "GMAIL + PASSWORD");
-    centered_text(s, 970, 390, 1, C_MUTED, "TECLADO NATIVO PS4");
-    centered_text(s, 970, 445, 1, C_GREEN, "SESION HTTPS");
-}
+static void draw_link(const cm_ui_surface_t *s, const cm_ui_state_t *st,
+                      const cm_ui_model_t *m) {
+    char email_line[96];
+    const char *email = m && m->login_email && m->login_email[0]
+        ? m->login_email : "ESCRIBE TU GMAIL";
+    size_t n = strlen(email);
+    if (n > 34) n = 34;
+    memcpy(email_line, email, n);
+    email_line[n] = 0;
 
+    text(s, 62, 125, 3, C_TEXT, "VINCULAR CUENTA CLOUDMOON");
+    text(s, 62, 170, 2, C_MUTED, "INGRESA TU GMAIL Y TU CONTRASENA.");
+    panel(s, 62, 220, 820, 105, st->link_focus == 0);
+    text(s, 92, 242, 1, C_CYAN, "GMAIL");
+    text(s, 92, 275, 2, C_TEXT, email_line);
+    panel(s, 62, 345, 820, 105, st->link_focus == 1);
+    text(s, 92, 367, 1, C_CYAN, "CONTRASENA");
+    text(s, 92, 400, 2, C_TEXT,
+         m && m->login_password_set ? "************" : "ESCRIBE TU CONTRASENA");
+    panel(s, 62, 475, 820, 76, st->link_focus == 2);
+    centered_text(s, 472, 500, 2, C_GREEN, "INICIAR SESION");
+    if (m && m->status_text)
+        text(s, 62, 570, 1, C_MUTED, m->status_text);
+    text(s, 930, 270, 1, C_MUTED, "ARRIBA / ABAJO");
+    text(s, 930, 295, 1, C_MUTED, "PARA ELEGIR");
+    text(s, 930, 335, 1, C_MUTED, "X: EDITAR / ENTRAR");
+    text(s, 930, 360, 1, C_MUTED, "O: VOLVER");
+}
 static void draw_settings(const cm_ui_surface_t *s, const cm_ui_state_t *st) {
     static const char *items[] = {"RESOLUCION DE STREAM", "FOTOGRAMAS POR SEGUNDO", "BITRATE"};
     static const char *values[] = {"1280 X 720", "60 FPS", "10 MBPS"};
@@ -333,7 +349,7 @@ void cm_ui_draw(const cm_ui_surface_t *s, const cm_ui_state_t *st,
     switch (st->view) {
     case CM_UI_HOME:     draw_home(s, st, m); break;
     case CM_UI_LIBRARY:  draw_library(s, st, m); break;
-    case CM_UI_LINK:     draw_link(s, m); break;
+    case CM_UI_LINK:     draw_link(s, st, m); break;
     case CM_UI_SETTINGS: draw_settings(s, st); break;
     default:             draw_home(s, st, m); break;
     }
