@@ -15,7 +15,20 @@ static void cm_orbis_game_signal(void *context,
                                  const char *json, size_t length) {
     cm_orbis_game_context_t *game = (cm_orbis_game_context_t *)context;
 
-    if (!game || game->failed || !client || !json || length == 0)
+    if (!game)
+        return;
+
+    /* cm_cloudmoon_client_run() invokes the signal callback with a NULL
+       packet before it frees its WebSocket transmit queue and TLS context.
+       Stop every RTC sender here, while queued sends are still safe. */
+    if (!client || !json || length == 0) {
+        if (game->webrtc) {
+            cm_orbis_webrtc_close(game->webrtc);
+            game->webrtc = NULL;
+        }
+        return;
+    }
+    if (game->failed)
         return;
 
     if (!game->webrtc) {
