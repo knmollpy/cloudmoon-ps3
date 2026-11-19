@@ -3,6 +3,7 @@
 #include "orbis_video.h"
 #include <orbis/Sysmodule.h>
 #include <orbis/libkernel.h>
+#include <orbis/GnmDriver.h>
 
 #include <emmintrin.h>
 #include <stdbool.h>
