@@ -1,4 +1,8 @@
 #include "cloudmoon_pairing.h"
+#include "../catalog/cloudmoon_catalog.h"
+#include "../../../src/cloudmoon_session.h"
+#include <mbedtls/aes.h>
+#include <mbedtls/md.h>
 
 #include "../net/cloudmoon_random_mbedtls.h"
 #include "../platform/orbis_network.h"
@@ -19,6 +23,7 @@
 #define CM_PAIR_REQUEST_MAX 16384
 #define CM_PAIR_BODY_MAX 8192
 #define CM_PAIR_NONCE_BYTES 16
+#define CM_PAIR_KEY_BYTES 32
 
 struct cm_pairing_service {
     int listen_fd;
@@ -29,46 +34,189 @@ struct cm_pairing_service {
     unsigned timeout_seconds;
     char nonce[CM_PAIR_NONCE_BYTES * 2 + 1];
     char ip[16];
-    char url[128];
+    char url[256];
+    char pair_key[CM_PAIR_KEY_BYTES];
+    char pair_key_hex[CM_PAIR_KEY_BYTES * 2 + 1];
     char status[128];
     cm_qr_t qr;
     cm_account_session_t account;
 };
 
 static const char s_pair_page[] =
-"<!doctype html><html lang='es'><meta charset='utf-8'>"
+"<!doctype html><html lang='es'><head><meta charset='utf-8'>"
 "<meta name='viewport' content='width=device-width,initial-scale=1'>"
 "<title>CloudMoon - Vincular PS4</title>"
 "<style>"
-"body{margin:0;background:#08111f;color:#eaf2ff;font:16px system-ui;padding:24px}"
-"main{max-width:620px;margin:8vh auto;background:#121f32;border:1px solid #29405f;"
-"border-radius:18px;padding:28px;box-shadow:0 18px 55px #0008}"
-"h1{color:#50dff1;font-size:26px}p,li{line-height:1.6;color:#b8c9de}"
-"a{color:#50dff1}input{box-sizing:border-box;width:100%;padding:14px;margin:12px 0;"
-"border:1px solid #405777;border-radius:10px;background:#091523;color:#fff}"
-"button{padding:14px 20px;background:#2c83e8;color:#fff;border:0;border-radius:10px;"
-"font-weight:700;width:100%}#result{margin-top:16px;white-space:pre-wrap}"
-"</style><main><h1>Vincular CloudMoon con PS4</h1>"
-"<p>La PS4 está esperando una sesión autorizada de CloudMoon en esta red local.</p>"
-"<ol><li>Abre <a href='https://web.cloudmoonapp.com/' target='_blank' rel='noopener'>"
-"CloudMoon</a> e inicia sesión en tu teléfono.</li>"
-"<li>Abre cualquier juego para crear una sesión web.</li>"
-"<li>Vuelve aquí y pega la dirección de la página de juego. Debe contener "
-"<code>?sid=</code>.</li></ol>"
-"<form id='f'><label for='u'>Enlace de sesión de CloudMoon</label>"
-"<input id='u' type='url' autocomplete='off' required "
-"placeholder='https://web.cloudmoonapp.com/run-site/?sid=...'>"
-"<button id='b' type='submit'>Vincular cuenta con PS4</button></form>"
-"<div id='result'></div></main><script>"
-"const f=document.getElementById('f'),u=document.getElementById('u'),"
-"b=document.getElementById('b'),r=document.getElementById('result');"
-"f.addEventListener('submit',async e=>{e.preventDefault();b.disabled=true;"
-"r.textContent='Verificando la sesión con CloudMoon...';try{"
-"const x=await fetch(location.pathname,{method:'POST',headers:{"
-"'Content-Type':'text/plain;charset=UTF-8'},body:u.value.trim()});"
-"const t=await x.text();r.textContent=t;if(!x.ok)throw new Error(t);"
-"b.textContent='Cuenta vinculada';}catch(e){b.disabled=false;"
-"r.textContent='No se pudo vincular: '+e.message;}});</script></html>";
+"body{margin:0;background:#08111f;color:#eaf2ff;font:16px system-ui;padding:20px}"
+"main{max-width:620px;margin:5vh auto;background:#121f32;border:1px solid #29405f;"
+"border-radius:18px;padding:24px;box-shadow:0 18px 55px #0008}"
+"h1{color:#50dff1;font-size:25px}p{line-height:1.55;color:#b8c9de}"
+"label{display:block;margin:12px 0 6px;color:#b8c9de}"
+"input,select{box-sizing:border-box;width:100%;padding:13px;margin:5px 0 12px;"
+"border:1px solid #405777;border-radius:10px;background:#091523;color:#fff;font-size:16px}"
+"button{padding:14px 18px;background:#2c83e8;color:#fff;border:0;border-radius:10px;"
+"font-weight:700;width:100%;font-size:16px;margin:5px 0;cursor:pointer}"
+"button:disabled{opacity:.55} .google{background:#fff;color:#222}"
+".muted{color:#8ea5c2;font-size:13px}.divider{text-align:center;color:#8295ad;margin:15px}"
+"#result{margin-top:16px;white-space:pre-wrap;line-height:1.4}"
+"</style></head><body><main><h1>Vincular CloudMoon con PS4</h1>"
+"<p>Inicia sesión con tu cuenta habitual de CloudMoon. La contraseña o el token "
+"de Google se envían cifrados a esta PS4 y la consola los valida directamente con CloudMoon.</p>"
+"<label for='server'>Región del servidor</label><select id='server'>"
+"<option value='21' selected>Sudamérica</option><option value='22'>Estados Unidos Oeste</option>"
+"<option value='23'>Estados Unidos Este</option><option value='3'>Asia</option>"
+"<option value='4'>Europa</option></select>"
+"<button class='google' id='google' type='button'>Continuar con Google</button>"
+"<div class='divider'>O inicia sesión con tu cuenta CloudMoon</div>"
+"<form id='passwordForm'><label for='email'>Correo electrónico</label>"
+"<input id='email' type='email' autocomplete='username' required>"
+"<label for='password'>Contraseña</label>"
+"<input id='password' type='password' autocomplete='current-password' required>"
+"<button id='passwordButton' type='submit'>Iniciar sesión</button></form>"
+"<p class='muted'>Si creaste tu cuenta con Google y aún no tienes contraseña, "
+"puedes iniciar sesión en <a href='https://web.cloudmoonapp.com/' target='_blank' rel='noopener'>CloudMoon</a> "
+"y configurar una desde tu perfil.</p><div id='result'>Esperando inicio de sesión…</div>"
+"</main><script src='https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js'></script>"
+"<script src='https://accounts.google.com/gsi/client' async defer></script>"
+"<script>"
+"const KEY_HEX='__PAIR_KEY__';"
+"const result=document.getElementById('result'),server=document.getElementById('server');"
+"const aesKey=CryptoJS.enc.Hex.parse(KEY_HEX.slice(0,32));"
+"const macKey=CryptoJS.enc.Hex.parse(KEY_HEX.slice(32));"
+"function encryptPayload(payload){const iv=CryptoJS.lib.WordArray.random(16);"
+"const cipher=CryptoJS.AES.encrypt(CryptoJS.enc.Utf8.parse(JSON.stringify(payload)),aesKey,"
+"{iv:iv,mode:CryptoJS.mode.CBC,padding:CryptoJS.pad.Pkcs7}).ciphertext;"
+"const ivHex=iv.toString(CryptoJS.enc.Hex),cipherHex=cipher.toString(CryptoJS.enc.Hex);"
+"const mac=CryptoJS.HmacSHA256(ivHex+cipherHex,macKey).toString(CryptoJS.enc.Hex);"
+"return JSON.stringify({iv:ivHex,ciphertext:cipherHex,mac:mac});}"
+"async function submitPayload(payload,button){button.disabled=true;result.textContent='Verificando la cuenta con CloudMoon…';"
+"try{const response=await fetch(location.pathname,{method:'POST',headers:{'Content-Type':'application/json'},"
+"body:encryptPayload(payload)});const message=await response.text();"
+"if(!response.ok)throw new Error(message);result.textContent=message;"
+"result.style.color='#5ce0b2';}catch(error){result.textContent='No se pudo vincular: '+error.message;"
+"result.style.color='#ff9b9b';button.disabled=false;}}"
+"document.getElementById('passwordForm').addEventListener('submit',event=>{event.preventDefault();"
+"submitPayload({provider:'password',email:document.getElementById('email').value,"
+"password:document.getElementById('password').value,server_id:Number(server.value),"
+"language:'es',locale:'ar'},document.getElementById('passwordButton'));});"
+"function initGoogle(){if(!window.google||!google.accounts||!google.accounts.id)return;"
+"google.accounts.id.initialize({client_id:'196443591263-k5447s9icscrq54n57j29lmvm05addbe.apps.googleusercontent.com',"
+"callback:response=>submitPayload({provider:'google',google_id_token:response.credential,"
+"server_id:Number(server.value),language:'es',locale:'ar'},document.getElementById('google')),"
+"auto_select:false,cancel_on_tap_outside:true});"
+"google.accounts.id.renderButton(document.getElementById('google'),{theme:'filled_blue',size:'large',"
+"text:'continue_with',shape:'rectangular',width:320});}"
+"document.getElementById('google').addEventListener('click',()=>{if(window.google&&google.accounts)"
+"google.accounts.id.prompt();});"
+"window.addEventListener('load',()=>{const start=Date.now();const timer=setInterval(()=>{"
+"if(window.google&&google.accounts){clearInterval(timer);initGoogle();}"
+"else if(Date.now()-start>10000){clearInterval(timer);document.getElementById('google').textContent='Google no disponible en este navegador';}},200);});"
+"</script></body></html>";
+
+static int build_pair_page(const cm_pairing_service_t *service,
+                           char *output, size_t capacity) {
+    static const char marker[] = "__PAIR_KEY__";
+    const char *where;
+    size_t prefix, suffix, key_length;
+    if (!service || !output || capacity == 0) return -1;
+    where = strstr(s_pair_page, marker);
+    if (!where) return -1;
+    prefix = (size_t)(where - s_pair_page);
+    key_length = strlen(service->pair_key_hex);
+    suffix = strlen(where + sizeof(marker) - 1u);
+    if (prefix + key_length + suffix + 1u > capacity) return -1;
+    memcpy(output, s_pair_page, prefix);
+    memcpy(output + prefix, service->pair_key_hex, key_length);
+    memcpy(output + prefix + key_length,
+           where + sizeof(marker) - 1u, suffix + 1u);
+    return (int)(prefix + key_length + suffix);
+}
+
+static int hex_decode(const char *input, uint8_t *output, size_t capacity) {
+    size_t i, length;
+    if (!input || !output) return -1;
+    length = strlen(input);
+    if ((length & 1u) != 0 || length / 2u > capacity) return -1;
+    for (i = 0; i < length; i += 2u) {
+        int a, b;
+        char ca = input[i], cb = input[i + 1u];
+        a = ca >= '0' && ca <= '9' ? ca - '0' :
+            ca >= 'a' && ca <= 'f' ? ca - 'a' + 10 :
+            ca >= 'A' && ca <= 'F' ? ca - 'A' + 10 : -1;
+        b = cb >= '0' && cb <= '9' ? cb - '0' :
+            cb >= 'a' && cb <= 'f' ? cb - 'a' + 10 :
+            cb >= 'A' && cb <= 'F' ? cb - 'A' + 10 : -1;
+        if (a < 0 || b < 0) return -1;
+        output[i / 2u] = (uint8_t)((a << 4) | b);
+    }
+    return (int)(length / 2u);
+}
+
+static int decrypt_pair_payload(const cm_pairing_service_t *service,
+                                const char *envelope, size_t envelope_length,
+                                char *plaintext, size_t plaintext_capacity) {
+    char iv_hex[33], cipher_hex[7000], mac_hex[65];
+    char authenticated[7100];
+    uint8_t iv[16], cipher[3500], expected_mac[32], actual_mac[32];
+    size_t cipher_length, plain_length, i;
+    const mbedtls_md_info_t *md;
+    mbedtls_aes_context aes;
+    int padding, diff = 0, rc = -1;
+
+    if (!service || !envelope || !plaintext || plaintext_capacity == 0 ||
+        cm_json_get_string(envelope, envelope_length, "iv",
+                           iv_hex, sizeof(iv_hex)) < 0 ||
+        cm_json_get_string(envelope, envelope_length, "ciphertext",
+                           cipher_hex, sizeof(cipher_hex)) < 0 ||
+        cm_json_get_string(envelope, envelope_length, "mac",
+                           mac_hex, sizeof(mac_hex)) < 0 ||
+        strlen(iv_hex) != 32 || strlen(mac_hex) != 64)
+        return -1;
+    if (hex_decode(iv_hex, iv, sizeof(iv)) != 16 ||
+        hex_decode(mac_hex, expected_mac, sizeof(expected_mac)) != 32)
+        return -1;
+    {
+        int decoded = hex_decode(cipher_hex, cipher, sizeof(cipher));
+        if (decoded <= 0 || (decoded % 16) != 0) return -1;
+        cipher_length = (size_t)decoded;
+    }
+    if (snprintf(authenticated, sizeof(authenticated), "%s%s",
+                 iv_hex, cipher_hex) < 0 ||
+        strlen(authenticated) >= sizeof(authenticated))
+        return -1;
+    md = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    if (!md || mbedtls_md_hmac(md, (const unsigned char *)service->pair_key + 16,
+                               16, (const unsigned char *)authenticated,
+                               strlen(authenticated), actual_mac) != 0)
+        return -1;
+    for (i = 0; i < sizeof(actual_mac); ++i)
+        diff |= actual_mac[i] ^ expected_mac[i];
+    if (diff != 0) return -1;
+
+    mbedtls_aes_init(&aes);
+    if (mbedtls_aes_setkey_dec(&aes,
+            (const unsigned char *)service->pair_key, 128) != 0)
+        goto done;
+    if (mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_DECRYPT, cipher_length,
+                              iv, cipher, cipher) != 0)
+        goto done;
+    padding = cipher[cipher_length - 1u];
+    if (padding < 1 || padding > 16 || (size_t)padding > cipher_length)
+        goto done;
+    for (i = 0; i < (size_t)padding; ++i)
+        if (cipher[cipher_length - 1u - i] != (uint8_t)padding) goto done;
+    plain_length = cipher_length - (size_t)padding;
+    if (plain_length == 0 || plain_length + 1u > plaintext_capacity)
+        goto done;
+    memcpy(plaintext, cipher, plain_length);
+    plaintext[plain_length] = 0;
+    rc = (int)plain_length;
+done:
+    mbedtls_aes_free(&aes);
+    memset(cipher, 0, sizeof(cipher));
+    memset(actual_mac, 0, sizeof(actual_mac));
+    return rc;
+}
 
 static int send_all(int fd, const char *data, size_t length) {
     size_t sent = 0;
