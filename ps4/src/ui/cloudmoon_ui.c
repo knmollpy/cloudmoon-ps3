@@ -322,11 +322,16 @@ static void draw_link(const cm_ui_surface_t *s, const cm_ui_model_t *m) {
         text(s, 100, 500, 3, C_TEXT, m->link_code);
     }
     panel(s, 790, 155, 360, 360, 0);
-    draw_qr(s, m);
-    if (!m || !m->qr_modules)
-        centered_text(s, 970, 310, 2, C_MUTED, "QR PENDIENTE");
-    if (m && m->link_url && m->link_url[0])
-        text(s, 830, 490, 1, C_CYAN, m->link_url);
+    if (m && m->session_linked) {
+        centered_text(s, 970, 295, 3, C_GREEN, "VINCULADA");
+        centered_text(s, 970, 350, 2, C_TEXT, "SESION VALIDADA");
+    } else {
+        draw_qr(s, m);
+        if (!m || !m->qr_modules)
+            centered_text(s, 970, 310, 2, C_MUTED, "QR PENDIENTE");
+        if (m && m->link_url && m->link_url[0])
+            text(s, 830, 490, 1, C_CYAN, m->link_url);
+    }
 }
 
 static void draw_settings(const cm_ui_surface_t *s, const cm_ui_state_t *st) {
