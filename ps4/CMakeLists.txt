@@ -48,6 +48,9 @@ if(PS4)
     set(GEN_FILES OFF CACHE BOOL "" FORCE)
     set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
     add_compile_definitions(MBEDTLS_NO_PLATFORM_ENTROPY)
+    # libdatachannel negotiates RTP media protection through Mbed TLS DTLS-SRTP.
+    # OpenOrbis builds must expose the matching extension in both headers and objects.
+    add_compile_definitions(MBEDTLS_SSL_DTLS_SRTP)
     set(USE_STATIC_MBEDTLS_LIBRARY ON CACHE BOOL "" FORCE)
     set(USE_SHARED_MBEDTLS_LIBRARY OFF CACHE BOOL "" FORCE)
 
