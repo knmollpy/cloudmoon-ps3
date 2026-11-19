@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-#define CM_UI_MAX_GAMES 64
+#define CM_UI_MAX_GAMES 512
 
 typedef enum {
     CM_UI_HOME = 0,
