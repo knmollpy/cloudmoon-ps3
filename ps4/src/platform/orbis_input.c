@@ -8,6 +8,7 @@
 #include <string.h>
 
 static int s_pad = -1;
+static int s_pad_initialized;
 static unsigned int s_previous;
 static uint64_t s_repeat_start;
 static uint64_t s_repeat_last;
@@ -35,8 +36,11 @@ int cm_orbis_input_init(void) {
     int rc;
     if (s_pad >= 0) return 0;
 
-    rc = scePadInit();
-    if (rc < 0) return -1;
+    if (!s_pad_initialized) {
+        rc = scePadInit();
+        if (rc < 0) return -1;
+        s_pad_initialized = 1;
+    }
 
     rc = sceUserServiceGetInitialUser(&user_id);
     if (rc < 0) return -1;
