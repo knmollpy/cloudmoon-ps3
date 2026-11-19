@@ -22,6 +22,12 @@ add_library(cloudmoon_protocol_core STATIC
 target_include_directories(cloudmoon_protocol_core PUBLIC ../src)
 target_compile_options(cloudmoon_protocol_core PRIVATE -Wall -Wextra -Werror)
 
+add_library(cloudmoon_catalog_parse STATIC
+    src/catalog/cloudmoon_catalog_parse.c
+)
+target_include_directories(cloudmoon_catalog_parse PUBLIC src/catalog)
+target_compile_options(cloudmoon_catalog_parse PRIVATE -Wall -Wextra -Werror)
+
 add_library(cloudmoon_account_core STATIC
     src/account/cloudmoon_session_link.c
 )
@@ -131,6 +137,11 @@ if(CM_UI_BUILD_TESTS)
     target_compile_options(cloudmoon_protocol_smoke PRIVATE -Wall -Wextra -Werror)
     add_test(NAME cloudmoon_protocol_smoke COMMAND cloudmoon_protocol_smoke)
 
+    add_executable(cloudmoon_catalog_smoke tests/catalog_smoke.c)
+    target_link_libraries(cloudmoon_catalog_smoke PRIVATE cloudmoon_catalog_parse)
+    target_compile_options(cloudmoon_catalog_smoke PRIVATE -Wall -Wextra -Werror)
+    add_test(NAME cloudmoon_catalog_smoke COMMAND cloudmoon_catalog_smoke)
+
     add_executable(cloudmoon_session_link_smoke tests/session_link_smoke.c)
     target_link_libraries(cloudmoon_session_link_smoke PRIVATE cloudmoon_account_core)
     target_compile_options(cloudmoon_session_link_smoke PRIVATE -Wall -Wextra -Werror)
@@ -144,16 +155,18 @@ if(PS4)
         src/platform/orbis_h264.c
         src/platform/orbis_audio.c
         src/platform/cloudmoon_orbis_webrtc.c
+        src/catalog/cloudmoon_catalog_fetch.c
         src/platform/orbis_dashboard.c
         src/account/cloudmoon_orbis_connection.c
         src/account/cloudmoon_orbis_game.c
     )
-    target_include_directories(cloudmoon_ps4_orbis_platform PUBLIC src/platform)
+    target_include_directories(cloudmoon_ps4_orbis_platform PUBLIC src/platform src/catalog)
     target_include_directories(cloudmoon_ps4_orbis_platform PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/../vendor/libdatachannel/include"
     )
     target_link_libraries(cloudmoon_ps4_orbis_platform PUBLIC
         cloudmoon_ps4_ui cloudmoon_protocol_core cloudmoon_account_core
+        cloudmoon_catalog_parse
         datachannel-static
         opus
     )
