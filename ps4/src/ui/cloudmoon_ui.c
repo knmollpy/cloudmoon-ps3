@@ -310,7 +310,7 @@ static void draw_qr(const cm_ui_surface_t *s, const cm_ui_model_t *m) {
 
 static void draw_link(const cm_ui_surface_t *s, const cm_ui_model_t *m) {
     text(s, 62, 125, 3, C_TEXT, "VINCULAR TU CUENTA");
-    text(s, 62, 170, 2, C_MUTED, "USA UNA SESION AUTENTICADA DE CLOUDMOON.");
+    text(s, 62, 170, 2, C_MUTED, "AUTORIZA TU CUENTA DE CLOUDMOON DESDE EL TELEFONO.");
     panel(s, 62, 220, 690, 320, 0);
     text(s, 100, 260, 2, C_CYAN, "ACCESO SEGURO");
     text(s, 100, 310, 2, C_TEXT, "1. ESCANEA EL QR CON TU TELEFONO.");
