@@ -409,6 +409,8 @@ void cm_ui_draw_game_menu_overlay(const cm_ui_surface_t *s) {
     panel(s, x + 34, y + 116, w - 68, 64, 1);
     centered_text(s, s->width / 2, y + 140, 2, C_GREEN,
                   "SALIR DE LA SESION");
-    centered_text(s, s->width / 2, y + h - 42, 1, C_MUTED,
+    centered_text(s, s->width / 2, y + h - 52, 1, C_MUTED,
                   "X: SALIR        O: CONTINUAR JUGANDO");
+    centered_text(s, s->width / 2, y + h - 28, 1, C_CYAN,
+                  "OPTIONS + PANEL TACTIL: MANTENER PARA ABRIR");
 }
