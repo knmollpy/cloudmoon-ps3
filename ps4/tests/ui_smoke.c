@@ -77,7 +77,9 @@ int main(void) {
     assert(result.type == CM_UI_ACTION_NONE);
     assert(state.view == CM_UI_LINK);
     result = cm_ui_input(&state, CM_UI_KEY_CROSS, &model);
-    assert(result.type == CM_UI_ACTION_EDIT_EMAIL);
+    assert(result.type == CM_UI_ACTION_NONE);
+    result = cm_ui_input(&state, CM_UI_KEY_CIRCLE, &model);
+    assert(result.type == CM_UI_ACTION_BACK);
 
     free(pixels);
     return 0;
