@@ -46,13 +46,13 @@ cp "${ROOT}/scripts/generate-ps4-icon.py" "${OUT_DIR}/generate-icon.py"
     "${TOOLS}/PkgTool.Core" sfo_setentry sce_sys/param.sfo TITLE_ID --type Utf8 --maxsize 12 --value "${TITLE_ID}"
     "${TOOLS}/PkgTool.Core" sfo_setentry sce_sys/param.sfo VERSION --type Utf8 --maxsize 8 --value '0.01'
 
-    "${TOOLS}/create-gp4" -out cloudmoon_ps4_preview.gp4 \
+    "${TOOLS}/create-gp4" -out cloudmoon_ps4.gp4 \
         --content-id="${CONTENT_ID}" \
-        --files "eboot.bin sce_sys/param.sfo sce_sys/icon0.png assets/cacert.pem"
+        --files "eboot.bin sce_sys/param.sfo sce_sys/icon0.png assets/misc/cacert.pem"
     "${TOOLS}/PkgTool.Core" pkg_build cloudmoon_ps4_preview.gp4 .
 )
 
 PKG_PATH="$(find "${OUT_DIR}" -maxdepth 2 -type f -name '*.pkg' -print -quit)"
 test -n "${PKG_PATH}"
 test -s "${PKG_PATH}"
-echo "Preview PKG created: ${PKG_PATH}"
+echo "CloudMoon PS4 application PKG created: ${PKG_PATH}"
