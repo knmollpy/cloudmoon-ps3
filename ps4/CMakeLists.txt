@@ -188,8 +188,7 @@ if(PS4)
         SceUserService
     )
     target_compile_options(cloudmoon_ps4_orbis_platform PRIVATE -Wall -Wextra)
-    # Link a standalone dashboard executable. This first PKG is a UI preview:
-    # account hand-off and streaming are intentionally not advertised as ready.
+    # Link the standalone CloudMoon dashboard, pairing and game-streaming app.
     add_executable(cloudmoon_ps4_app src/main.c)
     target_link_libraries(cloudmoon_ps4_app PRIVATE
         cloudmoon_ps4_orbis_platform
