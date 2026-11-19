@@ -28,6 +28,8 @@ jobs:
           git submodule update --init --depth 1 vendor/libdatachannel
           git -C vendor/libdatachannel submodule update --init --recursive --depth 1
           bash scripts/patch-libjuice-orbis.sh
+          git clone --filter=blob:none https://github.com/xiph/opus.git vendor/opus
+          git -C vendor/opus checkout ddbe48383984d56acd9e1ab6a090c54ca6b735a6
 
       - name: Install missing LLVM linker tools
         run: |
