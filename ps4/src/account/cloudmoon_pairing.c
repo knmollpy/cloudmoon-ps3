@@ -1,8 +1,6 @@
 #include "cloudmoon_pairing.h"
 #include "../catalog/cloudmoon_catalog.h"
 #include "../../../src/cloudmoon_session.h"
-#include <mbedtls/aes.h>
-#include <mbedtls/md.h>
 
 #include "../net/cloudmoon_random_mbedtls.h"
 #include "../platform/orbis_network.h"
@@ -23,7 +21,6 @@
 #define CM_PAIR_REQUEST_MAX 16384
 #define CM_PAIR_BODY_MAX 8192
 #define CM_PAIR_NONCE_BYTES 16
-#define CM_PAIR_KEY_BYTES 32
 
 struct cm_pairing_service {
     int listen_fd;
@@ -35,90 +32,72 @@ struct cm_pairing_service {
     char nonce[CM_PAIR_NONCE_BYTES * 2 + 1];
     char ip[16];
     char url[256];
-    char pair_key[CM_PAIR_KEY_BYTES];
-    char pair_key_hex[CM_PAIR_KEY_BYTES * 2 + 1];
     char status[128];
     cm_qr_t qr;
     cm_account_session_t account;
 };
 
 static const char s_pair_page[] =
-"<!doctype html><html lang='es'><head><meta charset='utf-8'>"
-"<meta name='viewport' content='width=device-width,initial-scale=1'>"
-"<title>CloudMoon - Vincular PS4</title>"
-"<style>body{margin:0;background:#08111f;color:#eaf2ff;font:16px system-ui;padding:20px}"
-"main{max-width:680px;margin:4vh auto;background:#121f32;border:1px solid #29405f;"
-"border-radius:18px;padding:24px;box-shadow:0 18px 55px #0008}"
+"<!doctype html>"
+"<html lang=\"es\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+"<title>Vincular CloudMoon - PS4</title>"
+"<style>"
+"*{box-sizing:border-box}body{margin:0;background:#08111f;color:#eaf2ff;font:16px system-ui;padding:18px}"
+"main{max-width:680px;margin:3vh auto;background:#121f32;border:1px solid #29405f;border-radius:18px;padding:24px}"
 "h1{color:#50dff1;font-size:25px}p{line-height:1.55;color:#b8c9de}"
-"button{padding:13px 18px;background:#2c83e8;color:#fff;border:0;border-radius:10px;"
-"font-weight:700;width:100%;font-size:15px;margin:8px 0;cursor:pointer}"
-"textarea{box-sizing:border-box;width:100%;padding:12px;border:1px solid #405777;"
-"border-radius:10px;background:#091523;color:#dcecff;font:12px monospace;overflow-wrap:anywhere}"
-".step{background:#0b1728;border:1px solid #29405f;border-radius:12px;padding:14px;margin:12px 0}"
-".muted{color:#8ea5c2;font-size:13px}b{color:#fff}a{color:#50dff1}"
-"</style></head><body><main><h1>Vincular CloudMoon con PS4</h1>"
-"<p>Esta consola recibe la sesión desde tu cuenta <b>ya iniciada en CloudMoon</b>. "
-"No te pediremos la contraseña de Google ni una contraseña nueva.</p>"
-"<div class='step'><b>1. Copia el enlace de esta PS4</b>"
-"<p class='muted'>Es el enlace local que abrió el QR. Incluye el fragmento #k=...; no lo compartas con nadie.</p>"
-"<button id='copyPair'>Copiar enlace de esta PS4</button></div>"
-"<div class='step'><b>2. Prepara un marcador una sola vez</b>"
-"<p class='muted'>Copia este acceso, crea un marcador nuevo en Brave y pega el código como dirección/URL del marcador. "
-"Nómbralo <b>Vincular PS4</b>. Este marcador lee el token de tu sesión oficial de CloudMoon y lo envía cifrado a la consola.</p>"
-"<textarea id='bookmarklet' rows='6' readonly></textarea>"
-"<button id='copyBookmarklet'>Copiar código del marcador</button></div>"
-"<div class='step'><b>3. Autoriza tu cuenta Google</b>"
-"<p class='muted'>Abre <a href='https://web.cloudmoonapp.com/' target='_blank' rel='noopener'>CloudMoon oficial</a>, "
-"inicia sesión con Google y, ya dentro de tu cuenta, toca el marcador <b>Vincular PS4</b>. "
-"Cuando lo pida, pega el enlace que copiaste en el paso 1. La región predeterminada es Sudamérica.</p></div>"
-"<p class='muted' id='status'>Esperando autorización desde CloudMoon…</p>"
-"</main><script>"
-"const bookmarklet='javascript:(async()=>{try{const d=JSON.parse(localStorage.getItem(\"userData\")||\"null\");if(!d||!d.token||!d.userId){alert(\"Primero inicia sesion en CloudMoon con Google.\");return;}const raw=prompt(\"Pega el enlace local que copiaste en la pantalla QR de tu PS4:\");if(!raw)return;const u=new URL(raw);if(u.protocol!==\"http:\"||u.port!==\"8787\"||!/^\\\\/pair\\\\/[0-9a-f]{32}$/i.test(u.pathname)){alert(\"El enlace no parece ser de vinculacion de CloudMoon PS4.\");return;}const k=new URLSearchParams(u.hash.slice(1)).get(\"k\");if(!k||!/^[0-9a-f]{64}$/i.test(k)){alert(\"Falta la clave temporal del QR. Copia el enlace completo otra vez.\");return;}const bytes=h=>new Uint8Array(h.match(/../g).map(x=>parseInt(x,16)));const key=bytes(k),aes=await crypto.subtle.importKey(\"raw\",key.slice(0,16),{name:\"AES-CBC\"},false,[\"encrypt\"]),hm=await crypto.subtle.importKey(\"raw\",key.slice(16),{name:\"HMAC\",hash:\"SHA-256\"},false,[\"sign\"]),iv=crypto.getRandomValues(new Uint8Array(16)),enc=new TextEncoder(),payload={provider:\"cloudmoon_token\",token:d.token,user_id:String(d.userId),server_id:21,language:\"en\",locale:\"AR\"},ct=new Uint8Array(await crypto.subtle.encrypt({name:\"AES-CBC\",iv},aes,enc.encode(JSON.stringify(payload)))),hex=x=>Array.from(x,v=>v.toString(16).padStart(2,\"0\")).join(\"\"),ih=hex(iv),ch=hex(ct),mac=hex(new Uint8Array(await crypto.subtle.sign(\"HMAC\",hm,enc.encode(ih+ch)))),form=document.createElement(\"form\"),field=document.createElement(\"input\");form.method=\"POST\";form.action=u.origin+u.pathname;form.enctype=\"application/x-www-form-urlencoded\";field.type=\"hidden\";field.name=\"payload\";field.value=JSON.stringify({iv:ih,ciphertext:ch,mac});form.appendChild(field);document.body.appendChild(form);form.submit();}catch(e){alert(\"No se pudo vincular la PS4: \"+e.message);}})()';"
-"document.getElementById('bookmarklet').value=bookmarklet;"
-"document.getElementById('copyBookmarklet').onclick=()=>{const x=document.getElementById('bookmarklet');x.focus();x.select();try{document.execCommand('copy');document.getElementById('status').textContent='Código copiado. Ahora guárdalo como dirección de un marcador en Brave.';}catch(e){document.getElementById('status').textContent='Selecciona el código y cópialo manualmente.';}};"
-"document.getElementById('copyPair').onclick=()=>{const x=document.createElement('textarea');x.value=location.href;x.style.position='fixed';x.style.opacity='0';document.body.appendChild(x);x.select();try{document.execCommand('copy');document.getElementById('status').textContent='Enlace QR copiado. Conserva el fragmento #k=...';}catch(e){document.getElementById('status').textContent='Copia el enlace completo desde la barra del navegador.';}x.remove();};"
+"a,button{display:block;padding:14px 18px;border:0;border-radius:10px;background:#287fe0;color:white;font-weight:700;text-align:center;text-decoration:none;margin:12px 0;width:100%;font-size:16px}"
+"textarea{width:100%;min-height:116px;padding:13px;border:1px solid #405777;border-radius:10px;background:#091523;color:#fff;font:14px system-ui;overflow-wrap:anywhere;resize:vertical}"
+".small{font-size:13px;color:#91a7c2}.step{background:#0b1728;border:1px solid #29405f;border-radius:12px;padding:14px;margin:12px 0}"
+"button:disabled{opacity:.55}#status{padding:12px;border-radius:8px;background:#0b1728;color:#50dff1;min-height:44px}"
+"</style></head><body><main>"
+"<h1>Vincular CloudMoon con PS4</h1>"
+"<p>Esta página conecta tu cuenta de CloudMoon con la consola. No pide tu contraseña ni necesita marcadores.</p>"
+"<div class=\"step\"><b>1. Abre CloudMoon</b><a href=\"https://web.cloudmoonapp.com/\" target=\"_blank\" rel=\"noopener\">Abrir CloudMoon oficial</a><p class=\"small\">Inicia sesión normalmente y abre cualquier juego hasta que aparezca la página de la partida.</p></div>"
+"<div class=\"step\"><b>2. Copia el enlace de la partida</b><p class=\"small\">En la pestaña de CloudMoon, copia la dirección completa de la página donde se abrió el juego. Debe ser de web.cloudmoonapp.com e incluir el parámetro sid.</p></div>"
+"<div class=\"step\"><b>3. Pega el enlace aquí</b><textarea id=\"gameUrl\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\" placeholder=\"https://web.cloudmoonapp.com/...?...sid=...\"></textarea><button id=\"pairButton\" type=\"button\">VINCULAR ESTA CUENTA</button></div>"
+"<p id=\"status\" role=\"status\">Esperando el enlace de tu partida…</p>"
+"<p class=\"small\">La PS4 valida el identificador de sesión directamente con CloudMoon. El identificador no se guarda en esta página.</p>"
+"</main>"
+"<script>"
+"const statusBox=document.getElementById('status'),button=document.getElementById('pairButton');"
+"button.addEventListener('click',async()=>{"
+" const raw=document.getElementById('gameUrl').value.trim();"
+" if(!raw){statusBox.textContent='Pega primero el enlace de la partida.';return;}"
+" let sid;"
+" try{"
+"  const u=new URL(raw);"
+"  if(u.protocol!=='https:'||u.hostname!=='web.cloudmoonapp.com'||u.username||u.password){throw new Error('El enlace debe pertenecer a web.cloudmoonapp.com.');}"
+"  const values=u.searchParams.getAll('sid');"
+"  if(values.length!==1||!values[0]||values[0].length>512){throw new Error('El enlace no contiene un parámetro sid válido. Abre un juego y copia su dirección completa.');}"
+"  sid=values[0];"
+" }catch(e){statusBox.textContent=e.message||'El enlace no es válido.';return;}"
+" button.disabled=true;statusBox.textContent='Verificando tu sesión con CloudMoon…';"
+" try{"
+"  const response=await fetch(location.pathname,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:'sid='+encodeURIComponent(sid),cache:'no-store'});"
+"  const message=await response.text();"
+"  if(!response.ok)throw new Error(message||('Error HTTP '+response.status));"
+"  document.getElementById('gameUrl').value='';"
+"  statusBox.textContent='Cuenta vinculada correctamente. Vuelve a tu PS4.';"
+" }catch(e){statusBox.textContent='No se pudo vincular: '+(e.message||'error de conexión');button.disabled=false;}"
+"});"
 "</script></body></html>";
 
-
-
-static int hex_decode(const char *input, uint8_t *output, size_t capacity) {
-    size_t i, length;
-    if (!input || !output) return -1;
-    length = strlen(input);
-    if ((length & 1u) != 0 || length / 2u > capacity) return -1;
-    for (i = 0; i < length; i += 2u) {
-        int a, b;
-        char ca = input[i], cb = input[i + 1u];
-        a = ca >= '0' && ca <= '9' ? ca - '0' :
-            ca >= 'a' && ca <= 'f' ? ca - 'a' + 10 :
-            ca >= 'A' && ca <= 'F' ? ca - 'A' + 10 : -1;
-        b = cb >= '0' && cb <= '9' ? cb - '0' :
-            cb >= 'a' && cb <= 'f' ? cb - 'a' + 10 :
-            cb >= 'A' && cb <= 'F' ? cb - 'A' + 10 : -1;
-        if (a < 0 || b < 0) return -1;
-        output[i / 2u] = (uint8_t)((a << 4) | b);
-    }
-    return (int)(length / 2u);
-}
-
-static int decode_form_payload(const char *body, size_t body_length,
-                               char *output, size_t output_capacity) {
-    static const char key[] = "payload=";
+static int decode_form_sid(const char *body, size_t body_length,
+                             char *output, size_t output_capacity) {
+    static const char key[] = "sid=";
     size_t i = 0, used = 0;
     int found = 0;
     if (!body || !output || output_capacity == 0) return -1;
     while (i < body_length) {
-        size_t start = i, end, key_length;
+        size_t start = i, end;
         while (i < body_length && body[i] != '&') ++i;
         end = i;
         if (i < body_length) ++i;
-        key_length = sizeof(key) - 1u;
-        if (end - start < key_length ||
-            memcmp(body + start, key, key_length) != 0)
-            continue;
+        if (end - start < sizeof(key) - 1u ||
+            memcmp(body + start, key, sizeof(key) - 1u) != 0) continue;
         if (found) return -1;
         found = 1;
-        start += key_length;
+        start += sizeof(key) - 1u;
         while (start < end) {
             unsigned char ch = (unsigned char)body[start++];
             if (ch == '+') ch = ' ';
@@ -136,80 +115,28 @@ static int decode_form_payload(const char *body, size_t body_length,
                 start += 2;
             }
             if (ch == 0 || ch < 0x20 || ch == 0x7f ||
-                used + 1u >= output_capacity)
-                return -1;
+                used + 1u >= output_capacity) return -1;
             output[used++] = (char)ch;
         }
     }
-    if (!found || used == 0) return -1;
+    if (!found || used < 8u) return -1;
     output[used] = 0;
     return (int)used;
 }
 
-static int decrypt_pair_payload(const cm_pairing_service_t *service,
-                                const char *envelope, size_t envelope_length,
-                                char *plaintext, size_t plaintext_capacity) {
-    char iv_hex[33], cipher_hex[7000], mac_hex[65];
-    char authenticated[7100];
-    uint8_t iv[16], cipher[3500], expected_mac[32], actual_mac[32];
-    size_t cipher_length, plain_length, i;
-    const mbedtls_md_info_t *md;
-    mbedtls_aes_context aes;
-    int padding, diff = 0, rc = -1;
-
-    if (!service || !envelope || !plaintext || plaintext_capacity == 0 ||
-        cm_json_get_string(envelope, envelope_length, "iv",
-                           iv_hex, sizeof(iv_hex)) < 0 ||
-        cm_json_get_string(envelope, envelope_length, "ciphertext",
-                           cipher_hex, sizeof(cipher_hex)) < 0 ||
-        cm_json_get_string(envelope, envelope_length, "mac",
-                           mac_hex, sizeof(mac_hex)) < 0 ||
-        strlen(iv_hex) != 32 || strlen(mac_hex) != 64)
-        return -1;
-    if (hex_decode(iv_hex, iv, sizeof(iv)) != 16 ||
-        hex_decode(mac_hex, expected_mac, sizeof(expected_mac)) != 32)
-        return -1;
-    {
-        int decoded = hex_decode(cipher_hex, cipher, sizeof(cipher));
-        if (decoded <= 0 || (decoded % 16) != 0) return -1;
-        cipher_length = (size_t)decoded;
-    }
-    if (snprintf(authenticated, sizeof(authenticated), "%s%s",
-                 iv_hex, cipher_hex) < 0 ||
-        strlen(authenticated) >= sizeof(authenticated))
-        return -1;
-    md = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-    if (!md || mbedtls_md_hmac(md, (const unsigned char *)service->pair_key + 16,
-                               16, (const unsigned char *)authenticated,
-                               strlen(authenticated), actual_mac) != 0)
-        return -1;
-    for (i = 0; i < sizeof(actual_mac); ++i)
-        diff |= actual_mac[i] ^ expected_mac[i];
-    if (diff != 0) return -1;
-
-    mbedtls_aes_init(&aes);
-    if (mbedtls_aes_setkey_dec(&aes,
-            (const unsigned char *)service->pair_key, 128) != 0)
-        goto done;
-    if (mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_DECRYPT, cipher_length,
-                              iv, cipher, cipher) != 0)
-        goto done;
-    padding = cipher[cipher_length - 1u];
-    if (padding < 1 || padding > 16 || (size_t)padding > cipher_length)
-        goto done;
-    for (i = 0; i < (size_t)padding; ++i)
-        if (cipher[cipher_length - 1u - i] != (uint8_t)padding) goto done;
-    plain_length = cipher_length - (size_t)padding;
-    if (plain_length == 0 || plain_length + 1u > plaintext_capacity)
-        goto done;
-    memcpy(plaintext, cipher, plain_length);
-    plaintext[plain_length] = 0;
-    rc = (int)plain_length;
-done:
-    mbedtls_aes_free(&aes);
-    memset(cipher, 0, sizeof(cipher));
-    memset(actual_mac, 0, sizeof(actual_mac));
-    return rc;
+static int pairing_make_device_uuid(char *out, size_t capacity) {
+    uint8_t bytes[16];
+    int n;
+    if (!out || capacity < 37 ||
+        cm_orbis_random_source(NULL, bytes, sizeof(bytes)) != 0) return -1;
+    bytes[6] = (uint8_t)((bytes[6] & 0x0fu) | 0x40u);
+    bytes[8] = (uint8_t)((bytes[8] & 0x3fu) | 0x80u);
+    n = snprintf(out, capacity,
+        "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5],
+        bytes[6], bytes[7], bytes[8], bytes[9], bytes[10], bytes[11],
+        bytes[12], bytes[13], bytes[14], bytes[15]);
+    return n == 36 ? 0 : -1;
 }
 
 static int send_all(int fd, const char *data, size_t length) {
@@ -348,61 +275,43 @@ static void handle_client(cm_pairing_service_t *service, int fd) {
     request[header_length + content_length] = 0;
 
     {
-        char envelope[7000], plaintext[6144], provider[32];
-        char cloud_token[1025], cloud_user_id[129], language[8], locale[8];
-        int server_id = 21, envelope_length, plain_length, auth_rc = -1;
+        char cloud_sid[513];
+        int sid_length, auth_rc = -1;
         cm_account_session_t candidate;
 
-        memset(envelope, 0, sizeof(envelope));
-        memset(plaintext, 0, sizeof(plaintext));
-        memset(cloud_token, 0, sizeof(cloud_token));
-        memset(cloud_user_id, 0, sizeof(cloud_user_id));
+        memset(cloud_sid, 0, sizeof(cloud_sid));
         memset(&candidate, 0, sizeof(candidate));
-
-        envelope_length = decode_form_payload(request + header_length,
-                                              content_length,
-                                              envelope, sizeof(envelope));
-        plain_length = envelope_length < 0 ? -1 :
-            decrypt_pair_payload(service, envelope, (size_t)envelope_length,
-                                  plaintext, sizeof(plaintext));
-        if (plain_length < 0 ||
-            cm_json_get_string(plaintext, (size_t)plain_length,
-                               "provider", provider, sizeof(provider)) < 0 ||
-            cm_json_get_integer(plaintext, (size_t)plain_length,
-                                "server_id", &server_id) != 0) {
-            (void)send_response(fd, 400, "Bad Request", "text/plain",
-                                "Invalid or expired secure authorization", 40);
-            memset(envelope, 0, sizeof(envelope));
-            memset(plaintext, 0, sizeof(plaintext));
+        if (__sync_fetch_and_add(&service->ready, 0)) {
+            static const char already[] = "Esta consola ya fue vinculada. Vuelve a la PS4.";
+            (void)send_response(fd, 409, "Conflict", "text/plain",
+                                already, sizeof(already) - 1);
             return;
         }
-        if (cm_json_get_string(plaintext, (size_t)plain_length,
-                               "language", language, sizeof(language)) < 0)
-            (void)snprintf(language, sizeof(language), "en");
-        if (cm_json_get_string(plaintext, (size_t)plain_length,
-                               "locale", locale, sizeof(locale)) < 0)
-            (void)snprintf(locale, sizeof(locale), "AR");
-
-        if (strcmp(provider, "cloudmoon_token") == 0 &&
-            cm_json_get_string(plaintext, (size_t)plain_length,
-                               "token", cloud_token, sizeof(cloud_token)) >= 0 &&
-            cm_json_get_string(plaintext, (size_t)plain_length,
-                               "user_id", cloud_user_id,
-                               sizeof(cloud_user_id)) >= 0) {
-            auth_rc = cm_account_session_import_token(
-                service->ca_bundle_path, service->timeout_seconds,
-                cloud_token, cloud_user_id, server_id,
-                language, locale, &candidate);
+        sid_length = decode_form_sid(request + header_length, content_length,
+                                     cloud_sid, sizeof(cloud_sid));
+        if (sid_length < 0) {
+            static const char invalid[] =
+                "Enlace invalido. Comprueba que incluya ?sid=.";
+            (void)send_response(fd, 400, "Bad Request", "text/plain",
+                                invalid, sizeof(invalid) - 1);
+            memset(cloud_sid, 0, sizeof(cloud_sid));
+            return;
         }
 
-        memset(envelope, 0, sizeof(envelope));
-        memset(plaintext, 0, sizeof(plaintext));
-        memset(cloud_token, 0, sizeof(cloud_token));
-        memset(cloud_user_id, 0, sizeof(cloud_user_id));
+        (void)snprintf(candidate.sid, sizeof(candidate.sid), "%s", cloud_sid);
+        if (cm_account_session_fetch(service->ca_bundle_path,
+                                     service->timeout_seconds, &candidate) == 0 &&
+            pairing_make_device_uuid(candidate.device_id,
+                                     sizeof(candidate.device_id)) == 0) {
+            candidate.server_id = 21;
+            (void)snprintf(candidate.language, sizeof(candidate.language), "en");
+            (void)snprintf(candidate.locale, sizeof(candidate.locale), "AR");
+            auth_rc = 0;
+        }
+        memset(cloud_sid, 0, sizeof(cloud_sid));
         if (auth_rc != 0) {
             static const char rejected[] =
-                "CloudMoon no pudo validar la sesion de Google. "
-                "Abre CloudMoon en el telefono, inicia sesion y vuelve a vincular.";
+                "CloudMoon no valido el enlace. Abre un juego y copia la direccion completa que contiene ?sid=.";
             (void)send_response(fd, 401, "Unauthorized", "text/plain",
                                 rejected, sizeof(rejected) - 1);
             memset(&candidate, 0, sizeof(candidate));
@@ -421,7 +330,7 @@ static void handle_client(cm_pairing_service_t *service, int fd) {
             "<!doctype html><meta name='viewport' content='width=device-width'>"
             "<body style='background:#08111f;color:white;font:18px system-ui;padding:24px'>"
             "<h2>CloudMoon vinculada</h2>"
-            "<p>La sesion de Google se verifico correctamente. Ya puedes volver a tu PS4.</p>"
+            "<p>La sesión fue validada. Ya puedes volver a tu PS4.</p>"
             "</body>";
         (void)send_response(fd, 200, "OK", "text/html; charset=utf-8",
                             success, sizeof(success) - 1);
@@ -471,7 +380,7 @@ int cm_pairing_start(cm_pairing_service_t **out,
                      const char *ca_bundle_path,
                      unsigned timeout_seconds) {
     cm_pairing_service_t *service;
-    uint8_t random_bytes[CM_PAIR_NONCE_BYTES + CM_PAIR_KEY_BYTES];
+    uint8_t random_bytes[CM_PAIR_NONCE_BYTES];
     static const char hex[] = "0123456789ABCDEF";
     struct sockaddr_in address;
     int i, n;
@@ -504,20 +413,9 @@ int cm_pairing_start(cm_pairing_service_t **out,
         service->nonce[i * 2 + 1] = hex[random_bytes[i] & 15];
     }
     service->nonce[CM_PAIR_NONCE_BYTES * 2] = 0;
-    memcpy(service->pair_key, random_bytes + CM_PAIR_NONCE_BYTES,
-           CM_PAIR_KEY_BYTES);
-    for (i = 0; i < CM_PAIR_KEY_BYTES; ++i) {
-        service->pair_key_hex[i * 2] =
-            "0123456789abcdef"[(unsigned char)service->pair_key[i] >> 4];
-        service->pair_key_hex[i * 2 + 1] =
-            "0123456789abcdef"[(unsigned char)service->pair_key[i] & 15];
-    }
-    service->pair_key_hex[CM_PAIR_KEY_BYTES * 2] = 0;
-
     n = snprintf(service->url, sizeof(service->url),
-                 "http://%s:%d/pair/%s#k=%s",
-                 service->ip, CM_PAIR_PORT, service->nonce,
-                 service->pair_key_hex);
+                 "http://%s:%d/pair/%s",
+                 service->ip, CM_PAIR_PORT, service->nonce);
     if (n < 0 || (size_t)n >= sizeof(service->url) ||
         cm_qr_encode(service->url, &service->qr) < 0) {
         free(service);
@@ -549,7 +447,7 @@ int cm_pairing_start(cm_pairing_service_t **out,
 
     service->running = 1;
     (void)snprintf(service->status, sizeof(service->status),
-                   "Escanea el QR e inicia sesion en CloudMoon desde el telefono");
+                   "Escanea el QR, abre CloudMoon y pega el enlace de una partida");
     if (pthread_create(&service->thread, NULL, pairing_thread, service) != 0) {
         close(service->listen_fd);
         free(service);
