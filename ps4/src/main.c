@@ -5,6 +5,7 @@
 #include <orbis/CommonDialog.h>
 #include "account/cloudmoon_orbis_game.h"
 #include "catalog/cloudmoon_catalog.h"
+#include "account/cloudmoon_pairing.h"
 
 #include <orbis/Sysmodule.h>
 #include <orbis/UserService.h>
@@ -21,6 +22,7 @@ typedef struct {
     cm_catalog_t catalog;
     const char *game_names[CM_CATALOG_MAX_GAMES];
     cm_account_session_t account;
+    cm_pairing_service_t *pairing;
     int32_t psn_user_id;
     char api_host[128];
     char status[192];
@@ -274,6 +276,43 @@ static int start_password_login(cm_app_context_t *app,
     return 0;
 }
 
+static void sync_pairing_model(cm_app_context_t *app, cm_ui_model_t *model) {
+    const cm_qr_t *qr;
+    if (!app || !model || !app->pairing) return;
+    qr = cm_pairing_qr(app->pairing);
+    model->qr_modules = qr ? qr->modules : NULL;
+    model->qr_size = qr ? qr->size : 0;
+    model->link_url = cm_pairing_url(app->pairing);
+    model->status_text = cm_pairing_status(app->pairing);
+}
+
+static int app_tick(cm_ui_model_t *model, void *context) {
+    cm_app_context_t *app = (cm_app_context_t *)context;
+    cm_account_session_t linked;
+    if (!app || !model) return -1;
+    if (app->pairing && cm_pairing_take_account(app->pairing, &linked)) {
+        memcpy(&app->account, &linked, sizeof(app->account));
+        memset(&linked, 0, sizeof(linked));
+        app->session_linked = 1;
+        app->catalog_loaded = 0;
+        (void)snprintf(app->account_label, sizeof(app->account_label),
+                       "%.320s", app->account.email);
+        cm_pairing_stop(app->pairing);
+        app->pairing = NULL;
+        model->session_linked = 1;
+        model->account_label = app->account_label;
+        model->qr_modules = NULL;
+        model->qr_size = 0;
+        model->link_url = NULL;
+        (void)snprintf(app->status, sizeof(app->status),
+                       "Cuenta vinculada. Ya puedes abrir el catalogo.");
+        model->status_text = app->status;
+        return 0;
+    }
+    if (app->pairing) sync_pairing_model(app, model);
+    return 0;
+}
+
 static int handle_ui_action(cm_ui_action_t action,
                             cm_ui_model_t *model,
                             void *context) {
@@ -291,8 +330,18 @@ static int handle_ui_action(cm_ui_action_t action,
         return start_password_login(app, model);
 
     case CM_UI_ACTION_REQUEST_LINK:
-        model->login_email = app->login_email;
-        model->login_password_set = app->login_password[0] != 0;
+        if (!app->pairing) {
+            int pair_rc = cm_pairing_start(&app->pairing, CM_CA_BUNDLE_PATH,
+                                           CM_API_TIMEOUT_SECONDS);
+            if (pair_rc != 0) {
+                (void)snprintf(app->status, sizeof(app->status),
+                               "No se pudo iniciar la vinculacion local. Codigo: %d",
+                               pair_rc);
+                model->status_text = app->status;
+                return 0;
+            }
+        }
+        sync_pairing_model(app, model);
         return 0;
 
     case CM_UI_ACTION_OPEN_LIBRARY:
@@ -367,7 +416,7 @@ static void app_run(void) {
 
     for (;;) {
         int rc = cm_orbis_dashboard_run(&model, handle_ui_action,
-                                        NULL, &app);
+                                        app_tick, &app);
         if (rc == 1 && app.play_pending) {
             const cm_catalog_game_t *game =
                 &app.catalog.games[app.play_index];
