@@ -149,3 +149,57 @@ elif new not in text:
     raise SystemExit("usrsctp userspace dummy mutex block changed unexpectedly")
 userspace.write_text(text)
 PY
+
+
+# The Orbis SDK does not ship FreeBSD kernel-only interface headers. Keep
+# usrsctp in its userspace compatibility path and provide the loopback type
+# constant used by its userspace route helpers.
+python3 - "$USRSCTP_DIR/netinet/sctp_os_userspace.h" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+
+old = """#if defined(__FreeBSD__)
+#include <net/if_types.h>
+/* #include <net/if_var.h> was a 0 byte file.  causes struct mtx redefinition */
+#endif"""
+new = """#if defined(__FreeBSD__) && !defined(__ORBIS__)
+#include <net/if_types.h>
+/* #include <net/if_var.h> was a 0 byte file.  causes struct mtx redefinition */
+#endif
+#if defined(__ORBIS__) && !defined(IFT_LOOP)
+#define IFT_LOOP 0x18
+#endif"""
+if old in text:
+    text = text.replace(old, new, 1)
+elif new not in text:
+    raise SystemExit("usrsctp if_types include block changed unexpectedly")
+
+old_domain = """#if defined(__FreeBSD__)
+#include <sys/domain.h>
+#endif"""
+new_domain = """#if defined(__FreeBSD__) && !defined(__ORBIS__)
+#include <sys/domain.h>
+#endif"""
+if old_domain in text:
+    text = text.replace(old_domain, new_domain, 1)
+elif new_domain not in text:
+    raise SystemExit("usrsctp sys/domain include block changed unexpectedly")
+
+old_ipv6 = """#if defined(__FreeBSD__)
+#include <netinet6/in6_pcb.h>
+#include <netinet6/scope6_var.h>
+#endif"""
+new_ipv6 = """#if defined(__FreeBSD__) && !defined(__ORBIS__)
+#include <netinet6/in6_pcb.h>
+#include <netinet6/scope6_var.h>
+#endif"""
+if old_ipv6 in text:
+    text = text.replace(old_ipv6, new_ipv6, 1)
+elif new_ipv6 not in text:
+    raise SystemExit("usrsctp FreeBSD IPv6 kernel include block changed unexpectedly")
+
+path.write_text(text)
+PY
