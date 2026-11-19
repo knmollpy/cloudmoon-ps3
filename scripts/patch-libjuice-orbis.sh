@@ -81,38 +81,30 @@ path.write_text(text)
 PY
 
 
-TCP_SOURCE="${1:-vendor/libdatachannel/deps/libjuice/src/tcp.c}"
-test -f "$TCP_SOURCE"
-
-python3 - "$TCP_SOURCE" <<'PY'
+for SOURCE in \
+    vendor/libdatachannel/deps/libjuice/src/tcp.c \
+    vendor/libdatachannel/deps/libjuice/src/udp.c
+do
+    test -f "$SOURCE"
+    python3 - "$SOURCE" <<'PY'
 from pathlib import Path
 import sys
 
 path = Path(sys.argv[1])
 text = path.read_text()
-
 old = """\tctl_t nbio = 1;
-\tif (ioctlsocket(sock, FIONBIO, &nbio)) {
-\t\tJLOG_ERROR("Setting non-blocking mode on TCP socket failed, errno=%d", sockerrno);
-\t\tgoto error;
-\t}"""
+\tif (ioctlsocket(sock, FIONBIO, &nbio)) {"""
 new = """#if defined(__ORBIS__)
 \tint flags = fcntl(sock, F_GETFL, 0);
 \tif (flags < 0 || fcntl(sock, F_SETFL, flags | O_NONBLOCK) < 0) {
-\t\tJLOG_ERROR("Setting non-blocking mode on TCP socket failed, errno=%d", sockerrno);
-\t\tgoto error;
-\t}
 #else
 \tctl_t nbio = 1;
 \tif (ioctlsocket(sock, FIONBIO, &nbio)) {
-\t\tJLOG_ERROR("Setting non-blocking mode on TCP socket failed, errno=%d", sockerrno);
-\t\tgoto error;
-\t}
 #endif"""
-
-if old not in text and new not in text:
-    raise SystemExit("libjuice tcp nonblocking block changed unexpectedly")
-
-text = text.replace(old, new)
+if old in text:
+    text = text.replace(old, new)
+elif new not in text:
+    raise SystemExit(f"{path}: expected nonblocking socket block not found")
 path.write_text(text)
 PY
+done
