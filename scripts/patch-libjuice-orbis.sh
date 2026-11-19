@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-HEADER="\${1:-vendor/libdatachannel/deps/libjuice/src/thread.h}"
+HEADER="${1:-vendor/libdatachannel/deps/libjuice/src/thread.h}"
 test -f "$HEADER"
 
 python3 - "$HEADER" <<'PY'
