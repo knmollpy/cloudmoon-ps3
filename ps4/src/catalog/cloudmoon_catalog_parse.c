@@ -122,9 +122,17 @@ static int json_skip_value(json_cursor_t *c) {
     skip_ws(c);
     if (c->cursor >= c->end) return -1;
 
-    if (*c->cursor == '"' ) {
-        char scratch[2];
-        return json_string(c, scratch, sizeof(scratch));
+    if (*c->cursor == '"') {
+        int escaped = 0;
+        ++c->cursor;
+        while (c->cursor < c->end) {
+            char ch = *c->cursor++;
+            if (escaped) escaped = 0;
+            else if (ch == '\\') escaped = 1;
+            else if (ch == '"') return 0;
+            else if ((unsigned char)ch < 0x20) return -1;
+        }
+        return -1;
     }
     if (*c->cursor == '{' || *c->cursor == '[') {
         const char open = *c->cursor;
@@ -248,7 +256,7 @@ int cm_catalog_parse_json(const char *json, size_t length,
         root.end = json + length;
         root.cursor = json;
         if (json_key_value(root.cursor, length, "code", value,
-                           sizeof(value), &type) == 0 && !type)
+                           sizeof(value), &type) == 0)
             root_code = atoi(value);
     }
     if (root_code != 0)
