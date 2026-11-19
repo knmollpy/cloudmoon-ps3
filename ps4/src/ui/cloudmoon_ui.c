@@ -357,3 +357,58 @@ void cm_ui_draw(const cm_ui_surface_t *s, const cm_ui_state_t *st,
     text(s, 44, s->height - 22, 1, C_MUTED, "L1 / R1: SECCIONES     X: CONFIRMAR     O: VOLVER");
     text(s, s->width - 160, s->height - 22, 1, C_CYAN, "CLOUDMOON PS4");
 }
+
+
+/* Blend a dark scrim over the decoded game frame without adding touch controls. */
+static void blend_rect(const cm_ui_surface_t *s, int x, int y, int w, int h,
+                       uint32_t color, unsigned int alpha) {
+    int x0, y0, x1, y1, yy;
+    unsigned int sr = (color >> 16) & 255u;
+    unsigned int sg = (color >> 8) & 255u;
+    unsigned int sb = color & 255u;
+    if (!s || !s->pixels || s->pitch_pixels < s->width ||
+        w <= 0 || h <= 0) return;
+    if (alpha > 255u) alpha = 255u;
+    x0 = x < 0 ? 0 : x;
+    y0 = y < 0 ? 0 : y;
+    x1 = x + w > s->width ? s->width : x + w;
+    y1 = y + h > s->height ? s->height : y + h;
+    if (x0 >= x1 || y0 >= y1) return;
+    for (yy = y0; yy < y1; ++yy) {
+        uint32_t *row = s->pixels + (size_t)yy * (size_t)s->pitch_pixels;
+        int xx;
+        for (xx = x0; xx < x1; ++xx) {
+            uint32_t dst = row[xx];
+            unsigned int dr = (dst >> 16) & 255u;
+            unsigned int dg = (dst >> 8) & 255u;
+            unsigned int db = dst & 255u;
+            unsigned int inv = 255u - alpha;
+            unsigned int r = (sr * alpha + dr * inv + 127u) / 255u;
+            unsigned int g = (sg * alpha + dg * inv + 127u) / 255u;
+            unsigned int b = (sb * alpha + db * inv + 127u) / 255u;
+            row[xx] = 0xFF000000u | (r << 16) | (g << 8) | b;
+        }
+    }
+}
+
+void cm_ui_draw_game_menu_overlay(const cm_ui_surface_t *s) {
+    int w = 700, h = 260;
+    int x, y;
+    if (!s || !s->pixels || s->width < 640 || s->height < 360 ||
+        s->pitch_pixels < s->width) return;
+    if (w > s->width - 40) w = s->width - 40;
+    if (h > s->height - 40) h = s->height - 40;
+    x = (s->width - w) / 2;
+    y = (s->height - h) / 2;
+
+    blend_rect(s, 0, 0, s->width, s->height, 0xFF000000u, 132u);
+    rect(s, x, y, w, h, C_PANEL);
+    outline(s, x, y, w, h, C_CYAN);
+    text(s, x + 38, y + 28, 2, C_CYAN, "CLOUDMOON PS4");
+    text(s, x + 38, y + 68, 3, C_TEXT, "MENU DE SESION");
+    panel(s, x + 34, y + 116, w - 68, 64, 1);
+    centered_text(s, s->width / 2, y + 140, 2, C_GREEN,
+                  "SALIR DE LA SESION");
+    centered_text(s, s->width / 2, y + h - 42, 1, C_MUTED,
+                  "X: SALIR        O: CONTINUAR JUGANDO");
+}
