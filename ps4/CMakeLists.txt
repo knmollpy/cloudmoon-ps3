@@ -98,6 +98,14 @@ if(PS4)
     add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../vendor/libdatachannel"
                      "${CMAKE_CURRENT_BINARY_DIR}/libdatachannel")
 
+    # usrsctp's FreeBSD userspace code refers to _ALIGN from sys/param.h.
+    # OpenOrbis does not ship that BSD kernel header; supply the portable
+    # equivalent only to the SCTP target.
+    if(TARGET usrsctp)
+        target_compile_options(usrsctp PRIVATE
+            "-include${CMAKE_CURRENT_SOURCE_DIR}/src/compat/orbis_compat.h")
+    endif()
+
     set(OPUS_BUILD_SHARED_LIBRARY OFF CACHE BOOL "" FORCE)
     set(OPUS_BUILD_TESTING OFF CACHE BOOL "" FORCE)
     set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
