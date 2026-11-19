@@ -207,11 +207,13 @@ static void handle_client(cm_pairing_service_t *service, int fd) {
             cm_account_session_fetch(service->ca_bundle_path,
                                      service->timeout_seconds,
                                      &candidate) != 0) {
-            (void)send_response(fd, 400, "Bad Request", "text/plain",
-                                "CloudMoon rejected this session link. "
-                                "Make sure it contains a valid ?sid= value "
-                                "and that the game session is still active.",
-                                130);
+            {
+                static const char rejected[] =
+                    "CloudMoon rejected this session link. Make sure it "
+                    "contains a valid ?sid= value and the game session is active.";
+                (void)send_response(fd, 400, "Bad Request", "text/plain",
+                                   rejected, sizeof(rejected) - 1);
+            }
             return;
         }
 
@@ -250,6 +252,15 @@ static void *pairing_thread(void *argument) {
             if (fd < 0) {
                 if (errno == EINTR || errno == EAGAIN) continue;
                 break;
+            }
+            {
+                struct timeval client_timeout;
+                client_timeout.tv_sec = 6;
+                client_timeout.tv_usec = 0;
+                (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO,
+                                 &client_timeout, sizeof(client_timeout));
+                (void)setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO,
+                                 &client_timeout, sizeof(client_timeout));
             }
             handle_client(service, fd);
             shutdown(fd, SHUT_RDWR);
