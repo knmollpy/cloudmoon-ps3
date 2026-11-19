@@ -203,3 +203,38 @@ elif new_ipv6 not in text:
 
 path.write_text(text)
 PY
+
+
+# FreeBSD pthread naming is cosmetic. Orbis has no pthread_np.h, so omit
+# only this optional thread-name hook while keeping normal pthread behavior.
+python3 - "$USRSCTP_DIR/netinet/sctp_userspace.c" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+
+old_include = """#if defined(__FreeBSD__)
+#include <pthread_np.h>
+#endif"""
+new_include = """#if defined(__FreeBSD__) && !defined(__ORBIS__)
+#include <pthread_np.h>
+#endif"""
+if old_include in text:
+    text = text.replace(old_include, new_include, 1)
+elif new_include not in text:
+    raise SystemExit("usrsctp pthread_np include block changed unexpectedly")
+
+old_name = """#if defined(__FreeBSD__)
+\tpthread_set_name_np(pthread_self(), name);
+#endif"""
+new_name = """#if defined(__FreeBSD__) && !defined(__ORBIS__)
+\tpthread_set_name_np(pthread_self(), name);
+#endif"""
+if old_name in text:
+    text = text.replace(old_name, new_name, 1)
+elif new_name not in text:
+    raise SystemExit("usrsctp pthread thread-name block changed unexpectedly")
+
+path.write_text(text)
+PY
