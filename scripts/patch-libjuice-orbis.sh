@@ -36,7 +36,7 @@ path.write_text(text)
 PY
 
 
-TCP_SOURCE="\${1:-vendor/libdatachannel/deps/libjuice/src/tcp.c}"
+TCP_SOURCE="${1:-vendor/libdatachannel/deps/libjuice/src/tcp.c}"
 test -f "$TCP_SOURCE"
 
 python3 - "$TCP_SOURCE" <<'PY'
