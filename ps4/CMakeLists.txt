@@ -173,7 +173,6 @@ if(PS4)
         src/catalog/cloudmoon_catalog_fetch.c
         src/platform/orbis_dashboard.c
         src/platform/orbis_network.c
-        src/net/cloudmoon_orbis_libc_compat.c
         src/account/cloudmoon_pairing.c
         src/account/cloudmoon_orbis_connection.c
         src/account/cloudmoon_orbis_game.c
@@ -198,7 +197,7 @@ if(PS4)
     )
     target_compile_options(cloudmoon_ps4_orbis_platform PRIVATE -Wall -Wextra)
     # Link the standalone CloudMoon dashboard, pairing and game-streaming app.
-    add_executable(cloudmoon_ps4_app src/main.c)
+    add_executable(cloudmoon_ps4_app src/main.c src/net/cloudmoon_orbis_libc_compat.c)
     target_link_libraries(cloudmoon_ps4_app PRIVATE
         cloudmoon_ps4_orbis_platform
         SceSysmodule
