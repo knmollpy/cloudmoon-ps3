@@ -23,7 +23,10 @@ typedef enum {
     CM_UI_ACTION_OPEN_LIBRARY,
     CM_UI_ACTION_REQUEST_LINK,
     CM_UI_ACTION_PLAY_GAME,
-    CM_UI_ACTION_BACK
+    CM_UI_ACTION_BACK,
+    CM_UI_ACTION_EDIT_EMAIL,
+    CM_UI_ACTION_EDIT_PASSWORD,
+    CM_UI_ACTION_LOGIN
 } cm_ui_action_type_t;
 
 typedef struct {
@@ -56,6 +59,8 @@ typedef struct {
     const char *const *games;
     int game_count;
     int session_linked;
+    const char *login_email;
+    int login_password_set;
 
     /* A real pairing service may supply a QR matrix. No placeholder QR is
        generated: qr_modules must contain qr_size * qr_size 0/1 values. */
@@ -70,6 +75,7 @@ typedef struct {
     int home_focus;
     int selected_game;
     int selected_setting;
+    int link_focus;
 } cm_ui_state_t;
 
 void cm_ui_init(cm_ui_state_t *state);
