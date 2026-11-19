@@ -8,6 +8,8 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 
 add_library(cloudmoon_ps4_ui STATIC
     src/ui/cloudmoon_ui.c
+    src/qr/qrcodegen.c
+    src/qr/cloudmoon_qr.c
 )
 
 # Platform-independent CloudMoon signalling/protocol code reused by the PS4 port.
@@ -34,7 +36,7 @@ add_library(cloudmoon_account_core STATIC
 target_include_directories(cloudmoon_account_core PUBLIC src/account ../src)
 target_link_libraries(cloudmoon_account_core PUBLIC cloudmoon_protocol_core)
 target_compile_options(cloudmoon_account_core PRIVATE -Wall -Wextra -Werror)
-target_include_directories(cloudmoon_ps4_ui PUBLIC src/ui)
+target_include_directories(cloudmoon_ps4_ui PUBLIC src/ui src/qr)
 target_compile_options(cloudmoon_ps4_ui PRIVATE -Wall -Wextra -Werror)
 
 
@@ -169,6 +171,12 @@ if(PS4)
         cloudmoon_catalog_parse
         datachannel-static
         opus
+        SceNet
+        SceNetCtl
+        ScePad
+        SceAudioOut
+        SceVideoOut
+        SceUserService
     )
     target_compile_options(cloudmoon_ps4_orbis_platform PRIVATE -Wall -Wextra)
 endif()
