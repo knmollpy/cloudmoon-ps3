@@ -159,10 +159,9 @@ cm_ui_action_t cm_ui_input(cm_ui_state_t *state, unsigned int keys,
             return action(CM_UI_ACTION_BACK, -1);
         }
         if (count == 0) {
-            if (keys & CM_UI_KEY_CROSS) {
-                state->view = CM_UI_LINK;
-                return action(CM_UI_ACTION_REQUEST_LINK, -1);
-            }
+            /* An empty catalog is informational only. Linking is available
+               exclusively from the VINCULAR tab or the home login entry;
+               CROSS must never launch the login IME from this screen. */
             break;
         }
         if (keys & CM_UI_KEY_LEFT)  --state->selected_game;
