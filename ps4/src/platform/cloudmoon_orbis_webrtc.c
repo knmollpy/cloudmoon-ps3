@@ -319,12 +319,10 @@ int cm_orbis_webrtc_create(cm_orbis_webrtc_t **out,
                            cm_cloudmoon_client_t *client,
                            int width, int height) {
     static const char *ice_servers[] = {
-        "stun:stun.ipfire.org:3478",
-        "stun:global.stun.twilio.com:19302",
+        "stun:stun.nenly.cn:53006",
         "stun:stun.l.google.com:19302"
     };
     rtcConfiguration configuration;
-    rtcTrackInit video_init, audio_init;
     cm_orbis_webrtc_t *rtc;
 
     if (!out || !client || width <= 0 || height <= 0)
@@ -368,22 +366,6 @@ int cm_orbis_webrtc_create(cm_orbis_webrtc_t **out,
         rtcSetStateChangeCallback(rtc->pc, cm_rtc_state_changed) < 0 ||
         rtcSetDataChannelCallback(rtc->pc, cm_rtc_data_channel) < 0 ||
         rtcSetTrackCallback(rtc->pc, cm_rtc_track) < 0)
-        goto fail;
-
-    memset(&video_init, 0, sizeof(video_init));
-    video_init.direction = RTC_DIRECTION_RECVONLY;
-    video_init.codec = RTC_CODEC_H264;
-    video_init.payloadType = 100;
-    video_init.mid = "0";
-    if (rtcAddTrackEx(rtc->pc, &video_init) < 0)
-        goto fail;
-
-    memset(&audio_init, 0, sizeof(audio_init));
-    audio_init.direction = RTC_DIRECTION_RECVONLY;
-    audio_init.codec = RTC_CODEC_OPUS;
-    audio_init.payloadType = 111;
-    audio_init.mid = "1";
-    if (rtcAddTrackEx(rtc->pc, &audio_init) < 0)
         goto fail;
 
     rtc->data_channel = rtcCreateDataChannel(rtc->pc, "config");
