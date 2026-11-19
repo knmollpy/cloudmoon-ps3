@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef struct {
@@ -309,7 +310,8 @@ int cm_catalog_parse_json(const char *json, size_t length,
                        "title", game.title, sizeof(game.title)) == 0 &&
             get_string(object_start, (size_t)(object_end - object_start),
                        "package_name", game.package_name,
-                       sizeof(game.package_name)) == 0) {
+                       sizeof(game.package_name)) == 0 &&
+            game.title[0] != 0 && game.package_name[0] != 0) {
             (void)get_string(object_start,
                              (size_t)(object_end - object_start),
                              "icon_url", game.icon_url,
