@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <orbis/libkernel.h>
 
 #define CM_ORBIS_SDP_MAX 16384
 #define CM_ORBIS_CANDIDATE_MAX 2048
@@ -264,6 +265,10 @@ static void *cm_orbis_input_thread(void *argument) {
     cm_orbis_webrtc_t *rtc = (cm_orbis_webrtc_t *)argument;
     char messages[512];
     unsigned int stats_frame = 0;
+    uint64_t menu_combo_start = 0;
+    int menu_combo_latched = 0;
+    int menu_open = 0;
+    int suppress_until_neutral = 0;
 
     if (cm_orbis_input_init() != 0) {
         __sync_lock_test_and_set(&rtc->running, 0);
@@ -279,27 +284,74 @@ static void *cm_orbis_input_thread(void *argument) {
         size_t offset = 0;
 
         if (cm_orbis_gamepad_read(&raw) == 0 && raw.connected) {
-            if (raw.options && raw.circle) {
-                __sync_lock_test_and_set(&rtc->running, 0);
-                cm_cloudmoon_client_request_stop();
-                break;
+            /*
+             * OpenOrbis' normal scePadReadState interface does not expose the
+             * physical SHARE button. The supported fallback is OPTIONS plus
+             * a press of the touchpad click, held together for 800 ms.
+             * Consume that chord so it never leaks into the remote game.
+             */
+            int menu_combo = raw.options && raw.touchpad;
+            uint64_t now = sceKernelGetProcessTime();
+
+            if (menu_combo) {
+                if (!menu_combo_start)
+                    menu_combo_start = now;
+                if (!menu_combo_latched && now >= menu_combo_start &&
+                    now - menu_combo_start >= 800000u) {
+                    menu_combo_latched = 1;
+                    menu_open = 1;
+                    suppress_until_neutral = 0;
+                    cm_input_reset(&rtc->input_state);
+                    cm_orbis_h264_set_game_menu(1);
+                }
+            } else {
+                menu_combo_start = 0;
+                menu_combo_latched = 0;
             }
 
-            cm_pad_to_cloudmoon(&raw, &pad);
-            length = cm_input_translate(&rtc->layout, &rtc->input_state,
-                                        &pad, messages, sizeof(messages));
             dc = __sync_fetch_and_add(&rtc->data_channel, 0);
-            if (length > 0 && dc >= 0 && rtcIsOpen(dc)) {
-                while (offset < (size_t)length) {
-                    size_t message_length = strlen(messages + offset);
-                    if (message_length == 0)
-                        break;
-                    (void)rtcSendMessage(dc, messages + offset,
-                                         (int)message_length);
-                    offset += message_length + 1u;
+
+            if (menu_open) {
+                /* The overlay owns controller input until closed or exited. */
+                if (!menu_combo && raw.cross) {
+                    cm_orbis_h264_set_game_menu(0);
+                    menu_open = 0;
+                    __sync_lock_test_and_set(&rtc->running, 0);
+                    cm_cloudmoon_client_request_stop();
+                    break;
                 }
-            } else if (dc < 0 || !rtcIsOpen(dc)) {
+                if (!menu_combo && raw.circle) {
+                    cm_orbis_h264_set_game_menu(0);
+                    menu_open = 0;
+                    suppress_until_neutral = 1;
+                    cm_input_reset(&rtc->input_state);
+                } else {
+                    cm_input_reset(&rtc->input_state);
+                }
+            } else if (menu_combo) {
                 cm_input_reset(&rtc->input_state);
+            } else if (suppress_until_neutral) {
+                /* Do not pass the menu-closing button through to the game. */
+                if (!raw.cross && !raw.circle && !raw.options && !raw.touchpad)
+                    suppress_until_neutral = 0;
+                else
+                    cm_input_reset(&rtc->input_state);
+            } else {
+                cm_pad_to_cloudmoon(&raw, &pad);
+                length = cm_input_translate(&rtc->layout, &rtc->input_state,
+                                            &pad, messages, sizeof(messages));
+                if (length > 0 && dc >= 0 && rtcIsOpen(dc)) {
+                    while (offset < (size_t)length) {
+                        size_t message_length = strlen(messages + offset);
+                        if (message_length == 0)
+                            break;
+                        (void)rtcSendMessage(dc, messages + offset,
+                                             (int)message_length);
+                        offset += message_length + 1u;
+                    }
+                } else if (dc < 0 || !rtcIsOpen(dc)) {
+                    cm_input_reset(&rtc->input_state);
+                }
             }
 
             if (++stats_frame >= 60u) {
@@ -311,6 +363,7 @@ static void *cm_orbis_input_thread(void *argument) {
         usleep(16000);
     }
 
+    cm_orbis_h264_set_game_menu(0);
     cm_orbis_input_shutdown();
     return NULL;
 }
