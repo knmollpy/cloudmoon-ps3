@@ -74,7 +74,7 @@ int main(void) {
     assert(state.view == CM_UI_LIBRARY);
 
     result = cm_ui_input(&state, CM_UI_KEY_R1, &model);
-    assert(result.type == CM_UI_ACTION_NONE);
+    assert(result.type == CM_UI_ACTION_REQUEST_LINK);
     assert(state.view == CM_UI_LINK);
     result = cm_ui_input(&state, CM_UI_KEY_CROSS, &model);
     assert(result.type == CM_UI_ACTION_NONE);
