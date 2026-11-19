@@ -75,7 +75,7 @@ jobs:
           curl --fail --location --retry 3 https://curl.se/ca/cacert.pem -o assets/cacert.pem
           test -s assets/cacert.pem
 
-      - name: Cross-compile and link CloudMoon PS4 preview
+      - name: Cross-compile and link CloudMoon PS4 application
         run: cmake --build build-ps4-modules --verbose
 
       - name: Package installable CloudMoon PS4 app PKG
