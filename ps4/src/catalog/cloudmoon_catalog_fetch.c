@@ -780,7 +780,7 @@ int cm_account_session_prepare_game(const char *ca_bundle_path,
     rc = cm_api_request_json("GET", "/phone/list", account->token,
                              account->device_id,
                              account->language[0] ? account->language : "en",
-                             account->locale[0] ? account->locale : "ar",
+                             account->locale[0] ? account->locale : "AR",
                              NULL, ca_bundle_path, timeout_seconds,
                              &response, &response_length);
     if (rc != 0 || !cm_api_success(response, response_length) ||
