@@ -13,6 +13,16 @@
 #define CM_HTTP_HEADER_MAX 16384u
 #define CM_API_HOST_COUNT 5
 
+static int contains_case_range(const char *begin, const char *end, const char *needle) {
+    size_t n = strlen(needle);
+    const char *p;
+    if ((size_t)(end - begin) < n) return 0;
+    for (p = begin; p + n <= end; ++p)
+        if (strncasecmp(p, needle, n) == 0) return 1;
+    return 0;
+}
+
+
 static const char *const s_api_hosts[CM_API_HOST_COUNT] = {
     "api.cloudmoon.cloudbatata.com",
     "api.prod.cloudmoonapp.com",
@@ -78,7 +88,7 @@ static int is_chunked(const char *headers, size_t length) {
         if (!line_end || line_end > end) line_end = end;
         if ((size_t)(line_end - p) >= 18 &&
             strncasecmp(p, "Transfer-Encoding:", 18) == 0 &&
-            strcasestr(p, "chunked") && strcasestr(p, "chunked") < line_end)
+            contains_case_range(colon + 1, line_end, "chunked"))
             return 1;
         p = line_end + (line_end < end ? 2 : 0);
     }
@@ -140,7 +150,7 @@ static int http_get_json(const char *host, const char *path,
         return -1;
     *body_out = NULL;
     *body_length_out = 0;
-    response = (char *)malloc(CM_HTTP_RESPONSE_MAX + CM_HTTP_HEADER_MAX);
+    response = (char *)malloc(CM_HTTP_RESPONSE_MAX + CM_HTTP_HEADER_MAX + 1u);
     if (!response) return -1;
 
     request_length = snprintf(request, sizeof(request),
@@ -166,6 +176,7 @@ static int http_get_json(const char *host, const char *path,
             goto done;
         memcpy(response + response_length, block, (size_t)n);
         response_length += (size_t)n;
+        response[response_length] = 0;
 
         if (!header_length) {
             size_t offset;
@@ -235,11 +246,10 @@ static int ping_host(const char *host, const char *ca_bundle,
     char *body = NULL;
     size_t length = 0;
     int rc = http_get_json(host, "/_ping", ca_bundle, timeout, &body, &length);
-    if (rc == 0) {
-        if (length == 0) rc = -1;
-        else if (!strstr(body, "pong") && !strstr(body, "success") &&
-                 !strstr(body, "\"code\"")) rc = -1;
-    }
+    if (rc == 0 &&
+        (length == 0 || (!strstr(body, "pong") && !strstr(body, "success") &&
+                         !strstr(body, "\"code\""))))
+        rc = -1;
     free(body);
     return rc;
 }
@@ -256,8 +266,7 @@ int cm_catalog_fetch(const char *ca_bundle_path, unsigned timeout_seconds,
     for (i = 0; i < CM_API_HOST_COUNT; ++i) {
         char *body = NULL;
         size_t body_length = 0;
-        char path[64];
-        int result;
+            int result;
 
         if (ping_host(s_api_hosts[i], ca_bundle_path, timeout_seconds) != 0)
             continue;
