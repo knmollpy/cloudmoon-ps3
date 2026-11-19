@@ -5,10 +5,12 @@ on:
     branches: [ps4-port]
     paths:
       - "ps4/**"
+      - "scripts/**"
       - ".github/workflows/ps4-orbis-build.yml"
   pull_request:
     paths:
       - "ps4/**"
+      - "scripts/**"
   workflow_dispatch:
 
 concurrency:
