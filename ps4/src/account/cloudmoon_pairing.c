@@ -101,6 +101,51 @@ static int hex_decode(const char *input, uint8_t *output, size_t capacity) {
     return (int)(length / 2u);
 }
 
+static int decode_form_payload(const char *body, size_t body_length,
+                               char *output, size_t output_capacity) {
+    static const char key[] = "payload=";
+    size_t i = 0, used = 0;
+    int found = 0;
+    if (!body || !output || output_capacity == 0) return -1;
+    while (i < body_length) {
+        size_t start = i, end, key_length;
+        while (i < body_length && body[i] != '&') ++i;
+        end = i;
+        if (i < body_length) ++i;
+        key_length = sizeof(key) - 1u;
+        if (end - start < key_length ||
+            memcmp(body + start, key, key_length) != 0)
+            continue;
+        if (found) return -1;
+        found = 1;
+        start += key_length;
+        while (start < end) {
+            unsigned char ch = (unsigned char)body[start++];
+            if (ch == '+') ch = ' ';
+            else if (ch == '%') {
+                int hi, lo;
+                if (end - start < 2) return -1;
+                hi = body[start] >= '0' && body[start] <= '9' ? body[start] - '0' :
+                     body[start] >= 'a' && body[start] <= 'f' ? body[start] - 'a' + 10 :
+                     body[start] >= 'A' && body[start] <= 'F' ? body[start] - 'A' + 10 : -1;
+                lo = body[start + 1] >= '0' && body[start + 1] <= '9' ? body[start + 1] - '0' :
+                     body[start + 1] >= 'a' && body[start + 1] <= 'f' ? body[start + 1] - 'a' + 10 :
+                     body[start + 1] >= 'A' && body[start + 1] <= 'F' ? body[start + 1] - 'A' + 10 : -1;
+                if (hi < 0 || lo < 0) return -1;
+                ch = (unsigned char)((hi << 4) | lo);
+                start += 2;
+            }
+            if (ch == 0 || ch < 0x20 || ch == 0x7f ||
+                used + 1u >= output_capacity)
+                return -1;
+            output[used++] = (char)ch;
+        }
+    }
+    if (!found || used == 0) return -1;
+    output[used] = 0;
+    return (int)used;
+}
+
 static int decrypt_pair_payload(const cm_pairing_service_t *service,
                                 const char *envelope, size_t envelope_length,
                                 char *plaintext, size_t plaintext_capacity) {
@@ -303,20 +348,23 @@ static void handle_client(cm_pairing_service_t *service, int fd) {
     request[header_length + content_length] = 0;
 
     {
-        char plaintext[6144], provider[16], google_token[4097];
-        char email[321], account_password[1025], language[8], locale[8];
-        int server_id = 0, plain_length, auth_rc = -1;
+        char envelope[7000], plaintext[6144], provider[32];
+        char cloud_token[1025], cloud_user_id[129], language[8], locale[8];
+        int server_id = 21, envelope_length, plain_length, auth_rc = -1;
         cm_account_session_t candidate;
 
+        memset(envelope, 0, sizeof(envelope));
         memset(plaintext, 0, sizeof(plaintext));
-        memset(google_token, 0, sizeof(google_token));
-        memset(email, 0, sizeof(email));
-        memset(account_password, 0, sizeof(account_password));
+        memset(cloud_token, 0, sizeof(cloud_token));
+        memset(cloud_user_id, 0, sizeof(cloud_user_id));
         memset(&candidate, 0, sizeof(candidate));
-        plain_length = decrypt_pair_payload(service,
-                                             request + header_length,
-                                             content_length,
-                                             plaintext, sizeof(plaintext));
+
+        envelope_length = decode_form_payload(request + header_length,
+                                              content_length,
+                                              envelope, sizeof(envelope));
+        plain_length = envelope_length < 0 ? -1 :
+            decrypt_pair_payload(service, envelope, (size_t)envelope_length,
+                                  plaintext, sizeof(plaintext));
         if (plain_length < 0 ||
             cm_json_get_string(plaintext, (size_t)plain_length,
                                "provider", provider, sizeof(provider)) < 0 ||
@@ -324,43 +372,37 @@ static void handle_client(cm_pairing_service_t *service, int fd) {
                                 "server_id", &server_id) != 0) {
             (void)send_response(fd, 400, "Bad Request", "text/plain",
                                 "Invalid or expired secure authorization", 40);
+            memset(envelope, 0, sizeof(envelope));
             memset(plaintext, 0, sizeof(plaintext));
             return;
         }
         if (cm_json_get_string(plaintext, (size_t)plain_length,
                                "language", language, sizeof(language)) < 0)
-            (void)snprintf(language, sizeof(language), "es");
+            (void)snprintf(language, sizeof(language), "en");
         if (cm_json_get_string(plaintext, (size_t)plain_length,
                                "locale", locale, sizeof(locale)) < 0)
             (void)snprintf(locale, sizeof(locale), "AR");
 
-        if (strcmp(provider, "google") == 0 &&
+        if (strcmp(provider, "cloudmoon_token") == 0 &&
             cm_json_get_string(plaintext, (size_t)plain_length,
-                               "google_id_token", google_token,
-                               sizeof(google_token)) >= 0) {
-            auth_rc = cm_account_session_authenticate(
+                               "token", cloud_token, sizeof(cloud_token)) >= 0 &&
+            cm_json_get_string(plaintext, (size_t)plain_length,
+                               "user_id", cloud_user_id,
+                               sizeof(cloud_user_id)) >= 0) {
+            auth_rc = cm_account_session_import_token(
                 service->ca_bundle_path, service->timeout_seconds,
-                "google", google_token, NULL, NULL, server_id,
-                language, locale, &candidate);
-        } else if (strcmp(provider, "password") == 0 &&
-                   cm_json_get_string(plaintext, (size_t)plain_length,
-                                      "email", email, sizeof(email)) >= 0 &&
-                   cm_json_get_string(plaintext, (size_t)plain_length,
-                                      "password", account_password,
-                                      sizeof(account_password)) >= 0) {
-            auth_rc = cm_account_session_authenticate(
-                service->ca_bundle_path, service->timeout_seconds,
-                "password", NULL, email, account_password, server_id,
+                cloud_token, cloud_user_id, server_id,
                 language, locale, &candidate);
         }
+
+        memset(envelope, 0, sizeof(envelope));
         memset(plaintext, 0, sizeof(plaintext));
-        memset(google_token, 0, sizeof(google_token));
-        memset(account_password, 0, sizeof(account_password));
-        memset(email, 0, sizeof(email));
+        memset(cloud_token, 0, sizeof(cloud_token));
+        memset(cloud_user_id, 0, sizeof(cloud_user_id));
         if (auth_rc != 0) {
             static const char rejected[] =
-                "CloudMoon no acepto las credenciales de esta cuenta. "
-                "Comprueba el acceso y la region seleccionada.";
+                "CloudMoon no pudo validar la sesion de Google. "
+                "Abre CloudMoon en el telefono, inicia sesion y vuelve a vincular.";
             (void)send_response(fd, 401, "Unauthorized", "text/plain",
                                 rejected, sizeof(rejected) - 1);
             memset(&candidate, 0, sizeof(candidate));
@@ -376,9 +418,10 @@ static void handle_client(cm_pairing_service_t *service, int fd) {
 
     {
         static const char success[] =
-            "Cuenta CloudMoon vinculada correctamente. Ya puedes volver a la PS4.";
-        (void)send_response(fd, 200, "OK", "text/plain; charset=utf-8",
-                            success, sizeof(success) - 1);
+            "Cuenta CloudMoon de Google vinculada correctamente. Ya puedes volver a la PS4.";
+        (void)send_response(fd, 200, "OK", "text/html; charset=utf-8",
+                            "<!doctype html><meta name='viewport' content='width=device-width'><body style='background:#08111f;color:white;font:18px system-ui;padding:24px'><h2>CloudMoon vinculada</h2><p>La sesion de Google se verifico correctamente. Ya puedes volver a tu PS4.</p></body>",
+                            sizeof("<!doctype html><meta name='viewport' content='width=device-width'><body style='background:#08111f;color:white;font:18px system-ui;padding:24px'><h2>CloudMoon vinculada</h2><p>La sesion de Google se verifico correctamente. Ya puedes volver a tu PS4.</p></body>") - 1);
     }
 }
 
