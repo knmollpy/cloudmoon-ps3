@@ -183,11 +183,17 @@ static void cm_rtc_video_frame(int track, const char *data, int size,
                                const rtcFrameInfo *info, void *context) {
     cm_orbis_webrtc_t *rtc = (cm_orbis_webrtc_t *)context;
     (void)track;
-    (void)info;
+    uint64_t pts_us = 0;
+    if (info) {
+        if (info->timestampSeconds >= 0.0)
+            pts_us = (uint64_t)(info->timestampSeconds * 1000000.0);
+        else
+            pts_us = ((uint64_t)info->timestamp * 1000000ULL) / 90000ULL;
+    }
     if (!rtc || !data || size <= 0 ||
         __sync_fetch_and_add(&rtc->closing, 0))
         return;
-    if (cm_orbis_h264_submit((const uint8_t *)data, (size_t)size) < 0) {
+    if (cm_orbis_h264_submit((const uint8_t *)data, (size_t)size, pts_us) < 0) {
         /* A damaged access unit is recoverable; next IDR can resynchronize. */
         return;
     }
