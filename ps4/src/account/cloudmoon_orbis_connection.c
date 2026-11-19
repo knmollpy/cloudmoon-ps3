@@ -25,7 +25,7 @@ int cm_orbis_cloudmoon_run_account(const cm_account_session_t *account,
 
     if (!cm_account_is_ready(account) || !ca_bundle_path ||
         !ca_bundle_path[0] || timeout_seconds == 0 ||
-        !game_package || !game_package[0]
+        !game_package || !game_package[0])
         return -1;
 
     if (cm_orbis_random_init() != 0)
