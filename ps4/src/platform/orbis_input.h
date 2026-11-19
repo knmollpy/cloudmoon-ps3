@@ -8,7 +8,7 @@ typedef struct {
     uint8_t cross, circle, square, triangle;
     uint8_t l1, r1, l2, r2;
     uint8_t up, down, left, right;
-    uint8_t options, connected;
+    uint8_t options, touchpad, connected;
 } cm_orbis_gamepad_state_t;
 
 int cm_orbis_input_init(void);
