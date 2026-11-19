@@ -2,6 +2,7 @@
 
 #include "cloudmoon_orbis_connection.h"
 #include "../platform/cloudmoon_orbis_webrtc.h"
+#include "../catalog/cloudmoon_catalog.h"
 
 #include <string.h>
 
@@ -47,10 +48,20 @@ int cm_orbis_cloudmoon_play_account(const cm_account_session_t *account,
                                     const char *ca_bundle_path,
                                     unsigned timeout_seconds) {
     cm_orbis_game_context_t game;
+    cm_account_session_t prepared;
     int result;
 
+    if (!account || !game_package || !game_package[0])
+        return -1;
+    memcpy(&prepared, account, sizeof(prepared));
+    if (cm_account_session_prepare_game(ca_bundle_path, timeout_seconds,
+                                        &prepared, game_package) != 0) {
+        memset(&prepared, 0, sizeof(prepared));
+        return -3;
+    }
+
     memset(&game, 0, sizeof(game));
-    result = cm_orbis_cloudmoon_run_account(account, game_package,
+    result = cm_orbis_cloudmoon_run_account(&prepared, game_package,
                                             ca_bundle_path,
                                             timeout_seconds,
                                             cm_orbis_game_signal, &game);
@@ -59,5 +70,6 @@ int cm_orbis_cloudmoon_play_account(const cm_account_session_t *account,
         cm_orbis_webrtc_close(game.webrtc);
         game.webrtc = NULL;
     }
+    memset(&prepared, 0, sizeof(prepared));
     return game.failed ? -2 : result;
 }
