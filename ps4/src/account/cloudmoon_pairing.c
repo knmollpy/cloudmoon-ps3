@@ -147,8 +147,6 @@ static void handle_client(cm_pairing_service_t *service, int fd) {
     char method[8], path[256];
     const char *header_end;
     size_t used = 0, content_length = 0, header_length;
-    int n;
-
     while (used < CM_PAIR_REQUEST_MAX) {
         ssize_t got = recv(fd, request + used, CM_PAIR_REQUEST_MAX - used, 0);
         if (got < 0 && errno == EINTR) continue;
@@ -182,6 +180,14 @@ static void handle_client(cm_pairing_service_t *service, int fd) {
         content_length == 0) {
         (void)send_response(fd, 400, "Bad Request", "text/plain",
                             "Invalid pairing request", 24);
+        return;
+    }
+
+    /* Reserve one byte for the terminating NUL before receiving the body. */
+    if (header_length >= CM_PAIR_REQUEST_MAX ||
+        content_length > CM_PAIR_REQUEST_MAX - header_length - 1u) {
+        (void)send_response(fd, 413, "Request Too Large", "text/plain",
+                            "Pairing body too large", 23);
         return;
     }
 
