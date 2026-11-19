@@ -29,14 +29,15 @@ The PS4 build now includes the portable CloudMoon signalling modules:
 - Coordinator discovery and Android instance ID decoding: cloudmoon_discovery.c.
 - WebSocket transport: cloudmoon_ws.c and cloudmoon_ws_tls.c.
 - PS4 TLS: Mbed TLS 3.6.5 with required certificate-chain and hostname verification, TLS 1.2, and an explicit Orbis entropy source. The backend is cross-compiled, but network operation has not yet been tested on a console.
-- Account authentication: the console generates a one-time local QR page. The phone authorizes with the CloudMoon web client's Google Identity Services client; the short-lived Google ID token is encrypted with an ephemeral per-pairing AES-CBC/HMAC key in the QR fragment and submitted to the PS4 over the local network. The PS4 validates the Google token through CloudMoon's official `/login/google` API over verified TLS and keeps only the resulting CloudMoon account token.
+- Account authentication: the console generates a one-time local QR page. The phone can authorize with the CloudMoon web client's Google Identity Services client or with a CloudMoon email/password login. The short-lived Google ID token or CloudMoon credentials are encrypted with an ephemeral per-pairing AES-CBC/HMAC key in the QR fragment and submitted to the PS4 over the local network. The PS4 validates them through CloudMoon's `/login/google` or `/login/pwd` API over verified TLS and keeps only the resulting CloudMoon account token.
 - Remote phone session: after account authorization, the PS4 calls CloudMoon `/phone/list` to get the account's cloud-phone ID and `/phone/connect` for the selected game and region, then decodes the returned `android_instance_id` to derive the coordinator Socket.IO endpoint.
 - Session-to-client bridge: the authenticated account and newly-created game instance supply the coordinator data used to register a 1280×720 CloudMoon client and start the coordinator WebSocket loop from a worker thread.
 - The catalogue fetcher calls the CloudMoon game-list API and the parser keeps active mobile packages. The source integration is present; authenticated/personalized filtering and real-console API behaviour still need verification.
 
 The QR is a local-network hand-off; it does not use an undocumented CloudMoon cloud pairing endpoint:
 - Google authentication is performed by Google's own Identity Services button. The PS4 never asks for or stores a Google password.
-- The PS4 sends the returned Google ID token to CloudMoon's own login API over verified TLS; the local hand-off is protected by a one-time nonce and an ephemeral AES-CBC/HMAC key.
+- A separate CloudMoon email/password option is available for accounts that have a CloudMoon password configured; credentials are not retained after the official HTTPS login request.
+- The local hand-off is protected by a one-time nonce and an ephemeral AES-CBC/HMAC key. The phone-to-console page is still served over the local network; active-LAN threat testing remains pending.
 - The current CloudMoon Google OAuth client may restrict allowed browser origins. The Google button must be tested from the local PS4 pairing page; if Google rejects the local origin, CloudMoon needs to authorize this origin or provide a device-code flow. Google auth on a physical phone/PS4 has not yet been verified.
 
 ## Platform port plan
