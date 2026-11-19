@@ -29,25 +29,26 @@ The PS4 build now includes the portable CloudMoon signalling modules:
 - Coordinator discovery and Android instance ID decoding: cloudmoon_discovery.c.
 - WebSocket transport: cloudmoon_ws.c and cloudmoon_ws_tls.c.
 - PS4 TLS: Mbed TLS 3.6.5 with required certificate-chain and hostname verification, TLS 1.2, and an explicit Orbis entropy source. The backend is cross-compiled, but network operation has not yet been tested on a console.
-- Session import: the PS4 parser accepts only HTTPS links from web.cloudmoonapp.com with token, email, game, userid and android_instance_id fields. Duplicate fields, fragments masquerading as query fields and malformed coordinator data are rejected.
-- Session-to-client bridge: a validated session creates a 1280×720 CloudMoon client registration and starts the coordinator WebSocket loop from a worker thread.
+- Session import: the console generates a one-time QR for a local PS4 pairing page. The phone opens that page and submits an active CloudMoon web-session URL; the console accepts only HTTPS links from web.cloudmoonapp.com with a unique sid, then exchanges that sid with CloudMoon's API to obtain the token, game, user and Android instance fields. Malformed URLs and duplicate sid fields are rejected.
+- Session-to-client bridge: the validated session supplies the account and coordinator data used to register a 1280×720 CloudMoon client and start the coordinator WebSocket loop from a worker thread.
+- The catalogue fetcher calls the CloudMoon game-list API and the parser keeps active mobile packages. The source integration is present; authenticated/personalized filtering and real-console API behaviour still need verification.
 
-CloudMoon's public material documents the browser session fields and coordinator signalling flow, but no general-purpose official QR device-pairing endpoint has been verified. Therefore:
+The QR is a local-network hand-off, not an invented CloudMoon cloud pairing endpoint:
 - The console does not ask for the user's Google password or CloudMoon password.
 - NVIDIA/GeForce NOW OAuth and Sunshine pairing are not substituted.
-- The QR flow and phone-to-console hand-off are still pending. The frontend will not display a fake QR.
+- The phone must already be signed into CloudMoon and have an active game-session URL to paste. The local QR page uses a nonce path; phone-to-console validation still needs testing on the PS4 and phone on the same LAN.
 
 ## Platform port plan
 
 1. [x] Independent CloudMoon dashboard and navigation.
 2. [x] Orbis DualShock 4 input and VideoOut framebuffer adapters, cross-compiled with OpenOrbis.
-3. [x] Portable CloudMoon protocol/client, WebSocket and Mbed TLS backend are present in the PS4 build graph; Orbis integration still needs CI and console verification.
+3. [x] Portable CloudMoon protocol/client, WebSocket and Mbed TLS backend are in the PS4 build graph; successful Orbis compilation and console TLS verification remain pending.
 4. [ ] Verify coordinator TLS/WebSocket registration on the physical 13.52 console.
-5. [ ] Complete and verify the libdatachannel WebRTC callbacks, ICE/DTLS/SRTP and DataChannel input path.
-6. [ ] Add H.264 decode and present streaming frames through VideoOut.
-7. [ ] Add Opus output and full DualShock 4 touch/button mapping.
-8. [ ] Implement the real phone/session hand-off and dynamic catalog retrieval.
-9. [ ] Build and validate the installable preview PKG, then test installation on firmware 13.52.
+5. [x] Implement the libdatachannel WebRTC callbacks, ICE/DTLS/SRTP and DataChannel input path; end-to-end streaming validation remains pending.
+6. [x] Implement the H.264 decoder and VideoOut presentation path; hardware validation remains pending.
+7. [x] Implement Opus output and DualShock 4 input mapping; hardware latency and control validation remain pending.
+8. [x] Implement local QR/session hand-off and CloudMoon game-list API retrieval; live phone/console verification remains pending.
+9. [ ] Complete the OpenOrbis application build, create the PKG and test installation on firmware 13.52.
 
 PS3 platform code is not copied blindly. Threading, TLS entropy, controller, filesystem, renderer, audio and package metadata each need a PS4 implementation. UI, session/account, signalling, WebRTC, decoder, audio and rendering remain separate modules so the final app does not depend on Moonlight's menu or launcher.
 
@@ -61,18 +62,18 @@ cmake --build build/cloudmoon-ps4-ui
 ctest --test-dir build/cloudmoon-ps4-ui --output-on-failure
 \`\`\`
 
-GitHub Actions runs UI, protocol and session smoke tests, and a separate OpenOrbis cross-build. The PS4 branch now includes a standalone dashboard entrypoint and a packaging script intended to produce a clearly labelled UI-preview PKG; the latest Orbis job must pass before that artifact can be claimed.
+GitHub Actions runs host UI, protocol, QR, catalogue and session smoke tests, plus an OpenOrbis application build that links the app and creates a PKG. The Orbis cross-build previously stopped in libjuice because UDP sockets used the Windows-only FIONBIO call; the PS4 patch now uses fcntl/O_NONBLOCK for Orbis. The current build is being used to verify that fix before a PKG is claimed.
 
 ## Current status
 
 - [x] Separate ps4-port branch; PS3 source/build remains intact.
 - [x] Original CloudMoon dashboard, paginated catalog UI and controller navigation.
 - [x] DualShock 4 and VideoOut PS4 platform modules.
-- [x] CloudMoon protocol, session parser, Socket.IO client and WebSocket transport.
-- [x] Mbed TLS backend and secure random source cross-compile for Orbis.
-- [x] Host UI/protocol/session tests pass.
-- [ ] Physical PS4 network and rendering test.
-- [ ] WebRTC, media decode, audio, QR/session pairing and full catalog integration.
-- [ ] Final PKG and FW 13.52 installation test.
+- [x] CloudMoon protocol, session parser, Socket.IO client and WebSocket transport are integrated in source.
+- [x] Mbed TLS backend, QR sid hand-off, game-list API, WebRTC callbacks, H.264 decode and Opus output are wired into the PS4 application source.
+- [x] Host UI/protocol/QR/catalogue/session smoke tests pass.
+- [ ] Successful full Orbis application link and PKG generation.
+- [ ] Physical PS4 network, QR pairing, rendering, audio and controller test.
+- [ ] End-to-end WebRTC game launch and firmware 13.52 installation test.
 
-**No installable PKG is claimed yet.** The current verified output is a set of cross-compiled static libraries, not a playable application.
+**No successful PS4 PKG is claimed yet.** Source-level integration and host tests do not prove that the Orbis app links, installs or streams correctly on a real console.
