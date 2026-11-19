@@ -12,7 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define CM_CA_BUNDLE_PATH "/app0/assets/misc/cacert.pem"
+#define CM_CA_BUNDLE_PATH "/app0/assets/cacert.pem"
 #define CM_API_TIMEOUT_SECONDS 12
 #define CM_STREAM_TIMEOUT_SECONDS 20
 
@@ -170,7 +170,9 @@ static int dashboard_tick(cm_ui_model_t *model, void *context) {
 }
 
 static void app_run(void) {
-    cm_app_context_t app;
+    /* The catalog contains up to 512 fixed-size records; keep it out of the
+       small Orbis main-thread stack. */
+    static cm_app_context_t app;
     cm_ui_model_t model;
     int32_t user_id = -1;
     int user_rc;
