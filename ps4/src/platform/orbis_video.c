@@ -117,7 +117,7 @@ int cm_orbis_video_init(int width, int height) {
     s_video = sceVideoOutOpen(user_id, CM_VIDEO_BUS_MAIN, 0, NULL);
     if (s_video < 0)
         s_video = sceVideoOutOpen(CM_VIDEO_USER_MAIN, CM_VIDEO_BUS_MAIN, 0, NULL);
-    if (!s_ready || s_video < 0) return -1;
+    if (s_video < 0) return -1;
 
     rc = sceKernelAllocateDirectMemory(0, (off_t)sceKernelGetDirectMemorySize(),
                                        s_memory_size, CM_VIDEO_DMEM_ALIGN,
