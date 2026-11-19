@@ -130,6 +130,7 @@ if(PS4)
     add_library(cloudmoon_ps4_orbis_platform STATIC
         src/platform/orbis_input.c
         src/platform/orbis_video.c
+        src/platform/orbis_h264.c
         src/platform/orbis_dashboard.c
         src/account/cloudmoon_orbis_connection.c
     )
