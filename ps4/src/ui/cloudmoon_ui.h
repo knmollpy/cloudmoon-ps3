@@ -84,6 +84,8 @@ cm_ui_action_t cm_ui_input(cm_ui_state_t *state, unsigned int pressed,
 void cm_ui_draw(const cm_ui_surface_t *surface,
                 const cm_ui_state_t *state,
                 const cm_ui_model_t *model);
+/* Draw a small native PS4 session menu over the live video frame. */
+void cm_ui_draw_game_menu_overlay(const cm_ui_surface_t *surface);
 
 #ifdef __cplusplus
 }
