@@ -12,4 +12,13 @@
 #define _ALIGN(value) (((uintptr_t)(value) + _ALIGNBYTES) & ~(uintptr_t)_ALIGNBYTES)
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+int timingsafe_bcmp(const void *left, const void *right, size_t length);
+void arc4random_buf(void *buffer, size_t length);
+#ifdef __cplusplus
+}
+#endif
+
 #endif
