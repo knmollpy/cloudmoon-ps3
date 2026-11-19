@@ -139,6 +139,11 @@ if(CM_UI_BUILD_TESTS)
     target_compile_options(cloudmoon_protocol_smoke PRIVATE -Wall -Wextra -Werror)
     add_test(NAME cloudmoon_protocol_smoke COMMAND cloudmoon_protocol_smoke)
 
+    add_executable(cloudmoon_qr_smoke tests/qr_smoke.c)
+    target_link_libraries(cloudmoon_qr_smoke PRIVATE cloudmoon_ps4_ui)
+    target_compile_options(cloudmoon_qr_smoke PRIVATE -Wall -Wextra -Werror)
+    add_test(NAME cloudmoon_qr_smoke COMMAND cloudmoon_qr_smoke)
+
     add_executable(cloudmoon_catalog_smoke tests/catalog_smoke.c)
     target_link_libraries(cloudmoon_catalog_smoke PRIVATE cloudmoon_catalog_parse)
     target_compile_options(cloudmoon_catalog_smoke PRIVATE -Wall -Wextra -Werror)
