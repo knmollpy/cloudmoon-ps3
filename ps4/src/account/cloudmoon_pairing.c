@@ -342,32 +342,62 @@ static void handle_client(cm_pairing_service_t *service, int fd) {
     request[header_length + content_length] = 0;
 
     {
+        char plaintext[6144], google_token[4097];
+        char language[8], locale[8];
+        int server_id = 0, plain_length, auth_rc;
         cm_account_session_t candidate;
+
+        memset(plaintext, 0, sizeof(plaintext));
+        memset(google_token, 0, sizeof(google_token));
         memset(&candidate, 0, sizeof(candidate));
-        if (cm_account_session_parse_url(request + header_length,
-                                         &candidate) != 0 ||
-            cm_account_session_fetch(service->ca_bundle_path,
-                                     service->timeout_seconds,
-                                     &candidate) != 0) {
-            {
-                static const char rejected[] =
-                    "CloudMoon rejected this session link. Make sure it "
-                    "contains a valid ?sid= value and the game session is active.";
-                (void)send_response(fd, 400, "Bad Request", "text/plain",
-                                   rejected, sizeof(rejected) - 1);
-            }
+        plain_length = decrypt_pair_payload(service,
+                                             request + header_length,
+                                             content_length,
+                                             plaintext, sizeof(plaintext));
+        if (plain_length < 0 ||
+            cm_json_get_string(plaintext, (size_t)plain_length,
+                               "google_id_token", google_token,
+                               sizeof(google_token)) < 0 ||
+            cm_json_get_integer(plaintext, (size_t)plain_length,
+                                "server_id", &server_id) != 0) {
+            (void)send_response(fd, 400, "Bad Request", "text/plain",
+                                "Invalid or expired secure authorization", 40);
+            memset(plaintext, 0, sizeof(plaintext));
+            return;
+        }
+        if (cm_json_get_string(plaintext, (size_t)plain_length,
+                               "language", language, sizeof(language)) < 0)
+            (void)snprintf(language, sizeof(language), "es");
+        if (cm_json_get_string(plaintext, (size_t)plain_length,
+                               "locale", locale, sizeof(locale)) < 0)
+            (void)snprintf(locale, sizeof(locale), "ar");
+
+        auth_rc = cm_account_session_authenticate(
+            service->ca_bundle_path, service->timeout_seconds,
+            "google", google_token, NULL, NULL, server_id,
+            language, locale, &candidate);
+        memset(plaintext, 0, sizeof(plaintext));
+        memset(google_token, 0, sizeof(google_token));
+        if (auth_rc != 0) {
+            static const char rejected[] =
+                "CloudMoon no acepto la autorizacion de Google. "
+                "Comprueba que la cuenta este vinculada a CloudMoon.";
+            (void)send_response(fd, 401, "Unauthorized", "text/plain",
+                                rejected, sizeof(rejected) - 1);
+            memset(&candidate, 0, sizeof(candidate));
             return;
         }
 
         memcpy(&service->account, &candidate, sizeof(candidate));
         __sync_lock_test_and_set(&service->ready, 1);
         (void)snprintf(service->status, sizeof(service->status),
-                       "Cuenta vinculada: %.90s", candidate.email);
+                       "Cuenta conectada: %.90s", candidate.email);
+        memset(&candidate, 0, sizeof(candidate));
     }
 
     {
         static const char success[] =
-            "Cuenta vinculada correctamente. Ya puedes volver a la PS4.";
+            "Cuenta CloudMoon vinculada correctamente. Ya puedes volver a la PS4.";
         (void)send_response(fd, 200, "OK", "text/plain; charset=utf-8",
                             success, sizeof(success) - 1);
     }
