@@ -75,7 +75,7 @@ static int parse_content_length(const char *headers, size_t length,
             *content_length = (size_t)parsed;
             return 0;
         }
-        p = line_end + (line_end < end ? 2 : 0);
+        p = line_end < end && end - line_end >= 2 ? line_end + 2 : end;
     }
     return 1;
 }
@@ -84,10 +84,15 @@ static int is_chunked(const char *headers, size_t length) {
     const char *p = headers;
     const char *end = headers + length;
     while (p < end) {
-        const char *line_end = strstr(p, "\r\n");
-        if (!line_end || line_end > end) line_end = end;
-        if ((size_t)(line_end - p) >= 18 &&
-            strncasecmp(p, "Transfer-Encoding:", 18) == 0 &&
+        const char *line_end = p;
+        const char *colon;
+        while (line_end + 1 < end &&
+               !(line_end[0] == '\r' && line_end[1] == '\n'))
+            ++line_end;
+        if (line_end + 1 >= end) line_end = end;
+        colon = memchr(p, ':', (size_t)(line_end - p));
+        if (colon && (size_t)(colon - p) == 17 &&
+            strncasecmp(p, "Transfer-Encoding", 17) == 0 &&
             contains_case_range(colon + 1, line_end, "chunked"))
             return 1;
         p = line_end + (line_end < end ? 2 : 0);
