@@ -288,3 +288,164 @@ int cm_catalog_fetch(const char *ca_bundle_path, unsigned timeout_seconds,
     }
     return -1;
 }
+
+
+#include "../account/cloudmoon_session_link.h"
+#include "../../../src/cloudmoon_discovery.h"
+#include "../../../src/cloudmoon_session.h"
+
+static int cm_find_data_object(const char *json, size_t length,
+                               const char **object, size_t *object_length) {
+    const char *p = json, *end = json + length, *start;
+    int depth = 0, in_string = 0, escaped = 0;
+    if (!json || !object || !object_length) return -1;
+
+    while (p + 6 < end) {
+        if (*p == '"' && (size_t)(end - p) >= 6 &&
+            memcmp(p, "\"data\"", 6) == 0)
+            break;
+        ++p;
+    }
+    if (p + 6 >= end) return -1;
+    p += 6;
+    while (p < end && (*p == ' ' || *p == '\t' ||
+           *p == '\r' || *p == '\n')) ++p;
+    if (p >= end || *p++ != ':') return -1;
+    while (p < end && (*p == ' ' || *p == '\t' ||
+           *p == '\r' || *p == '\n')) ++p;
+    if (p >= end || *p != '{') return -1;
+
+    start = p;
+    do {
+        char ch = *p++;
+        if (in_string) {
+            if (escaped) escaped = 0;
+            else if (ch == '\\') escaped = 1;
+            else if (ch == '"') in_string = 0;
+        } else if (ch == '"') in_string = 1;
+        else if (ch == '{') ++depth;
+        else if (ch == '}') --depth;
+    } while (p < end && depth > 0);
+    if (depth != 0 || in_string) return -1;
+    *object = start;
+    *object_length = (size_t)(p - start);
+    return 0;
+}
+
+static int cm_url_encode_query(const char *input, char *out, size_t capacity) {
+    static const char hex[] = "0123456789ABCDEF";
+    size_t used = 0;
+    const unsigned char *p = (const unsigned char *)input;
+    if (!input || !out || capacity == 0) return -1;
+
+    while (*p) {
+        unsigned char c = *p++;
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+            (c >= '0' && c <= '9') || c == '-' || c == '_' ||
+            c == '.' || c == '~') {
+            if (used + 1 >= capacity) return -1;
+            out[used++] = (char)c;
+        } else {
+            if (used + 3 >= capacity) return -1;
+            out[used++] = '%';
+            out[used++] = hex[c >> 4];
+            out[used++] = hex[c & 15];
+        }
+    }
+    out[used] = 0;
+    return (int)used;
+}
+
+int cm_account_session_fetch(const char *ca_bundle_path,
+                             unsigned timeout_seconds,
+                             cm_account_session_t *account) {
+    size_t i;
+    char encoded_sid[1600], path[1800];
+
+    if (!ca_bundle_path || !account || !account->sid[0] ||
+        timeout_seconds == 0 ||
+        cm_url_encode_query(account->sid, encoded_sid,
+                            sizeof(encoded_sid)) < 0)
+        return -1;
+
+    (void)snprintf(path, sizeof(path), "/web/sid?sid=%s", encoded_sid);
+
+    for (i = 0; i < CM_API_HOST_COUNT; ++i) {
+        char *body = NULL;
+        size_t body_length = 0, data_length = 0;
+        const char *data_object = NULL;
+        char value[2049];
+        int code = -1, result;
+
+        if (ping_host(s_api_hosts[i], ca_bundle_path, timeout_seconds) != 0)
+            continue;
+
+        result = http_get_json(s_api_hosts[i], path, ca_bundle_path,
+                               timeout_seconds, &body, &body_length);
+        if (result != 0) {
+            free(body);
+            continue;
+        }
+
+        if (cm_json_get_integer(body, body_length, "code", &code) != 0 ||
+            code != 0 ||
+            cm_find_data_object(body, body_length,
+                                &data_object, &data_length) != 0) {
+            free(body);
+            continue;
+        }
+
+        memset(account->token, 0, sizeof(account->token));
+        memset(account->email, 0, sizeof(account->email));
+        memset(account->game, 0, sizeof(account->game));
+        memset(account->user_id, 0, sizeof(account->user_id));
+        memset(account->android_instance_id, 0,
+               sizeof(account->android_instance_id));
+        memset(account->coordinator_host, 0,
+               sizeof(account->coordinator_host));
+        account->coordinator_port = 0;
+        memset(account->coordinator_path, 0,
+               sizeof(account->coordinator_path));
+
+        result =
+            cm_json_get_string(data_object, data_length, "token",
+                               account->token, sizeof(account->token)) >= 0 &&
+            cm_json_get_string(data_object, data_length, "email",
+                               account->email, sizeof(account->email)) >= 0 &&
+            cm_json_get_string(data_object, data_length, "game",
+                               account->game, sizeof(account->game)) >= 0 &&
+            cm_json_get_string(data_object, data_length, "android_id",
+                               account->user_id, sizeof(account->user_id)) >= 0 &&
+            cm_json_get_string(data_object, data_length, "android_instance_id",
+                               account->android_instance_id,
+                               sizeof(account->android_instance_id)) >= 0;
+        if (!result) {
+            free(body);
+            continue;
+        }
+
+        if (cm_cloudmoon_get_coordinator(account->android_instance_id,
+                                         account->coordinator_host,
+                                         sizeof(account->coordinator_host),
+                                         &account->coordinator_port,
+                                         account->coordinator_path,
+                                         sizeof(account->coordinator_path)) != 0) {
+            free(body);
+            continue;
+        }
+
+        if (!account->token[0] || !account->game[0] ||
+            !account->user_id[0] || !account->android_instance_id[0] ||
+            account->coordinator_port == 0) {
+            free(body);
+            continue;
+        }
+
+        (void)snprintf(account->api_host, sizeof(account->api_host), "%s",
+                       s_api_hosts[i]);
+        free(body);
+        return 0;
+    }
+
+    return -1;
+}
