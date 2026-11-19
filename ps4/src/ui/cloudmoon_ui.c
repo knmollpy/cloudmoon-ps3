@@ -136,8 +136,12 @@ cm_ui_action_t cm_ui_input(cm_ui_state_t *state, unsigned int keys,
     }
     if (keys & CM_UI_KEY_L1) {
         state->view = (cm_ui_view_t)((state->view + CM_UI_VIEW_COUNT - 1) % CM_UI_VIEW_COUNT);
+        if (state->view == CM_UI_LINK)
+            return action(CM_UI_ACTION_REQUEST_LINK, -1);
     } else if (keys & CM_UI_KEY_R1) {
         state->view = (cm_ui_view_t)((state->view + 1) % CM_UI_VIEW_COUNT);
+        if (state->view == CM_UI_LINK)
+            return action(CM_UI_ACTION_REQUEST_LINK, -1);
     }
     switch (state->view) {
     case CM_UI_HOME:
