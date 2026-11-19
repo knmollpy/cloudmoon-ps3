@@ -1,0 +1,102 @@
+name: CloudMoon PS4 application build
+
+on:
+  push:
+    branches: [ps4-port]
+    paths:
+      - "ps4/**"
+      - "scripts/**"
+      - ".github/workflows/ps4-orbis-build.yml"
+  pull_request:
+    paths:
+      - "ps4/**"
+      - "scripts/**"
+  workflow_dispatch:
+
+concurrency:
+  group: cloudmoon-ps4-orbis-final-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  orbis-compile:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize Mbed TLS and framework sources
+        run: |
+          git submodule update --init --depth 1 vendor/mbedtls
+          git -C vendor/mbedtls submodule update --init --depth 1 framework
+          git submodule update --init --depth 1 vendor/libdatachannel
+          git -C vendor/libdatachannel submodule update --init --recursive --depth 1
+          bash scripts/patch-libjuice-orbis.sh
+          git clone --filter=blob:none https://github.com/xiph/opus.git vendor/opus
+          git -C vendor/opus checkout ddbe48383984d56acd9e1ab6a090c54ca6b735a6
+
+      - name: Install missing LLVM linker tools
+        run: |
+          sudo apt-get install -y --no-install-recommends lld llvm
+          clang --version
+          ld.lld --version
+          llvm-ar --version
+          llvm-ranlib --version
+          cmake --version
+          make --version
+
+      - name: Download and verify OpenOrbis v0.5.4
+        env:
+          OO_URL: https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz
+          OO_SHA256: 3c7cd5bb593ca74fa1c13fd59f3938dc0fc07985167f7275063019e63abe4526
+        run: |
+          set -euxo pipefail
+          mkdir -p "$HOME/ps4dev/OpenOrbis/PS4Toolchain"
+          curl --fail --location --retry 3 "$OO_URL" -o /tmp/openorbis.tar.gz
+          echo "$OO_SHA256  /tmp/openorbis.tar.gz" | sha256sum --check -
+          echo "Archive size:"; ls -lh /tmp/openorbis.tar.gz
+          echo "Archive checksum:"; sha256sum /tmp/openorbis.tar.gz
+          echo "Checking archive members..."
+          tar -tzf /tmp/openorbis.tar.gz > /tmp/openorbis-files.txt
+          sed -n '1,30p' /tmp/openorbis-files.txt
+          tar -xzf /tmp/openorbis.tar.gz -C "$HOME/ps4dev" OpenOrbis/PS4Toolchain
+          test -f "$HOME/ps4dev/OpenOrbis/PS4Toolchain/link.x"
+          test -d "$HOME/ps4dev/OpenOrbis/PS4Toolchain/include/orbis"
+          echo "OO_PS4_TOOLCHAIN=$HOME/ps4dev/OpenOrbis/PS4Toolchain" >> "$GITHUB_ENV"
+
+      - name: Configure PS4 platform modules
+        run: |
+          cmake -S ps4 -B build-ps4-modules -G "Unix Makefiles" \
+            -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/ps4/cmake/openorbis.cmake" \
+            -DCMAKE_MAKE_PROGRAM=/usr/bin/make \
+            -DCM_UI_BUILD_TESTS=OFF
+
+      - name: Download CA certificates for CloudMoon HTTPS validation
+        run: |
+          mkdir -p assets
+          curl --fail --location --retry 3 https://curl.se/ca/cacert.pem -o assets/cacert.pem
+          test -s assets/cacert.pem
+
+      - name: Cross-compile and link CloudMoon PS4 application
+        run: cmake --build build-ps4-modules --verbose
+
+      - name: Install OpenSSL 1.1 compatibility for OpenOrbis packager
+        run: |
+          set -euxo pipefail
+          # OpenOrbis v0.5.4 create-gp4 uses a legacy .NET Core 3.1 host.
+          # Ubuntu 24.04 provides OpenSSL 3 only, which that host cannot load.
+          echo "deb [arch=amd64] https://archive.ubuntu.com/ubuntu focal-updates main" |
+            sudo tee /etc/apt/sources.list.d/focal-updates.list
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libssl1.1
+          ldconfig -p | grep -F 'libssl.so.1.1'
+
+      - name: Package installable CloudMoon PS4 app PKG
+        env:
+          DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
+        run: bash scripts/package-ps4-preview.sh
+
+      - name: Upload CloudMoon PS4 application PKG
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudmoon-ps4-application-pkg
+          path: dist/cloudmoon-ps4/*.pkg
+          if-no-files-found: error
