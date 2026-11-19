@@ -12,7 +12,7 @@
 #if defined(__ORBIS__)
 #define CM_CLIENT_PLATFORM_LABEL "CloudMoon PS4 native client (Orbis x86_64)"
 #else
-#define CM_CLIENT_PLATFORM_LABEL "CloudMoon PS3 native client (PS3; PowerPC)"
+#define CM_CLIENT_PLATFORM_LABEL CM_CLIENT_PLATFORM_LABEL
 #endif
 #endif
 
