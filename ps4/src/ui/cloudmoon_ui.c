@@ -315,7 +315,7 @@ static void draw_link(const cm_ui_surface_t *s, const cm_ui_model_t *m) {
     text(s, 100, 260, 2, C_CYAN, "ACCESO SEGURO");
     text(s, 100, 310, 2, C_TEXT, "1. ESCANEA EL QR CON TU TELEFONO.");
     text(s, 100, 345, 2, C_TEXT, "2. INICIA SESION EN CLOUDMOON.");
-    text(s, 100, 380, 2, C_TEXT, "3. INICIA SESION CON TU CUENTA CLOUDMOON.");
+    text(s, 100, 380, 2, C_TEXT, "3. USA EL MARCADOR VINCULAR PS4.");
     text(s, 100, 430, 1, C_MUTED, m && m->status_text ? m->status_text : "ESPERANDO AUTORIZACION DEL TELEFONO");
     if (m && m->link_code && m->link_code[0]) {
         text(s, 100, 465, 2, C_CYAN, "CODIGO DE VINCULACION:");
