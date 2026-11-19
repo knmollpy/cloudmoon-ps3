@@ -78,6 +78,17 @@ jobs:
       - name: Cross-compile and link CloudMoon PS4 application
         run: cmake --build build-ps4-modules --verbose
 
+      - name: Install OpenSSL 1.1 compatibility for OpenOrbis packager
+        run: |
+          set -euxo pipefail
+          # OpenOrbis v0.5.4 create-gp4 uses a legacy .NET Core 3.1 host.
+          # Ubuntu 24.04 provides OpenSSL 3 only, which that host cannot load.
+          echo "deb [arch=amd64] https://archive.ubuntu.com/ubuntu focal-updates main" |
+            sudo tee /etc/apt/sources.list.d/focal-updates.list
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libssl1.1
+          ldconfig -p | grep -F 'libssl.so.1.1'
+
       - name: Package installable CloudMoon PS4 app PKG
         env:
           DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
