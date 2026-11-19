@@ -1,7 +1,7 @@
 #include "platform/orbis_dashboard.h"
 #include "platform/orbis_network.h"
 
-#include "account/cloudmoon_pairing.h"
+#include <orbis/ImeDialog.h>
 #include "account/cloudmoon_orbis_game.h"
 #include "catalog/cloudmoon_catalog.h"
 
@@ -20,7 +20,7 @@ typedef struct {
     cm_catalog_t catalog;
     const char *game_names[CM_CATALOG_MAX_GAMES];
     cm_account_session_t account;
-    cm_pairing_service_t *pairing;
+    int32_t psn_user_id;
     char api_host[128];
     char status[192];
     char account_label[321];
@@ -58,46 +58,189 @@ static int load_catalog(cm_app_context_t *app, cm_ui_model_t *model) {
     return 0;
 }
 
-static void clear_pairing_view(cm_ui_model_t *model) {
-    if (!model) return;
-    model->qr_modules = NULL;
-    model->qr_size = 0;
-    model->link_url = NULL;
-    model->link_code = NULL;
+static int cm_ime_text_to_utf8(const wchar_t *source,
+                              char *output, size_t output_capacity) {
+    size_t used = 0;
+    size_t i = 0;
+
+    if (!source || !output || output_capacity == 0) return -1;
+    while (source[i] != 0) {
+        uint32_t cp = (uint32_t)source[i++];
+        if (cp >= 0xd800u && cp <= 0xdbffu) {
+            uint32_t low = (uint32_t)source[i];
+            if (low < 0xdc00u || low > 0xdfffu) return -1;
+            ++i;
+            cp = 0x10000u + ((cp - 0xd800u) << 10) + (low - 0xdc00u);
+        } else if (cp >= 0xdc00u && cp <= 0xdfffu) {
+            return -1;
+        }
+
+        if (cp < 0x20u || cp == 0x7fu || cp > 0x10ffffu) return -1;
+        if (cp <= 0x7fu) {
+            if (used + 1u >= output_capacity) return -1;
+            output[used++] = (char)cp;
+        } else if (cp <= 0x7ffu) {
+            if (used + 2u >= output_capacity) return -1;
+            output[used++] = (char)(0xc0u | (cp >> 6));
+            output[used++] = (char)(0x80u | (cp & 0x3fu));
+        } else if (cp <= 0xffffu) {
+            if (used + 3u >= output_capacity) return -1;
+            output[used++] = (char)(0xe0u | (cp >> 12));
+            output[used++] = (char)(0x80u | ((cp >> 6) & 0x3fu));
+            output[used++] = (char)(0x80u | (cp & 0x3fu));
+        } else {
+            if (used + 4u >= output_capacity) return -1;
+            output[used++] = (char)(0xf0u | (cp >> 18));
+            output[used++] = (char)(0x80u | ((cp >> 12) & 0x3fu));
+            output[used++] = (char)(0x80u | ((cp >> 6) & 0x3fu));
+            output[used++] = (char)(0x80u | (cp & 0x3fu));
+        }
+    }
+    output[used] = 0;
+    return used ? 0 : -1;
 }
 
-static int start_pairing(cm_app_context_t *app, cm_ui_model_t *model) {
-    int rc;
-    if (!app || !model) return -1;
+static int cm_read_ime_text(uint32_t user_id, OrbisImeType type,
+                            const wchar_t *title, uint32_t max_text_length,
+                            char *output, size_t output_capacity) {
+    OrbisImeDialogSetting setting;
+    OrbisDialogResult result;
+    wchar_t input[1025];
+    int status, rc, polls = 0;
 
+    if (!output || output_capacity < 2 || max_text_length == 0 ||
+        max_text_length > 1024)
+        return -1;
+    output[0] = 0;
+    memset(input, 0, sizeof(input));
+    memset(&setting, 0, sizeof(setting));
+    memset(&result, 0, sizeof(result));
+
+    setting.userId = user_id;
+    setting.type = type;
+    setting.supportedLanguages = 0;
+    setting.enterLabel = ORBIS_BUTTON_LABEL_DEFAULT;
+    setting.inputMethod = ORBIS__DEFAULT;
+    setting.maxTextLength = max_text_length;
+    setting.inputTextBuffer = input;
+    setting.posx = 0.0f;
+    setting.posy = 0.0f;
+    setting.horizontalAlignment = ORBIS_H_LEFT;
+    setting.verticalAlignment = ORBIS_V_CENTER;
+    setting.placeholder = NULL;
+    setting.title = title;
+
+    rc = sceImeDialogInit(&setting, NULL);
+    if (rc < 0) {
+        memset(input, 0, sizeof(input));
+        return -1;
+    }
+
+    do {
+        status = sceImeDialogGetStatus();
+        if (status != ORBIS_DIALOG_STATUS_RUNNING) break;
+        sceKernelUsleep(20000);
+    } while (++polls < 30000);
+
+    if (status == ORBIS_DIALOG_STATUS_RUNNING) {
+        (void)sceImeDialogAbort();
+        for (polls = 0; polls < 1000; ++polls) {
+            status = sceImeDialogGetStatus();
+            if (status != ORBIS_DIALOG_STATUS_RUNNING) break;
+            sceKernelUsleep(10000);
+        }
+    }
+
+    rc = sceImeDialogGetResult(&result);
+    (void)sceImeDialogTerm();
+    if (rc < 0 || result.endstatus != ORBIS_DIALOG_OK) {
+        memset(input, 0, sizeof(input));
+        return -1;
+    }
+
+    rc = cm_ime_text_to_utf8(input, output, output_capacity);
+    memset(input, 0, sizeof(input));
+    if (rc != 0) memset(output, 0, output_capacity);
+    return rc;
+}
+
+static int start_password_login(cm_app_context_t *app,
+                                cm_ui_model_t *model) {
+    char email[321];
+    char password[1025];
+    cm_account_session_t authenticated;
+    int rc;
+
+    if (!app || !model) return -1;
     if (app->session_linked) {
         (void)snprintf(app->status, sizeof(app->status),
-                       "Cuenta conectada: %.110s", app->account.email);
+                       "Sesion activa: %.110s", app->account.email);
         model->status_text = app->status;
         return 0;
     }
-    if (!app->pairing) {
-        rc = cm_pairing_start(&app->pairing, CM_CA_BUNDLE_PATH,
-                              CM_API_TIMEOUT_SECONDS);
-        if (rc != 0) {
-            (void)snprintf(app->status, sizeof(app->status),
-                           "No se pudo abrir el enlace local. Comprueba que la PS4 este conectada al Wi-Fi.");
-            model->status_text = app->status;
-            return 0;
-        }
+
+    memset(email, 0, sizeof(email));
+    memset(password, 0, sizeof(password));
+    memset(&authenticated, 0, sizeof(authenticated));
+
+    (void)snprintf(app->status, sizeof(app->status),
+                   "Introduce el correo de tu cuenta CloudMoon.");
+    model->status_text = app->status;
+    rc = cm_read_ime_text((uint32_t)app->psn_user_id, ORBIS_TYPE_MAIL,
+                          L"CloudMoon - Correo electronico", 256,
+                          email, sizeof(email));
+    if (rc != 0) {
+        (void)snprintf(app->status, sizeof(app->status),
+                       "Inicio de sesion cancelado. Pulsa X para intentarlo otra vez.");
+        model->status_text = app->status;
+        memset(email, 0, sizeof(email));
+        return 0;
     }
 
-    {
-        const cm_qr_t *qr = cm_pairing_qr(app->pairing);
-        if (qr) {
-            model->qr_modules = qr->modules;
-            model->qr_size = qr->size;
-        }
+    (void)snprintf(app->status, sizeof(app->status),
+                   "Introduce tu contrasena de CloudMoon.");
+    model->status_text = app->status;
+    rc = cm_read_ime_text((uint32_t)app->psn_user_id, ORBIS_TYPE_BASIC_LATIN,
+                          L"CloudMoon - Contrasena", 256,
+                          password, sizeof(password));
+    if (rc != 0) {
+        (void)snprintf(app->status, sizeof(app->status),
+                       "Inicio de sesion cancelado. Pulsa X para intentarlo otra vez.");
+        model->status_text = app->status;
+        memset(email, 0, sizeof(email));
+        memset(password, 0, sizeof(password));
+        return 0;
     }
-    model->link_url = cm_pairing_url(app->pairing);
-    model->link_code = NULL;
-    (void)snprintf(app->status, sizeof(app->status), "%s",
-                   cm_pairing_status(app->pairing));
+
+    (void)snprintf(app->status, sizeof(app->status),
+                   "Validando la cuenta con CloudMoon...");
+    model->status_text = app->status;
+    rc = cm_account_session_authenticate(
+        CM_CA_BUNDLE_PATH, CM_API_TIMEOUT_SECONDS,
+        "password", NULL, email, password, 21, "en", "AR",
+        &authenticated);
+
+    memset(email, 0, sizeof(email));
+    memset(password, 0, sizeof(password));
+
+    if (rc != 0) {
+        memset(&authenticated, 0, sizeof(authenticated));
+        (void)snprintf(app->status, sizeof(app->status),
+                       "No se pudo iniciar sesion. Revisa correo, contrasena o conexion.");
+        model->status_text = app->status;
+        return 0;
+    }
+
+    memcpy(&app->account, &authenticated, sizeof(app->account));
+    memset(&authenticated, 0, sizeof(authenticated));
+    app->session_linked = 1;
+    app->catalog_loaded = 0;
+    (void)snprintf(app->account_label, sizeof(app->account_label),
+                   "%s", app->account.email);
+    model->session_linked = 1;
+    model->account_label = app->account_label;
+    (void)snprintf(app->status, sizeof(app->status),
+                   "Sesion iniciada. Ya puedes abrir el catalogo de CloudMoon.");
     model->status_text = app->status;
     return 0;
 }
@@ -110,7 +253,7 @@ static int handle_ui_action(cm_ui_action_t action,
 
     switch (action.type) {
     case CM_UI_ACTION_REQUEST_LINK:
-        return start_pairing(app, model);
+        return start_password_login(app, model);
 
     case CM_UI_ACTION_OPEN_LIBRARY:
         (void)load_catalog(app, model);
@@ -141,34 +284,6 @@ static int handle_ui_action(cm_ui_action_t action,
     }
 }
 
-static int dashboard_tick(cm_ui_model_t *model, void *context) {
-    cm_app_context_t *app = (cm_app_context_t *)context;
-    cm_account_session_t account;
-
-    if (!app || !model) return -1;
-    if (app->pairing) {
-        if (cm_pairing_take_account(app->pairing, &account)) {
-            cm_pairing_stop(app->pairing);
-            app->pairing = NULL;
-            memcpy(&app->account, &account, sizeof(account));
-            app->session_linked = 1;
-            (void)snprintf(app->account_label, sizeof(app->account_label),
-                           "%s", app->account.email);
-            model->session_linked = 1;
-            model->account_label = app->account_label;
-            clear_pairing_view(model);
-            (void)snprintf(app->status, sizeof(app->status),
-                           "Cuenta conectada. Ya puedes abrir un juego del catalogo.");
-            model->status_text = app->status;
-        } else {
-            (void)snprintf(app->status, sizeof(app->status), "%s",
-                           cm_pairing_status(app->pairing));
-            model->status_text = app->status;
-        }
-    }
-    return 0;
-}
-
 static void app_run(void) {
     /* The catalog contains up to 512 fixed-size records; keep it out of the
        small Orbis main-thread stack. */
@@ -184,11 +299,14 @@ static void app_run(void) {
     (void)sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_USER_SERVICE);
     (void)sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_PAD);
     (void)sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_VIDEO_OUT);
+    (void)sceSysmoduleLoadModule(ORBIS_SYSMODULE_IME_DIALOG);
 
     user_rc = sceUserServiceInitialize(NULL);
-    if (user_rc < 0 && sceUserServiceGetInitialUser(&user_id) < 0) {
+    (void)user_rc;
+    if (sceUserServiceGetInitialUser(&user_id) < 0 || user_id < 0) {
         for (;;) sceKernelUsleep(1000000);
     }
+    app.psn_user_id = user_id;
 
     if (cm_orbis_network_init() != 0) {
         (void)snprintf(app.status, sizeof(app.status),
@@ -204,7 +322,7 @@ static void app_run(void) {
 
     for (;;) {
         int rc = cm_orbis_dashboard_run(&model, handle_ui_action,
-                                        dashboard_tick, &app);
+                                        NULL, &app);
         if (rc == 1 && app.play_pending) {
             const cm_catalog_game_t *game =
                 &app.catalog.games[app.play_index];
