@@ -271,7 +271,7 @@ static void draw_library(const cm_ui_surface_t *s, const cm_ui_state_t *st,
         centered_text(s, s->width / 2, 310, 4, C_TEXT, "CATALOGO AUN NO VINCULADO");
         centered_text(s, s->width / 2, 385, 2, C_MUTED, "INICIA SESION DESDE LA PESTANA VINCULAR.");
         centered_text(s, s->width / 2, 430, 1, C_CYAN, "USA R1 / L1 PARA CAMBIAR DE SECCION");
-        centered_text(s, s->width / 2, 466, 1, C_MUTED, "LA X NO ABRE EL FORMULARIO DESDE ESTA PANTALLA.");
+        centered_text(s, s->width / 2, 466, 1, C_MUTED, "COMPLETA GMAIL Y CONTRASENA Y PULSA INICIAR SESION.");
         return;
     }
     {
