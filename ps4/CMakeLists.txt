@@ -90,6 +90,17 @@ if(PS4)
     add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../vendor/libdatachannel"
                      "${CMAKE_CURRENT_BINARY_DIR}/libdatachannel")
 
+    set(OPUS_BUILD_SHARED_LIBRARY OFF CACHE BOOL "" FORCE)
+    set(OPUS_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+    set(OPUS_INSTALL_PKG_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+    set(OPUS_INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../vendor/opus/CMakeLists.txt")
+        message(FATAL_ERROR "Opus source missing; fetch pinned xiph/opus commit in CI")
+    endif()
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../vendor/opus"
+                     "${CMAKE_CURRENT_BINARY_DIR}/opus")
+
 
     add_library(cloudmoon_tls_mbedtls STATIC
         src/net/cloudmoon_tls_mbedtls.c
@@ -131,6 +142,7 @@ if(PS4)
         src/platform/orbis_input.c
         src/platform/orbis_video.c
         src/platform/orbis_h264.c
+        src/platform/orbis_audio.c
         src/platform/orbis_dashboard.c
         src/account/cloudmoon_orbis_connection.c
     )
@@ -141,6 +153,7 @@ if(PS4)
     target_link_libraries(cloudmoon_ps4_orbis_platform PUBLIC
         cloudmoon_ps4_ui cloudmoon_protocol_core cloudmoon_account_core
         datachannel-static
+        opus
     )
     target_compile_options(cloudmoon_ps4_orbis_platform PRIVATE -Wall -Wextra)
 endif()
