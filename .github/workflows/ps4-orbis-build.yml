@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: cloudmoon-ps4-orbis-${{ github.ref }}
+  group: cloudmoon-ps4-orbis-final-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
