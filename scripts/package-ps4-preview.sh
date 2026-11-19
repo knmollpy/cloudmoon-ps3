@@ -14,9 +14,11 @@ test -x "${TOOLS}/create-fself"
 test -x "${TOOLS}/create-gp4"
 test -f "${TOOLS}/PkgTool.Core"
 test -f "${APP_ELF}"
+test -s "${ROOT}/assets/cacert.pem"
 
 rm -rf "${OUT_DIR}"
-mkdir -p "${OUT_DIR}/sce_sys"
+mkdir -p "${OUT_DIR}/sce_sys" "${OUT_DIR}/assets"
+cp "${ROOT}/assets/cacert.pem" "${OUT_DIR}/assets/cacert.pem"
 cp "${ROOT}/scripts/generate-ps4-icon.py" "${OUT_DIR}/generate-icon.py"
 (
     cd "${OUT_DIR}"
@@ -46,7 +48,7 @@ cp "${ROOT}/scripts/generate-ps4-icon.py" "${OUT_DIR}/generate-icon.py"
 
     "${TOOLS}/create-gp4" -out cloudmoon_ps4_preview.gp4 \
         --content-id="${CONTENT_ID}" \
-        --files "eboot.bin sce_sys/param.sfo sce_sys/icon0.png"
+        --files "eboot.bin sce_sys/param.sfo sce_sys/icon0.png assets/cacert.pem"
     "${TOOLS}/PkgTool.Core" pkg_build cloudmoon_ps4_preview.gp4 .
 )
 
