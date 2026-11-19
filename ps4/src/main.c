@@ -25,6 +25,8 @@ typedef struct {
     char api_host[128];
     char status[192];
     char account_label[321];
+    char login_email[321];
+    char login_password[1025];
     int catalog_loaded;
     int session_linked;
     int play_pending;
@@ -103,6 +105,7 @@ static int cm_ime_text_to_utf8(const uint16_t *source,
 
 static int cm_read_ime_text(uint32_t user_id, OrbisImeType type,
                             const uint16_t *title, uint32_t max_text_length,
+                            const char *initial,
                             char *output, size_t output_capacity) {
     OrbisImeDialogSetting setting;
     OrbisDialogResult result;
@@ -114,6 +117,14 @@ static int cm_read_ime_text(uint32_t user_id, OrbisImeType type,
         return -1;
     output[0] = 0;
     memset(input, 0, sizeof(input));
+    if (initial) {
+        size_t i;
+        for (i = 0; initial[i] && i < max_text_length && i < 1024; ++i) {
+            unsigned char ch = (unsigned char)initial[i];
+            if (ch > 0x7fu) break;
+            input[i] = (uint16_t)ch;
+        }
+    }
     memset(&setting, 0, sizeof(setting));
     memset(&result, 0, sizeof(result));
 
@@ -166,16 +177,48 @@ static int cm_read_ime_text(uint32_t user_id, OrbisImeType type,
     return rc;
 }
 
-static int start_password_login(cm_app_context_t *app,
-                                cm_ui_model_t *model) {
+static int edit_login_field(cm_app_context_t *app,
+                             cm_ui_model_t *model, int password_field) {
     static const uint16_t email_title[] = {
-        'C','l','o','u','d','M','o','o','n',' ','-',' ','C','o','r','r','e','o',0
+        'G','m','a','i','l',' ','d','e',' ','C','l','o','u','d','M','o','o','n',0
     };
     static const uint16_t password_title[] = {
-        'C','l','o','u','d','M','o','o','n',' ','-',' ','C','o','n','t','r','a','s','e','n','a',0
+        'C','o','n','t','r','a','s','e','n','a',' ','d','e',' ','C','l','o','u','d','M','o','o','n',0
     };
-    char email[321];
-    char password[1025];
+    int rc;
+    if (!app || !model || app->session_linked) return -1;
+
+    if (password_field) {
+        rc = cm_read_ime_text((uint32_t)app->psn_user_id,
+                              ORBIS_TYPE_BASIC_LATIN, password_title, 256,
+                              app->login_password, app->login_password,
+                              sizeof(app->login_password));
+        if (rc == 0)
+            (void)snprintf(app->status, sizeof(app->status),
+                           "Contrasena guardada. Selecciona INICIAR SESION.");
+        else
+            (void)snprintf(app->status, sizeof(app->status),
+                           "No se modifico la contrasena.");
+    } else {
+        rc = cm_read_ime_text((uint32_t)app->psn_user_id,
+                              ORBIS_TYPE_MAIL, email_title, 256,
+                              app->login_email, app->login_email,
+                              sizeof(app->login_email));
+        if (rc == 0)
+            (void)snprintf(app->status, sizeof(app->status),
+                           "Gmail guardado. Selecciona el campo contrasena.");
+        else
+            (void)snprintf(app->status, sizeof(app->status),
+                           "No se modifico el Gmail.");
+    }
+    model->login_email = app->login_email;
+    model->login_password_set = app->login_password[0] != 0;
+    model->status_text = app->status;
+    return 0;
+}
+
+static int start_password_login(cm_app_context_t *app,
+                                cm_ui_model_t *model) {
     cm_account_session_t authenticated;
     int rc;
 
@@ -186,56 +229,33 @@ static int start_password_login(cm_app_context_t *app,
         model->status_text = app->status;
         return 0;
     }
+    if (!app->login_email[0] || !app->login_password[0]) {
+        (void)snprintf(app->status, sizeof(app->status),
+                       "Completa Gmail y contrasena antes de iniciar sesion.");
+        model->status_text = app->status;
+        model->login_email = app->login_email;
+        model->login_password_set = app->login_password[0] != 0;
+        return 0;
+    }
 
-    memset(email, 0, sizeof(email));
-    memset(password, 0, sizeof(password));
     memset(&authenticated, 0, sizeof(authenticated));
-
     (void)snprintf(app->status, sizeof(app->status),
-                   "Introduce el correo de tu cuenta CloudMoon.");
-    model->status_text = app->status;
-    rc = cm_read_ime_text((uint32_t)app->psn_user_id, ORBIS_TYPE_MAIL,
-                          email_title, 256,
-                          email, sizeof(email));
-    if (rc != 0) {
-        (void)snprintf(app->status, sizeof(app->status),
-                       "Inicio de sesion cancelado. Pulsa X para intentarlo otra vez.");
-        model->status_text = app->status;
-        memset(email, 0, sizeof(email));
-        return 0;
-    }
-
-    (void)snprintf(app->status, sizeof(app->status),
-                   "Introduce tu contrasena de CloudMoon.");
-    model->status_text = app->status;
-    rc = cm_read_ime_text((uint32_t)app->psn_user_id, ORBIS_TYPE_BASIC_LATIN,
-                          password_title, 256,
-                          password, sizeof(password));
-    if (rc != 0) {
-        (void)snprintf(app->status, sizeof(app->status),
-                       "Inicio de sesion cancelado. Pulsa X para intentarlo otra vez.");
-        model->status_text = app->status;
-        memset(email, 0, sizeof(email));
-        memset(password, 0, sizeof(password));
-        return 0;
-    }
-
-    (void)snprintf(app->status, sizeof(app->status),
-                   "Validando la cuenta con CloudMoon...");
+                   "Iniciando sesion en CloudMoon...");
     model->status_text = app->status;
     rc = cm_account_session_authenticate(
         CM_CA_BUNDLE_PATH, CM_API_TIMEOUT_SECONDS,
-        "password", NULL, email, password, 21, "en", "AR",
-        &authenticated);
+        "password", NULL, app->login_email, app->login_password,
+        21, "en", "AR", &authenticated);
 
-    memset(email, 0, sizeof(email));
-    memset(password, 0, sizeof(password));
+    memset(app->login_password, 0, sizeof(app->login_password));
+    model->login_password_set = 0;
 
     if (rc != 0) {
         memset(&authenticated, 0, sizeof(authenticated));
         (void)snprintf(app->status, sizeof(app->status),
-                       "No se pudo iniciar sesion. Revisa correo, contrasena o conexion.");
+                       "No se pudo iniciar sesion. Revisa Gmail, contrasena o conexion.");
         model->status_text = app->status;
+        model->login_email = app->login_email;
         return 0;
     }
 
@@ -243,10 +263,12 @@ static int start_password_login(cm_app_context_t *app,
     memset(&authenticated, 0, sizeof(authenticated));
     app->session_linked = 1;
     app->catalog_loaded = 0;
+    memset(app->login_email, 0, sizeof(app->login_email));
     (void)snprintf(app->account_label, sizeof(app->account_label),
                    "%s", app->account.email);
     model->session_linked = 1;
     model->account_label = app->account_label;
+    model->login_email = "";
     (void)snprintf(app->status, sizeof(app->status),
                    "Sesion iniciada. Ya puedes abrir el catalogo de CloudMoon.");
     model->status_text = app->status;
@@ -260,8 +282,19 @@ static int handle_ui_action(cm_ui_action_t action,
     if (!app || !model) return -1;
 
     switch (action.type) {
-    case CM_UI_ACTION_REQUEST_LINK:
+    case CM_UI_ACTION_EDIT_EMAIL:
+        return edit_login_field(app, model, 0);
+
+    case CM_UI_ACTION_EDIT_PASSWORD:
+        return edit_login_field(app, model, 1);
+
+    case CM_UI_ACTION_LOGIN:
         return start_password_login(app, model);
+
+    case CM_UI_ACTION_REQUEST_LINK:
+        model->login_email = app->login_email;
+        model->login_password_set = app->login_password[0] != 0;
+        return 0;
 
     case CM_UI_ACTION_OPEN_LIBRARY:
         (void)load_catalog(app, model);
@@ -328,6 +361,8 @@ static void app_run(void) {
     }
 
     model.account_label = "CUENTA NO VINCULADA";
+    model.login_email = app.login_email;
+    model.login_password_set = 0;
     model.status_text = app.status;
     model.session_linked = 0;
 
