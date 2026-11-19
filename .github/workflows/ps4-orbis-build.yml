@@ -67,6 +67,12 @@ jobs:
             -DCMAKE_MAKE_PROGRAM=/usr/bin/make \
             -DCM_UI_BUILD_TESTS=OFF
 
+      - name: Download CA certificates for CloudMoon HTTPS validation
+        run: |
+          mkdir -p assets
+          curl --fail --location --retry 3 https://curl.se/ca/cacert.pem -o assets/cacert.pem
+          test -s assets/cacert.pem
+
       - name: Cross-compile and link CloudMoon PS4 preview
         run: cmake --build build-ps4-modules --verbose
 
