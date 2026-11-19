@@ -764,6 +764,62 @@ int cm_account_session_authenticate(const char *ca_bundle_path,
     return account->token[0] ? 0 : -1;
 }
 
+int cm_account_session_import_token(const char *ca_bundle_path,
+                                    unsigned timeout_seconds,
+                                    const char *token,
+                                    const char *user_id,
+                                    int server_id,
+                                    const char *language,
+                                    const char *locale,
+                                    cm_account_session_t *account) {
+    char *response = NULL;
+    size_t response_length = 0;
+    char confirmed_user_id[129];
+
+    if (!ca_bundle_path || !account || !token || !token[0] ||
+        !user_id || !user_id[0] || !language || !locale ||
+        timeout_seconds == 0 || strlen(token) >= sizeof(account->token) ||
+        strlen(user_id) >= sizeof(account->user_id))
+        return -1;
+
+    if (server_id != 21 && server_id != 22 && server_id != 23 &&
+        server_id != 3 && server_id != 4)
+        return -1;
+
+    memset(account, 0, sizeof(*account));
+    if (cm_orbis_random_init() != 0 ||
+        cm_make_uuid(account->device_id, sizeof(account->device_id)) != 0)
+        return -1;
+    (void)snprintf(account->token, sizeof(account->token), "%s", token);
+
+    /* Never trust the browser's cached profile blindly: validate its bearer
+       token with CloudMoon and match the returned user id before linking. */
+    if (cm_api_request_json("GET", "/user/info", account->token,
+                            account->device_id, language, locale, NULL,
+                            ca_bundle_path, timeout_seconds,
+                            &response, &response_length) != 0 ||
+        !response || !cm_api_success(response, response_length) ||
+        cm_get_data_string(response, response_length, "user_id",
+                           confirmed_user_id, sizeof(confirmed_user_id)) < 0 ||
+        strcmp(confirmed_user_id, user_id) != 0 ||
+        cm_get_data_string(response, response_length, "email",
+                           account->email, sizeof(account->email)) < 0) {
+        free(response);
+        memset(account, 0, sizeof(*account));
+        return -1;
+    }
+    free(response);
+
+    (void)snprintf(account->user_id, sizeof(account->user_id), "%s",
+                   confirmed_user_id);
+    account->server_id = server_id;
+    (void)snprintf(account->language, sizeof(account->language), "%.7s", language);
+    (void)snprintf(account->locale, sizeof(account->locale), "%.7s", locale);
+    (void)snprintf(account->api_host, sizeof(account->api_host), "%s",
+                   CM_WEB_API_HOST);
+    return 0;
+}
+
 int cm_account_session_prepare_game(const char *ca_bundle_path,
                                     unsigned timeout_seconds,
                                     cm_account_session_t *account,
