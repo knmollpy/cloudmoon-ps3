@@ -722,6 +722,8 @@ int cm_account_session_authenticate(const char *ca_bundle_path,
                                  &response, &response_length);
     } else return -1;
 
+    /* Do not retain account credentials in the temporary JSON request body. */
+    memset(request_body, 0, sizeof(request_body));
     if (rc != 0 || !response || !cm_api_success(response, response_length)) {
         free(response);
         return -1;
