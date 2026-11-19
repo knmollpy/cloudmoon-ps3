@@ -35,9 +35,9 @@ The PS4 build now includes the portable CloudMoon signalling modules:
 - The catalogue fetcher calls the CloudMoon game-list API and the parser keeps active mobile packages. The source integration is present; authenticated/personalized filtering and real-console API behaviour still need verification.
 
 The QR is a local-network hand-off; it does not use an undocumented CloudMoon cloud pairing endpoint:
-- Google authentication is performed by Google's own Identity Services button. The PS4 never asks for or stores a Google password.
-- A separate CloudMoon email/password option is available for accounts that have a CloudMoon password configured; credentials are not retained after the official HTTPS login request.
-- The local hand-off is protected by a one-time nonce and an ephemeral AES-CBC/HMAC key. The phone-to-console page is still served over the local network; active-LAN threat testing remains pending.
+- Google authentication remains on CloudMoon's official HTTPS origin; the local PS4 page does not attempt Google OAuth from an unregistered IP origin.
+- The phone bookmarklet transfers the already-authenticated CloudMoon bearer token, never the Google password, and uses the console's one-time nonce plus AES-CBC/HMAC encryption.
+- The bookmarklet requires a one-time manual save as a browser bookmark. It then asks for the current PS4 QR URL, so it can be reused for later pairings. Browser private-network/form-navigation behaviour and physical-device testing remain pending.
 - The current CloudMoon Google OAuth client may restrict allowed browser origins. The Google button must be tested from the local PS4 pairing page; if Google rejects the local origin, CloudMoon needs to authorize this origin or provide a device-code flow. Google auth on a physical phone/PS4 has not yet been verified.
 
 ## Platform port plan
