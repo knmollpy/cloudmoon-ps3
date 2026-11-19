@@ -5,6 +5,7 @@
 #include <orbis/libkernel.h>
 
 #include <emmintrin.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -442,7 +443,7 @@ int cm_orbis_h264_submit(const uint8_t *annex_b, size_t length) {
 
     (void)sceGnmFlushGarlic();
     read_ptr = (const uint8_t *)output.frameBuffer;
-    offset = read_ptr - (const uint8_t *)s_frame_mem.ptr;
+    offset = (ptrdiff_t)((uintptr_t)read_ptr - (uintptr_t)s_frame_mem.ptr);
     if (s_frame_read_alias && offset >= 0 &&
         (size_t)offset < s_frame_mem.size)
         read_ptr = (const uint8_t *)s_frame_read_alias + offset;
