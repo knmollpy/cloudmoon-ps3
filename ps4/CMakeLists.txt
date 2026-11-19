@@ -164,10 +164,14 @@ if(PS4)
         src/platform/cloudmoon_orbis_webrtc.c
         src/catalog/cloudmoon_catalog_fetch.c
         src/platform/orbis_dashboard.c
+        src/platform/orbis_network.c
+        src/account/cloudmoon_pairing.c
         src/account/cloudmoon_orbis_connection.c
         src/account/cloudmoon_orbis_game.c
     )
-    target_include_directories(cloudmoon_ps4_orbis_platform PUBLIC src/platform src/catalog)
+    target_include_directories(cloudmoon_ps4_orbis_platform PUBLIC
+        src/platform src/catalog src/account src/net src/qr
+    )
     target_include_directories(cloudmoon_ps4_orbis_platform PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/../vendor/libdatachannel/include"
     )
