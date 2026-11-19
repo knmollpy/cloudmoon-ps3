@@ -115,7 +115,6 @@ static int cm_read_ime_text(uint32_t user_id, OrbisImeType type,
     if (!output || output_capacity < 2 || max_text_length == 0 ||
         max_text_length > 1024)
         return -1;
-    output[0] = 0;
     memset(input, 0, sizeof(input));
     if (initial) {
         size_t i;
@@ -125,6 +124,7 @@ static int cm_read_ime_text(uint32_t user_id, OrbisImeType type,
             input[i] = (uint16_t)ch;
         }
     }
+    output[0] = 0;
     memset(&setting, 0, sizeof(setting));
     memset(&result, 0, sizeof(result));
 
