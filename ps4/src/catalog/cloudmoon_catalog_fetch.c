@@ -1,4 +1,5 @@
 #include "cloudmoon_catalog.h"
+#include <ctype.h>
 
 #include "cloudmoon_random_mbedtls.h"
 #include "cloudmoon_tls_polarssl.h"
@@ -766,7 +767,8 @@ int cm_account_session_prepare_game(const char *ca_bundle_path,
                                     cm_account_session_t *account,
                                     const char *game_package) {
     char *response = NULL, request_body[2048];
-    size_t response_length = 0, item_length = 0;
+    char locale_params[8];
+    size_t response_length = 0, item_length = 0, locale_index;
     const char *item = NULL;
     int n, rc;
 
@@ -792,19 +794,23 @@ int cm_account_session_prepare_game(const char *ca_bundle_path,
     free(response);
     response = NULL;
 
+    (void)snprintf(locale_params, sizeof(locale_params), "%.7s",
+                   account->locale[0] ? account->locale : "AR");
+    for (locale_index = 0; locale_params[locale_index]; ++locale_index)
+        locale_params[locale_index] =
+            (char)tolower((unsigned char)locale_params[locale_index]);
     n = snprintf(request_body, sizeof(request_body),
         "{\"android_id\":\"%s\",\"game_name\":\"%s\","
         "\"screen_res\":\"720x1280\",\"server_id\":%d,"
         "\"params\":\"{\\\"language\\\":\\\"%s\\\",\\\"locale\\\":\\\"%s\\\"}\"}",
         account->user_id, game_package, account->server_id,
-        account->language[0] ? account->language : "en",
-        account->locale[0] ? account->locale : "ar");
+        account->language[0] ? account->language : "en", locale_params);
     if (n < 0 || (size_t)n >= sizeof(request_body)) return -1;
 
     rc = cm_api_request_json("POST", "/phone/connect", account->token,
                              account->device_id,
                              account->language[0] ? account->language : "en",
-                             account->locale[0] ? account->locale : "ar",
+                             account->locale[0] ? account->locale : "AR",
                              request_body, ca_bundle_path, timeout_seconds,
                              &response, &response_length);
     if (rc != 0 || !cm_api_success(response, response_length) ||
