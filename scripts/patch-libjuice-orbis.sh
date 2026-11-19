@@ -238,3 +238,23 @@ elif new_name not in text:
 
 path.write_text(text)
 PY
+
+# OpenOrbis libc++ treats the braced iterator pair as an initializer_list.
+# Construct std::seed_seq with its iterator-range constructor explicitly.
+RANDOM_SOURCE="${4:-vendor/libdatachannel/src/impl/utils.cpp}"
+test -f "$RANDOM_SOURCE"
+
+python3 - "$RANDOM_SOURCE" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+old = "return {seed.begin(), seed.end()};"
+new = "return std::seed_seq(seed.begin(), seed.end());"
+if old in text:
+    text = text.replace(old, new, 1)
+elif new not in text:
+    raise SystemExit("libdatachannel seed_seq iterator return changed unexpectedly")
+path.write_text(text)
+PY
