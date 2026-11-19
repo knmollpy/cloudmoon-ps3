@@ -17,6 +17,7 @@
 
 static OpusDecoder *s_decoder;
 static int32_t s_audio_handle = -1;
+static int s_audio_initialized;
 static int s_ring_head;
 static int s_ring_tail;
 static int s_ring_count;
@@ -39,11 +40,14 @@ int cm_orbis_audio_start(void) {
     }
 
     (void)sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_AUDIOOUT);
-    rc = sceAudioOutInit();
-    if (rc < 0 && (uint32_t)rc != 0x8026000Eu) {
-        opus_decoder_destroy(s_decoder);
-        s_decoder = NULL;
-        return -1;
+    if (!s_audio_initialized) {
+        rc = sceAudioOutInit();
+        if (rc < 0) {
+            opus_decoder_destroy(s_decoder);
+            s_decoder = NULL;
+            return -1;
+        }
+        s_audio_initialized = 1;
     }
 
     {
