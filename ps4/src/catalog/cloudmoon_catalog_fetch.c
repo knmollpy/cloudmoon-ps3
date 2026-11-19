@@ -651,7 +651,8 @@ int cm_account_session_authenticate(const char *ca_bundle_path,
                                     const char *language,
                                     const char *locale,
                                     cm_account_session_t *account) {
-    char request_body[6144], *response = NULL;
+    char request_body[6144], email_json[640], password_json[2048];
+    char *response = NULL;
     size_t response_length = 0, used;
     const char *credential;
     char *escaped;
@@ -683,35 +684,38 @@ int cm_account_session_authenticate(const char *ca_bundle_path,
         if (!email || !email[0] || !password || !password[0] ||
             strlen(email) > 300 || strlen(password) > 1024) return -1;
         /* JSON escape the two user-supplied strings before constructing body. */
+        /* Keep the escaped values in separate buffers. The old code built
+           password_json in request_body and then used that same buffer as
+           both snprintf destination and source, which is undefined behavior
+           and can corrupt the password before it reaches the API. */
         used = 0;
-        escaped = request_body;
+        escaped = email_json;
         for (i = 0; email[i]; ++i) {
             unsigned char ch = (unsigned char)email[i];
             if (ch == '"' || ch == '\\') {
-                if (used + 2 >= sizeof(request_body)) return -1;
+                if (used + 2 >= sizeof(email_json)) return -1;
                 escaped[used++] = '\\'; escaped[used++] = (char)ch;
-            } else if (ch < 0x20 || used + 1 >= sizeof(request_body)) return -1;
+            } else if (ch < 0x20 || used + 1 >= sizeof(email_json)) return -1;
             else escaped[used++] = (char)ch;
         }
         escaped[used] = 0;
-        {
-            char email_json[640];
-            (void)snprintf(email_json, sizeof(email_json), "%s", escaped);
-            used = 0;
-            for (i = 0; password[i]; ++i) {
-                unsigned char ch = (unsigned char)password[i];
-                if (ch == '"' || ch == '\\') {
-                    if (used + 2 >= sizeof(request_body)) return -1;
-                    escaped[used++] = '\\'; escaped[used++] = (char)ch;
-                } else if (ch < 0x20 || used + 1 >= sizeof(request_body)) return -1;
-                else escaped[used++] = (char)ch;
-            }
-            escaped[used] = 0;
-            n = snprintf(request_body, sizeof(request_body),
-                         "{\"email\":\"%s\",\"password\":\"%s\"}",
-                         email_json, escaped);
-            if (n < 0 || (size_t)n >= sizeof(request_body)) return -1;
+
+        used = 0;
+        escaped = password_json;
+        for (i = 0; password[i]; ++i) {
+            unsigned char ch = (unsigned char)password[i];
+            if (ch == '"' || ch == '\\') {
+                if (used + 2 >= sizeof(password_json)) return -1;
+                escaped[used++] = '\\'; escaped[used++] = (char)ch;
+            } else if (ch < 0x20 || used + 1 >= sizeof(password_json)) return -1;
+            else escaped[used++] = (char)ch;
         }
+        escaped[used] = 0;
+
+        n = snprintf(request_body, sizeof(request_body),
+                     "{\"email\":\"%s\",\"password\":\"%s\"}",
+                     email_json, password_json);
+        if (n < 0 || (size_t)n >= sizeof(request_body)) return -1;
         rc = cm_orbis_random_init();
         if (rc != 0) return -1;
         memset(account->device_id, 0, sizeof(account->device_id));
