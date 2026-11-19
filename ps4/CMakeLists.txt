@@ -143,8 +143,10 @@ if(PS4)
         src/platform/orbis_video.c
         src/platform/orbis_h264.c
         src/platform/orbis_audio.c
+        src/platform/cloudmoon_orbis_webrtc.c
         src/platform/orbis_dashboard.c
         src/account/cloudmoon_orbis_connection.c
+        src/account/cloudmoon_orbis_game.c
     )
     target_include_directories(cloudmoon_ps4_orbis_platform PUBLIC src/platform)
     target_include_directories(cloudmoon_ps4_orbis_platform PUBLIC
