@@ -4,7 +4,23 @@ set -euo pipefail
 : "${OO_PS4_TOOLCHAIN:?OO_PS4_TOOLCHAIN must point to OpenOrbis PS4Toolchain}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TOOLS="${OO_PS4_TOOLCHAIN}/bin/linux"
-MODULES="${OO_PS4_TOOLCHAIN}/bin/data/modules"
+# OpenOrbis package compatibility modules are shipped in the toolchain archive,
+# but their location differs between toolchain layouts/releases. Resolve them
+# by filename rather than assuming a fixed subdirectory.
+find_module() {
+    local name="$1"
+    local path
+    path="$(find "${OO_PS4_TOOLCHAIN}" -type f -name "${name}" -print -quit 2>/dev/null || true)"
+    if [[ -z "${path}" || ! -s "${path}" ]]; then
+        echo "Required OpenOrbis compatibility module not found: ${name}" >&2
+        echo "Searched under: ${OO_PS4_TOOLCHAIN}" >&2
+        find "${OO_PS4_TOOLCHAIN}" -maxdepth 5 -type f -name '*.prx' -print >&2 || true
+        return 1
+    fi
+    printf '%s' "${path}"
+}
+LIBC_PRX="$(find_module libc.prx)"
+FIOS_PRX="$(find_module libSceFios2.prx)"
 BUILD_DIR="${ROOT}/build-ps4-modules"
 OUT_DIR="${ROOT}/dist/cloudmoon-ps4"
 TITLE_ID="CLDM00001"
@@ -18,13 +34,11 @@ test -f "${APP_ELF}"
 test -s "${ROOT}/assets/cacert.pem"
 # OpenOrbis homebrew packages must carry these compatibility modules.
 # Omitting them can make the PS4 report that the installed app data is corrupt.
-test -s "${MODULES}/libc.prx"
-test -s "${MODULES}/libSceFios2.prx"
 
 rm -rf "${OUT_DIR}"
 mkdir -p "${OUT_DIR}/sce_sys" "${OUT_DIR}/sce_module" "${OUT_DIR}/assets/misc"
-cp "${MODULES}/libc.prx" "${OUT_DIR}/sce_module/libc.prx"
-cp "${MODULES}/libSceFios2.prx" "${OUT_DIR}/sce_module/libSceFios2.prx"
+cp "${LIBC_PRX}" "${OUT_DIR}/sce_module/libc.prx"
+cp "${FIOS_PRX}" "${OUT_DIR}/sce_module/libSceFios2.prx"
 cp "${ROOT}/assets/cacert.pem" "${OUT_DIR}/assets/misc/cacert.pem"
 cp "${ROOT}/scripts/generate-ps4-icon.py" "${OUT_DIR}/generate-icon.py"
 (
