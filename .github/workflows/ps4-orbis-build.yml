@@ -15,7 +15,7 @@ on:
 
 concurrency:
   group: cloudmoon-ps4-orbis-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   orbis-compile:
