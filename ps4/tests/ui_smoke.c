@@ -59,9 +59,19 @@ int main(void) {
     assert(result.type == CM_UI_ACTION_PLAY_GAME);
     assert(result.game_index == 8);
 
-    state.view = CM_UI_LINK;
+    /* An empty catalog must not launch the login keyboard when CROSS is
+       pressed. The user enters VINCULAR explicitly with R1/L1. */
+    model.game_count = 0;
+    state.view = CM_UI_LIBRARY;
     result = cm_ui_input(&state, CM_UI_KEY_CROSS, &model);
-    assert(result.type == CM_UI_ACTION_REQUEST_LINK);
+    assert(result.type == CM_UI_ACTION_NONE);
+    assert(state.view == CM_UI_LIBRARY);
+
+    result = cm_ui_input(&state, CM_UI_KEY_R1, &model);
+    assert(result.type == CM_UI_ACTION_NONE);
+    assert(state.view == CM_UI_LINK);
+    result = cm_ui_input(&state, CM_UI_KEY_CROSS, &model);
+    assert(result.type == CM_UI_ACTION_EDIT_EMAIL);
 
     free(pixels);
     return 0;
