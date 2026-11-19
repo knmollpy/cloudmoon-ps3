@@ -68,7 +68,7 @@ static const char s_pair_page[] =
 "<div id='result'>Esperando autorización…</div></main>"
 "<script src='https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js'></script>"
 "<script src='https://accounts.google.com/gsi/client' async defer></script><script>"
-"const KEY_HEX='__PAIR_KEY__',result=document.getElementById('result'),server=document.getElementById('server');"
+"const KEY_HEX=new URLSearchParams(location.hash.slice(1)).get('k')||'',result=document.getElementById('result'),server=document.getElementById('server');"
 "function encryptPayload(payload){if(!window.CryptoJS)throw new Error('No se pudo cargar el cifrado seguro');"
 "const aesKey=CryptoJS.enc.Hex.parse(KEY_HEX.slice(0,32)),macKey=CryptoJS.enc.Hex.parse(KEY_HEX.slice(32));"
 "const iv=CryptoJS.lib.WordArray.random(16),cipher=CryptoJS.AES.encrypt("
@@ -93,25 +93,6 @@ static const char s_pair_page[] =
 "else if(Date.now()-start>12000){clearInterval(timer);result.textContent="
 "'Google no pudo iniciarse en este navegador. Comprueba que el teléfono tenga acceso a Google.';}},200);});"
 "</script></body></html>";
-
-static int build_pair_page(const cm_pairing_service_t *service,
-                           char *output, size_t capacity) {
-    static const char marker[] = "__PAIR_KEY__";
-    const char *where;
-    size_t prefix, suffix, key_length;
-    if (!service || !output || capacity == 0) return -1;
-    where = strstr(s_pair_page, marker);
-    if (!where) return -1;
-    prefix = (size_t)(where - s_pair_page);
-    key_length = strlen(service->pair_key_hex);
-    suffix = strlen(where + sizeof(marker) - 1u);
-    if (prefix + key_length + suffix + 1u > capacity) return -1;
-    memcpy(output, s_pair_page, prefix);
-    memcpy(output + prefix, service->pair_key_hex, key_length);
-    memcpy(output + prefix + key_length,
-           where + sizeof(marker) - 1u, suffix + 1u);
-    return (int)(prefix + key_length + suffix);
-}
 
 static int hex_decode(const char *input, uint8_t *output, size_t capacity) {
     size_t i, length;
@@ -299,15 +280,8 @@ static void handle_client(cm_pairing_service_t *service, int fd) {
     }
 
     if (strcmp(method, "GET") == 0) {
-        char page[8192];
-        int page_length = build_pair_page(service, page, sizeof(page));
-        if (page_length < 0) {
-            (void)send_response(fd, 500, "Internal Server Error", "text/plain",
-                                "Could not prepare pairing page", 31);
-            return;
-        }
         (void)send_response(fd, 200, "OK", "text/html; charset=utf-8",
-                            page, (size_t)page_length);
+                            s_pair_page, sizeof(s_pair_page) - 1);
         return;
     }
 
