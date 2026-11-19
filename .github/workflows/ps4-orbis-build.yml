@@ -1,4 +1,4 @@
-name: CloudMoon PS4 Orbis cross-compile
+name: CloudMoon PS4 application build
 
 on:
   push:
@@ -76,14 +76,14 @@ jobs:
       - name: Cross-compile and link CloudMoon PS4 preview
         run: cmake --build build-ps4-modules --verbose
 
-      - name: Package installable CloudMoon UI preview PKG
+      - name: Package installable CloudMoon PS4 app PKG
         env:
           DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
         run: bash scripts/package-ps4-preview.sh
 
-      - name: Upload CloudMoon PS4 preview PKG
+      - name: Upload CloudMoon PS4 application PKG
         uses: actions/upload-artifact@v4
         with:
-          name: cloudmoon-ps4-preview-pkg
-          path: dist/cloudmoon-ps4-preview/*.pkg
+          name: cloudmoon-ps4-application-pkg
+          path: dist/cloudmoon-ps4/*.pkg
           if-no-files-found: error
