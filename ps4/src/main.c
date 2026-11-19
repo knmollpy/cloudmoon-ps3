@@ -59,16 +59,16 @@ static int load_catalog(cm_app_context_t *app, cm_ui_model_t *model) {
     return 0;
 }
 
-static int cm_ime_text_to_utf8(const wchar_t *source,
+static int cm_ime_text_to_utf8(const uint16_t *source,
                               char *output, size_t output_capacity) {
     size_t used = 0;
     size_t i = 0;
 
     if (!source || !output || output_capacity == 0) return -1;
     while (source[i] != 0) {
-        uint32_t cp = (uint32_t)source[i++];
+        uint32_t cp = source[i++];
         if (cp >= 0xd800u && cp <= 0xdbffu) {
-            uint32_t low = (uint32_t)source[i];
+            uint32_t low = source[i];
             if (low < 0xdc00u || low > 0xdfffu) return -1;
             ++i;
             cp = 0x10000u + ((cp - 0xd800u) << 10) + (low - 0xdc00u);
@@ -102,11 +102,11 @@ static int cm_ime_text_to_utf8(const wchar_t *source,
 }
 
 static int cm_read_ime_text(uint32_t user_id, OrbisImeType type,
-                            const wchar_t *title, uint32_t max_text_length,
+                            const uint16_t *title, uint32_t max_text_length,
                             char *output, size_t output_capacity) {
     OrbisImeDialogSetting setting;
     OrbisDialogResult result;
-    wchar_t input[1025];
+    uint16_t input[1025];
     int status, rc, polls = 0;
 
     if (!output || output_capacity < 2 || max_text_length == 0 ||
@@ -124,13 +124,13 @@ static int cm_read_ime_text(uint32_t user_id, OrbisImeType type,
     setting.inputMethod = ORBIS__DEFAULT;
     setting.option = (type == ORBIS_TYPE_BASIC_LATIN) ? 4u : 0u; /* ORBIS_IME_OPTION_PASSWORD */
     setting.maxTextLength = max_text_length;
-    setting.inputTextBuffer = input;
+    setting.inputTextBuffer = (wchar_t *)(void *)input;
     setting.posx = 0.0f;
     setting.posy = 0.0f;
     setting.horizontalAlignment = ORBIS_H_LEFT;
     setting.verticalAlignment = ORBIS_V_CENTER;
     setting.placeholder = NULL;
-    setting.title = title;
+    setting.title = (const wchar_t *)(const void *)title;
 
     rc = sceImeDialogInit(&setting, NULL);
     if (rc < 0) {
@@ -168,6 +168,12 @@ static int cm_read_ime_text(uint32_t user_id, OrbisImeType type,
 
 static int start_password_login(cm_app_context_t *app,
                                 cm_ui_model_t *model) {
+    static const uint16_t email_title[] = {
+        'C','l','o','u','d','M','o','o','n',' ','-',' ','C','o','r','r','e','o',0
+    };
+    static const uint16_t password_title[] = {
+        'C','l','o','u','d','M','o','o','n',' ','-',' ','C','o','n','t','r','a','s','e','n','a',0
+    };
     char email[321];
     char password[1025];
     cm_account_session_t authenticated;
@@ -189,7 +195,7 @@ static int start_password_login(cm_app_context_t *app,
                    "Introduce el correo de tu cuenta CloudMoon.");
     model->status_text = app->status;
     rc = cm_read_ime_text((uint32_t)app->psn_user_id, ORBIS_TYPE_MAIL,
-                          L"CloudMoon - Correo electronico", 256,
+                          email_title, 256,
                           email, sizeof(email));
     if (rc != 0) {
         (void)snprintf(app->status, sizeof(app->status),
@@ -203,7 +209,7 @@ static int start_password_login(cm_app_context_t *app,
                    "Introduce tu contrasena de CloudMoon.");
     model->status_text = app->status;
     rc = cm_read_ime_text((uint32_t)app->psn_user_id, ORBIS_TYPE_BASIC_LATIN,
-                          L"CloudMoon - Contrasena", 256,
+                          password_title, 256,
                           password, sizeof(password));
     if (rc != 0) {
         (void)snprintf(app->status, sizeof(app->status),
