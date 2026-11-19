@@ -435,7 +435,7 @@ int cm_pairing_start(cm_pairing_service_t **out,
                      const char *ca_bundle_path,
                      unsigned timeout_seconds) {
     cm_pairing_service_t *service;
-    uint8_t random_bytes[CM_PAIR_NONCE_BYTES];
+    uint8_t random_bytes[CM_PAIR_NONCE_BYTES + CM_PAIR_KEY_BYTES];
     static const char hex[] = "0123456789ABCDEF";
     struct sockaddr_in address;
     int i, n;
@@ -468,9 +468,20 @@ int cm_pairing_start(cm_pairing_service_t **out,
         service->nonce[i * 2 + 1] = hex[random_bytes[i] & 15];
     }
     service->nonce[CM_PAIR_NONCE_BYTES * 2] = 0;
+    memcpy(service->pair_key, random_bytes + CM_PAIR_NONCE_BYTES,
+           CM_PAIR_KEY_BYTES);
+    for (i = 0; i < CM_PAIR_KEY_BYTES; ++i) {
+        service->pair_key_hex[i * 2] =
+            "0123456789abcdef"[(unsigned char)service->pair_key[i] >> 4];
+        service->pair_key_hex[i * 2 + 1] =
+            "0123456789abcdef"[(unsigned char)service->pair_key[i] & 15];
+    }
+    service->pair_key_hex[CM_PAIR_KEY_BYTES * 2] = 0;
 
-    n = snprintf(service->url, sizeof(service->url), "http://%s:%d/pair/%s",
-                 service->ip, CM_PAIR_PORT, service->nonce);
+    n = snprintf(service->url, sizeof(service->url),
+                 "http://%s:%d/pair/%s#k=%s",
+                 service->ip, CM_PAIR_PORT, service->nonce,
+                 service->pair_key_hex);
     if (n < 0 || (size_t)n >= sizeof(service->url) ||
         cm_qr_encode(service->url, &service->qr) < 0) {
         free(service);
@@ -502,7 +513,7 @@ int cm_pairing_start(cm_pairing_service_t **out,
 
     service->running = 1;
     (void)snprintf(service->status, sizeof(service->status),
-                   "Escanea el QR con el telefono y pega el enlace de sesion");
+                   "Escanea el QR e inicia sesion en CloudMoon desde el telefono");
     if (pthread_create(&service->thread, NULL, pairing_thread, service) != 0) {
         close(service->listen_fd);
         free(service);
