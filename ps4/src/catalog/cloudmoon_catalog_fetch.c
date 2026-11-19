@@ -818,21 +818,41 @@ int cm_account_session_prepare_game(const char *ca_bundle_path,
     if (rc != 0 || !cm_api_success(response, response_length) ||
         cm_get_data_string(response, response_length, "android_instance_id",
                            account->android_instance_id,
-                           sizeof(account->android_instance_id)) < 0) {
+                           sizeof(account->android_instance_id)) < 0 ||
+        cm_get_data_string(response, response_length, "coordinator_host",
+                           account->coordinator_host,
+                           sizeof(account->coordinator_host)) < 0) {
         free(response);
         return -1;
     }
     free(response);
 
-    /* Decode the coordinator from the instance id using the same protocol
-       routine as CloudMoon's web client. */
-    if (cm_cloudmoon_get_coordinator(account->android_instance_id,
-                                     account->coordinator_host,
-                                     sizeof(account->coordinator_host),
-                                     &account->coordinator_port,
-                                     account->coordinator_path,
-                                     sizeof(account->coordinator_path)) != 0)
-        return -1;
+    /* Match the regional coordinator aliases used by CloudMoon's web client. */
+    {
+        const char *coordinator_url = account->coordinator_host;
+        char normalized_url[320], parsed_path[128];
+        if (strcmp(coordinator_url,
+                   "https://coordinator-sgp-cf.prod.nenly.cn") == 0)
+            coordinator_url = "https://coor-sgp.prod.cloudmoonapp.com";
+        else if (strcmp(coordinator_url,
+                        "https://coordinator-sgp-cf-sp.prod.nenly.cn") == 0)
+            coordinator_url = "https://coor-nl.prod.cloudmoonapp.com";
+        else if (strcmp(coordinator_url,
+                        "https://coordinator-funplus-va.prod.nenly.cn") == 0)
+            coordinator_url = "https://coor-la.prod.cloudmoonapp.com";
+        (void)snprintf(normalized_url, sizeof(normalized_url), "%s",
+                       coordinator_url);
+        memset(account->coordinator_host, 0, sizeof(account->coordinator_host));
+        if (cm_cloudmoon_parse_https_url(normalized_url,
+                                         account->coordinator_host,
+                                         sizeof(account->coordinator_host),
+                                         &account->coordinator_port,
+                                         parsed_path, sizeof(parsed_path)) != 0)
+            return -1;
+        (void)snprintf(account->coordinator_path,
+                       sizeof(account->coordinator_path),
+                       "/client/socket.io/?EIO=3&transport=websocket");
+    }
     (void)snprintf(account->game, sizeof(account->game), "%.128s", game_package);
     return account->coordinator_host[0] && account->coordinator_port != 0 ? 0 : -1;
 }
