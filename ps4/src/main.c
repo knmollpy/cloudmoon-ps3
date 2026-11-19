@@ -124,7 +124,6 @@ static int cm_read_ime_text(uint32_t user_id, OrbisImeType type,
             input[i] = (uint16_t)ch;
         }
     }
-    output[0] = 0;
     memset(&setting, 0, sizeof(setting));
     memset(&result, 0, sizeof(result));
 
