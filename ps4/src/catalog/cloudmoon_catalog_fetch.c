@@ -449,3 +449,406 @@ int cm_account_session_fetch(const char *ca_bundle_path,
 
     return -1;
 }
+
+
+/* CloudMoon web API account authentication and remote-phone session setup.
+   API request shape mirrors the current public CloudMoon web client. */
+#define CM_WEB_API_HOST "api.prod.cloudmoonapp.com"
+
+static int cm_hex_encode(const uint8_t *input, size_t length,
+                         char *output, size_t capacity) {
+    static const char hex[] = "0123456789abcdef";
+    size_t i;
+    if (!input || !output || capacity < length * 2u + 1u) return -1;
+    for (i = 0; i < length; ++i) {
+        output[i * 2u] = hex[input[i] >> 4];
+        output[i * 2u + 1u] = hex[input[i] & 15u];
+    }
+    output[length * 2u] = 0;
+    return (int)(length * 2u);
+}
+
+static int cm_make_uuid(char *out, size_t capacity) {
+    uint8_t bytes[16];
+    int n;
+    if (!out || capacity < 37 || cm_orbis_random_source(NULL, bytes, sizeof(bytes)) != 0)
+        return -1;
+    bytes[6] = (uint8_t)((bytes[6] & 0x0fu) | 0x40u);
+    bytes[8] = (uint8_t)((bytes[8] & 0x3fu) | 0x80u);
+    n = snprintf(out, capacity,
+        "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5],
+        bytes[6], bytes[7], bytes[8], bytes[9], bytes[10], bytes[11],
+        bytes[12], bytes[13], bytes[14], bytes[15]);
+    return n == 36 ? 0 : -1;
+}
+
+static int cm_api_request_json(const char *method, const char *path,
+                               const char *token, const char *device_id,
+                               const char *language, const char *locale,
+                               const char *request_body,
+                               const char *ca_bundle, unsigned timeout,
+                               char **body_out, size_t *body_length_out) {
+    cm_tls_connection *tls = NULL;
+    char request[8192], request_path[2048], query_uuid[37], status_line[64];
+    char headers[2048];
+    char *response = NULL, *body = NULL;
+    size_t response_length = 0, header_length = 0, body_length = 0;
+    size_t expected_body = 0, request_body_length = request_body ? strlen(request_body) : 0;
+    int expected_found = 1, chunked = 0, status = 0, request_length, header_length_out;
+    int rc = -1;
+    unsigned char block[4096];
+
+    if (!method || !path || !device_id || !device_id[0] || !ca_bundle ||
+        !body_out || !body_length_out || !language || !locale)
+        return -1;
+    *body_out = NULL;
+    *body_length_out = 0;
+    if (cm_make_uuid(query_uuid, sizeof(query_uuid)) != 0) return -1;
+    request_length = snprintf(request_path, sizeof(request_path),
+        "%s%cdevice_type=web&query_uuid=%s&device_id=%s",
+        path, strchr(path, '?') ? '&' : '?', query_uuid, device_id);
+    if (request_length < 0 || (size_t)request_length >= sizeof(request_path))
+        return -1;
+
+    header_length_out = snprintf(headers, sizeof(headers),
+        "Host: %s\r\n"
+        "Accept: application/json\r\n"
+        "Accept-Encoding: identity\r\n"
+        "User-Agent: CloudMoon-PS4/0.2\r\n"
+        "X-User-Locale: %s\r\n"
+        "X-User-Language: %s\r\n"
+        "%s%s%s"
+        "Content-Type: application/json\r\n"
+        "Content-Length: %lu\r\n"
+        "Connection: close\r\n\r\n",
+        CM_WEB_API_HOST, locale, language,
+        token && token[0] ? "X-User-Token: " : "",
+        token && token[0] ? token : "",
+        token && token[0] ? "\r\n" : "",
+        (unsigned long)request_body_length);
+    if (header_length_out < 0 || (size_t)header_length_out >= sizeof(headers))
+        return -1;
+    request_length = snprintf(request, sizeof(request), "%s %s HTTP/1.1\r\n%s",
+                              method, request_path, headers);
+    if (request_length < 0 || (size_t)request_length >= sizeof(request))
+        return -1;
+    response = (char *)malloc(CM_HTTP_RESPONSE_MAX + CM_HTTP_HEADER_MAX + 1u);
+    if (!response) return -1;
+
+    if (cm_tls_connect_polarssl(&tls, CM_WEB_API_HOST, 443, ca_bundle, timeout) != 0)
+        goto done;
+    if (cm_tls_write_polarssl(tls, request, (size_t)request_length) != request_length)
+        goto done;
+    if (request_body_length &&
+        cm_tls_write_polarssl(tls, request_body, request_body_length) !=
+            (int)request_body_length)
+        goto done;
+
+    while (response_length < CM_HTTP_RESPONSE_MAX + CM_HTTP_HEADER_MAX) {
+        int n = cm_tls_read_polarssl(tls, block, sizeof(block));
+        if (n < 0) goto done;
+        if (n == 0) break;
+        if ((size_t)n > CM_HTTP_RESPONSE_MAX + CM_HTTP_HEADER_MAX - response_length)
+            goto done;
+        memcpy(response + response_length, block, (size_t)n);
+        response_length += (size_t)n;
+        response[response_length] = 0;
+        if (!header_length) {
+            size_t offset;
+            if (find_header_end(response, response_length, &offset)) {
+                header_length = offset;
+                {
+                    const char *line_end = strstr(response, "\r\n");
+                    size_t line_length = line_end ? (size_t)(line_end - response) : 0;
+                    if (!line_end || line_length >= sizeof(status_line)) goto done;
+                    memcpy(status_line, response, line_length);
+                    status_line[line_length] = 0;
+                    if (sscanf(status_line, "HTTP/%*u.%*u %d", &status) != 1 ||
+                        status != 200) goto done;
+                }
+                expected_found = parse_content_length(response, header_length,
+                                                      &expected_body);
+                if (expected_found < 0) goto done;
+                chunked = is_chunked(response, header_length);
+                if (!chunked && expected_found == 0 &&
+                    response_length - header_length >= expected_body) break;
+            } else if (response_length > CM_HTTP_HEADER_MAX) goto done;
+        } else if (!chunked && expected_found == 0 &&
+                   response_length - header_length >= expected_body) break;
+    }
+    if (!header_length || response_length < header_length) goto done;
+    body = (char *)malloc(CM_HTTP_RESPONSE_MAX + 1u);
+    if (!body) goto done;
+    if (chunked) {
+        if (decode_chunked(response + header_length,
+                           response_length - header_length,
+                           body, CM_HTTP_RESPONSE_MAX, &body_length) != 0)
+            goto done;
+    } else {
+        size_t available = response_length - header_length;
+        if (expected_found == 0) {
+            if (available < expected_body) goto done;
+            available = expected_body;
+        }
+        if (available == 0 || available > CM_HTTP_RESPONSE_MAX) goto done;
+        memcpy(body, response + header_length, available);
+        body_length = available;
+    }
+    body[body_length] = 0;
+    *body_out = body;
+    *body_length_out = body_length;
+    body = NULL;
+    rc = 0;
+done:
+    if (tls) cm_tls_close_polarssl(tls);
+    free(body);
+    free(response);
+    return rc;
+}
+
+static int cm_get_data_string(const char *json, size_t length,
+                              const char *key, char *out, size_t capacity) {
+    const char *data;
+    size_t data_length;
+    if (cm_find_data_object(json, length, &data, &data_length) != 0) return -1;
+    return cm_json_get_string(data, data_length, key, out, capacity);
+}
+
+static int cm_find_first_list_item(const char *json, size_t length,
+                                   const char **item, size_t *item_length) {
+    const char *p, *end, *start;
+    int depth = 0, in_string = 0, escaped = 0;
+    if (!json || !item || !item_length) return -1;
+    end = json + length;
+    p = json;
+    while (p + 6 < end && memcmp(p, "\"list\"", 6) != 0) ++p;
+    if (p + 6 >= end) return -1;
+    p += 6;
+    while (p < end && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')) ++p;
+    if (p >= end || *p++ != ':') return -1;
+    while (p < end && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')) ++p;
+    if (p >= end || *p++ != '[') return -1;
+    while (p < end && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')) ++p;
+    if (p >= end || *p != '{') return -1;
+    start = p;
+    do {
+        char ch = *p++;
+        if (in_string) {
+            if (escaped) escaped = 0;
+            else if (ch == '\\') escaped = 1;
+            else if (ch == '"') in_string = 0;
+        } else if (ch == '"') in_string = 1;
+        else if (ch == '{') ++depth;
+        else if (ch == '}') --depth;
+    } while (p < end && depth > 0);
+    if (depth != 0 || in_string) return -1;
+    *item = start;
+    *item_length = (size_t)(p - start);
+    return 0;
+}
+
+static int cm_api_success(const char *json, size_t length) {
+    int code = -1;
+    return cm_json_get_integer(json, length, "code", &code) == 0 && code == 0;
+}
+
+int cm_account_session_authenticate(const char *ca_bundle_path,
+                                    unsigned timeout_seconds,
+                                    const char *provider,
+                                    const char *google_id_token,
+                                    const char *email,
+                                    const char *password,
+                                    int server_id,
+                                    const char *language,
+                                    const char *locale,
+                                    cm_account_session_t *account) {
+    char request_body[6144], *response = NULL;
+    size_t response_length = 0, used;
+    const char *credential;
+    char *escaped;
+    int n, rc;
+    static const int allowed_servers[] = {21, 22, 23, 3, 4};
+    size_t i;
+    int server_ok = 0;
+
+    if (!ca_bundle_path || !account || timeout_seconds == 0 ||
+        !provider || !language || !locale) return -1;
+    for (i = 0; i < sizeof(allowed_servers) / sizeof(allowed_servers[0]); ++i)
+        if (server_id == allowed_servers[i]) server_ok = 1;
+    if (!server_ok) return -1;
+    if (strcmp(provider, "google") == 0) {
+        credential = google_id_token;
+        if (!credential || !credential[0] || strlen(credential) > 4096) return -1;
+        n = snprintf(request_body, sizeof(request_body),
+                     "{\"google_id_token\":\"%s\"}", credential);
+        if (n < 0 || (size_t)n >= sizeof(request_body)) return -1;
+        rc = cm_orbis_random_init();
+        if (rc != 0) return -1;
+        memset(account->device_id, 0, sizeof(account->device_id));
+        if (cm_make_uuid(account->device_id, sizeof(account->device_id)) != 0) return -1;
+        rc = cm_api_request_json("POST", "/login/google", NULL,
+                                 account->device_id, language, locale,
+                                 request_body, ca_bundle_path, timeout_seconds,
+                                 &response, &response_length);
+    } else if (strcmp(provider, "password") == 0) {
+        if (!email || !email[0] || !password || !password[0] ||
+            strlen(email) > 300 || strlen(password) > 1024) return -1;
+        /* JSON escape the two user-supplied strings before constructing body. */
+        used = 0;
+        escaped = request_body;
+        for (i = 0; email[i]; ++i) {
+            unsigned char ch = (unsigned char)email[i];
+            if (ch == '"' || ch == '\\') {
+                if (used + 2 >= sizeof(request_body)) return -1;
+                escaped[used++] = '\\'; escaped[used++] = (char)ch;
+            } else if (ch < 0x20 || used + 1 >= sizeof(request_body)) return -1;
+            else escaped[used++] = (char)ch;
+        }
+        escaped[used] = 0;
+        {
+            char email_json[640];
+            (void)snprintf(email_json, sizeof(email_json), "%s", escaped);
+            used = 0;
+            for (i = 0; password[i]; ++i) {
+                unsigned char ch = (unsigned char)password[i];
+                if (ch == '"' || ch == '\\') {
+                    if (used + 2 >= sizeof(request_body)) return -1;
+                    escaped[used++] = '\\'; escaped[used++] = (char)ch;
+                } else if (ch < 0x20 || used + 1 >= sizeof(request_body)) return -1;
+                else escaped[used++] = (char)ch;
+            }
+            escaped[used] = 0;
+            n = snprintf(request_body, sizeof(request_body),
+                         "{\"email\":\"%s\",\"password\":\"%s\"}",
+                         email_json, escaped);
+            if (n < 0 || (size_t)n >= sizeof(request_body)) return -1;
+        }
+        rc = cm_orbis_random_init();
+        if (rc != 0) return -1;
+        memset(account->device_id, 0, sizeof(account->device_id));
+        if (cm_make_uuid(account->device_id, sizeof(account->device_id)) != 0) return -1;
+        rc = cm_api_request_json("POST", "/login/pwd", NULL,
+                                 account->device_id, language, locale,
+                                 request_body, ca_bundle_path, timeout_seconds,
+                                 &response, &response_length);
+    } else return -1;
+
+    if (rc != 0 || !response || !cm_api_success(response, response_length)) {
+        free(response);
+        return -1;
+    }
+    memset(account->token, 0, sizeof(account->token));
+    memset(account->email, 0, sizeof(account->email));
+    if (cm_get_data_string(response, response_length, "token",
+                           account->token, sizeof(account->token)) < 0 ||
+        cm_get_data_string(response, response_length, "user_id",
+                           account->user_id, sizeof(account->user_id)) < 0) {
+        free(response);
+        return -1;
+    }
+    free(response);
+    response = NULL;
+
+    if (cm_api_request_json("GET", "/user/info", account->token,
+                            account->device_id, language, locale, NULL,
+                            ca_bundle_path, timeout_seconds,
+                            &response, &response_length) == 0 &&
+        cm_api_success(response, response_length))
+        (void)cm_get_data_string(response, response_length, "email",
+                                 account->email, sizeof(account->email));
+    free(response);
+    response = NULL;
+    if (!account->email[0] && email && email[0])
+        (void)snprintf(account->email, sizeof(account->email), "%s", email);
+
+    account->server_id = server_id;
+    (void)snprintf(account->language, sizeof(account->language), "%.7s", language);
+    (void)snprintf(account->locale, sizeof(account->locale), "%.7s", locale);
+    (void)snprintf(account->api_host, sizeof(account->api_host), "%s", CM_WEB_API_HOST);
+    account->sid[0] = 0;
+    account->game[0] = 0;
+    account->android_instance_id[0] = 0;
+    account->coordinator_host[0] = 0;
+    account->coordinator_path[0] = 0;
+    account->coordinator_port = 0;
+    return account->token[0] ? 0 : -1;
+}
+
+int cm_account_session_prepare_game(const char *ca_bundle_path,
+                                    unsigned timeout_seconds,
+                                    cm_account_session_t *account,
+                                    const char *game_package) {
+    char *response = NULL, request_body[2048];
+    size_t response_length = 0, item_length = 0;
+    const char *item = NULL;
+    int n, rc;
+    char encoded_instance[2049];
+
+    if (!ca_bundle_path || !account || !account->token[0] ||
+        !account->device_id[0] || !game_package || !game_package[0] ||
+        timeout_seconds == 0)
+        return -1;
+
+    rc = cm_api_request_json("GET", "/phone/list", account->token,
+                             account->device_id,
+                             account->language[0] ? account->language : "en",
+                             account->locale[0] ? account->locale : "ar",
+                             NULL, ca_bundle_path, timeout_seconds,
+                             &response, &response_length);
+    if (rc != 0 || !cm_api_success(response, response_length) ||
+        cm_find_first_list_item(response, response_length,
+                                &item, &item_length) != 0 ||
+        cm_json_get_string(item, item_length, "android_id",
+                           account->user_id, sizeof(account->user_id)) < 0) {
+        free(response);
+        return -1;
+    }
+    free(response);
+    response = NULL;
+
+    n = snprintf(request_body, sizeof(request_body),
+        "{\"android_id\":\"%s\",\"game_name\":\"%s\","
+        "\"screen_res\":\"720x1280\",\"server_id\":%d,"
+        "\"params\":\"{\\\"language\\\":\\\"%s\\\",\\\"locale\\\":\\\"%s\\\"}\"}",
+        account->user_id, game_package, account->server_id,
+        account->language[0] ? account->language : "en",
+        account->locale[0] ? account->locale : "ar");
+    if (n < 0 || (size_t)n >= sizeof(request_body)) return -1;
+
+    rc = cm_api_request_json("POST", "/phone/connect", account->token,
+                             account->device_id,
+                             account->language[0] ? account->language : "en",
+                             account->locale[0] ? account->locale : "ar",
+                             request_body, ca_bundle_path, timeout_seconds,
+                             &response, &response_length);
+    if (rc != 0 || !cm_api_success(response, response_length) ||
+        cm_get_data_string(response, response_length, "android_instance_id",
+                           account->android_instance_id,
+                           sizeof(account->android_instance_id)) < 0) {
+        free(response);
+        return -1;
+    }
+    (void)cm_get_data_string(response, response_length, "coordinator_host",
+                             account->coordinator_host,
+                             sizeof(account->coordinator_host));
+    free(response);
+
+    /* The instance identifier contains a coordinator URL in the current
+       CloudMoon client protocol. Prefer an explicit API host if supplied,
+       otherwise decode that URL and derive the Socket.IO endpoint. */
+    if (cm_cloudmoon_get_coordinator(account->android_instance_id,
+                                     encoded_instance, sizeof(encoded_instance),
+                                     &account->coordinator_port,
+                                     account->coordinator_path,
+                                     sizeof(account->coordinator_path)) == 0) {
+        if (!account->coordinator_host[0])
+            (void)snprintf(account->coordinator_host,
+                           sizeof(account->coordinator_host), "%s",
+                           encoded_instance);
+    } else if (!account->coordinator_host[0]) {
+        return -1;
+    }
+    (void)snprintf(account->game, sizeof(account->game), "%.128s", game_package);
+    return account->coordinator_host[0] && account->coordinator_port != 0 ? 0 : -1;
+}
