@@ -173,6 +173,7 @@ if(PS4)
         src/catalog/cloudmoon_catalog_fetch.c
         src/platform/orbis_dashboard.c
         src/platform/orbis_network.c
+        src/net/cloudmoon_orbis_libc_compat.c
         src/account/cloudmoon_pairing.c
         src/account/cloudmoon_orbis_connection.c
         src/account/cloudmoon_orbis_game.c
