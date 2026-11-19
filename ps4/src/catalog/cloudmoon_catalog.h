@@ -50,6 +50,15 @@ int cm_account_session_authenticate(const char *ca_bundle_path,
                                     const char *language,
                                     const char *locale,
                                     cm_account_session_t *account);
+/* Validate a CloudMoon bearer token obtained from the official logged-in web client. */
+int cm_account_session_import_token(const char *ca_bundle_path,
+                                    unsigned timeout_seconds,
+                                    const char *token,
+                                    const char *user_id,
+                                    int server_id,
+                                    const char *language,
+                                    const char *locale,
+                                    cm_account_session_t *account);
 int cm_account_session_prepare_game(const char *ca_bundle_path,
                                     unsigned timeout_seconds,
                                     cm_account_session_t *account,
