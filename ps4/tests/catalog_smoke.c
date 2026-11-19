@@ -27,8 +27,11 @@ int main(void) {
     static const char no_package[] =
         "{\"code\":0,\"data\":{\"list\":[{\"title\":\"No package\"}]}}";
     cm_catalog_t catalog;
+    int parsed;
 
-    assert(cm_catalog_parse_json(json, sizeof(json) - 1u, &catalog) == 2);
+    parsed = cm_catalog_parse_json(json, sizeof(json) - 1u, &catalog);
+    if (parsed != 2) fprintf(stderr, "parse result=%d count=%lu\\n", parsed, (unsigned long)catalog.count);
+    assert(parsed == 2);
     assert(catalog.count == 2);
     assert(strcmp(catalog.games[0].title, "Roblox") == 0);
     assert(strcmp(catalog.games[0].package_name, "com.roblox.client") == 0);
