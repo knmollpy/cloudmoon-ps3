@@ -17,6 +17,9 @@ add_library(cloudmoon_protocol_core STATIC
     ../src/cloudmoon_protocol.c
     ../src/cloudmoon_session.c
     ../src/cloudmoon_discovery.c
+    ../src/cloudmoon_random.c
+    ../src/cloudmoon_upgrade.c
+    ../src/cloudmoon_input.c
     ../src/cloudmoon_ws.c
     ../src/cloudmoon_ws_tls.c
     ../src/cloudmoon_client.c
