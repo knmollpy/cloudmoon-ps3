@@ -455,19 +455,6 @@ int cm_account_session_fetch(const char *ca_bundle_path,
    API request shape mirrors the current public CloudMoon web client. */
 #define CM_WEB_API_HOST "api.prod.cloudmoonapp.com"
 
-static int cm_hex_encode(const uint8_t *input, size_t length,
-                         char *output, size_t capacity) {
-    static const char hex[] = "0123456789abcdef";
-    size_t i;
-    if (!input || !output || capacity < length * 2u + 1u) return -1;
-    for (i = 0; i < length; ++i) {
-        output[i * 2u] = hex[input[i] >> 4];
-        output[i * 2u + 1u] = hex[input[i] & 15u];
-    }
-    output[length * 2u] = 0;
-    return (int)(length * 2u);
-}
-
 static int cm_make_uuid(char *out, size_t capacity) {
     uint8_t bytes[16];
     int n;
@@ -741,9 +728,7 @@ int cm_account_session_authenticate(const char *ca_bundle_path,
     memset(account->token, 0, sizeof(account->token));
     memset(account->email, 0, sizeof(account->email));
     if (cm_get_data_string(response, response_length, "token",
-                           account->token, sizeof(account->token)) < 0 ||
-        cm_get_data_string(response, response_length, "user_id",
-                           account->user_id, sizeof(account->user_id)) < 0) {
+                           account->token, sizeof(account->token)) < 0) {
         free(response);
         return -1;
     }
@@ -761,6 +746,7 @@ int cm_account_session_authenticate(const char *ca_bundle_path,
     response = NULL;
     if (!account->email[0] && email && email[0])
         (void)snprintf(account->email, sizeof(account->email), "%s", email);
+    if (!account->email[0]) return -1;
 
     account->server_id = server_id;
     (void)snprintf(account->language, sizeof(account->language), "%.7s", language);
@@ -783,7 +769,6 @@ int cm_account_session_prepare_game(const char *ca_bundle_path,
     size_t response_length = 0, item_length = 0;
     const char *item = NULL;
     int n, rc;
-    char encoded_instance[2049];
 
     if (!ca_bundle_path || !account || !account->token[0] ||
         !account->device_id[0] || !game_package || !game_package[0] ||
