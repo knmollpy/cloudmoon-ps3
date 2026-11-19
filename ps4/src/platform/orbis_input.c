@@ -133,5 +133,6 @@ int cm_orbis_gamepad_read(cm_orbis_gamepad_state_t *state) {
     state->left = (uint8_t)!!(pad.buttons & ORBIS_PAD_BUTTON_LEFT);
     state->right = (uint8_t)!!(pad.buttons & ORBIS_PAD_BUTTON_RIGHT);
     state->options = (uint8_t)!!(pad.buttons & ORBIS_PAD_BUTTON_OPTIONS);
+    state->touchpad = (uint8_t)!!(pad.buttons & ORBIS_PAD_BUTTON_TOUCH_PAD);
     return 0;
 }
