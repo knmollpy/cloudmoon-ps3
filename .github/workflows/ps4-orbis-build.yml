@@ -27,6 +27,7 @@ jobs:
           git -C vendor/mbedtls submodule update --init --depth 1 framework
           git submodule update --init --depth 1 vendor/libdatachannel
           git -C vendor/libdatachannel submodule update --init --recursive --depth 1
+          bash scripts/patch-libjuice-orbis.sh
 
       - name: Install missing LLVM linker tools
         run: |
