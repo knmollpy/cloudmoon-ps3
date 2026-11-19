@@ -222,7 +222,7 @@ static void draw_header(const cm_ui_surface_t *s, cm_ui_view_t view,
         text(s, s->width - 188, 31, 1, C_GREEN, "CUENTA CONECTADA");
     } else {
         rect(s, s->width - 205, 31, 9, 9, C_MUTED);
-        text(s, s->width - 188, 31, 1, C_MUTED, "SIN VINCULAR");
+        text(s, s->width - 188, 31, 1, C_MUTED, "SIN SESION");
     }
 }
 
@@ -237,7 +237,7 @@ static void draw_home(const cm_ui_surface_t *s, const cm_ui_state_t *st,
     text(s, 91, 382, 3, C_TEXT, "EXPLORAR CATALOGO");
     text(s, 91, 421, 1, C_MUTED, "VER JUEGOS DISPONIBLES");
     panel(s, 62, 475, 360, 92, st->home_focus == 1);
-    text(s, 91, 500, 3, C_TEXT, "VINCULAR CUENTA");
+    text(s, 91, 500, 3, C_TEXT, "INICIAR SESION");
     text(s, 91, 537, 1, C_MUTED, "INICIAR CON TU SESION CLOUDMOON");
     panel(s, 480, 128, 735, 439, 0);
     text(s, 520, 164, 2, C_CYAN, "ESTADO DE LA CUENTA");
@@ -264,7 +264,7 @@ static void draw_library(const cm_ui_surface_t *s, const cm_ui_state_t *st,
     if (count == 0) {
         panel(s, 62, 230, s->width - 124, 330, 0);
         centered_text(s, s->width / 2, 310, 4, C_TEXT, "CATALOGO AUN NO VINCULADO");
-        centered_text(s, s->width / 2, 390, 2, C_MUTED, "VINCULA TU CUENTA PARA CARGAR TUS JUEGOS.");
+        centered_text(s, s->width / 2, 390, 2, C_MUTED, "INICIA SESION PARA CARGAR TUS JUEGOS.");
         centered_text(s, s->width / 2, 450, 2, C_CYAN, "PULSA X PARA VINCULAR");
         return;
     }
@@ -292,46 +292,21 @@ static void draw_library(const cm_ui_surface_t *s, const cm_ui_state_t *st,
     }
 }
 
-static void draw_qr(const cm_ui_surface_t *s, const cm_ui_model_t *m) {
-    int size, scale, x, y, xx, yy;
-    if (!m || !m->qr_modules || m->qr_size < 21 || m->qr_size > 177) return;
-    size = m->qr_size;
-    scale = 260 / (size + 8);
-    if (scale < 1) return;
-    x = 830 + (280 - (size + 8) * scale) / 2;
-    y = 190 + (280 - (size + 8) * scale) / 2;
-    rect(s, 830, 190, 280, 280, C_WHITE);
-    for (yy = 0; yy < size; ++yy)
-        for (xx = 0; xx < size; ++xx)
-            if (m->qr_modules[(size_t)yy * (size_t)size + (size_t)xx])
-                rect(s, x + (xx + 4) * scale, y + (yy + 4) * scale,
-                     scale, scale, C_DARK);
-}
-
 static void draw_link(const cm_ui_surface_t *s, const cm_ui_model_t *m) {
-    text(s, 62, 125, 3, C_TEXT, "VINCULAR TU CUENTA");
-    text(s, 62, 170, 2, C_MUTED, "AUTORIZA TU CUENTA DE CLOUDMOON DESDE EL TELEFONO.");
+    text(s, 62, 125, 3, C_TEXT, "INICIAR SESION EN CLOUDMOON");
+    text(s, 62, 170, 2, C_MUTED, "USA TU CORREO Y CONTRASENA, SIN QR NI TELEFONO.");
     panel(s, 62, 220, 690, 320, 0);
-    text(s, 100, 260, 2, C_CYAN, "ACCESO SEGURO");
-    text(s, 100, 310, 2, C_TEXT, "1. ESCANEA EL QR CON TU TELEFONO.");
-    text(s, 100, 345, 2, C_TEXT, "2. INICIA SESION EN CLOUDMOON.");
-    text(s, 100, 380, 2, C_TEXT, "3. USA EL MARCADOR VINCULAR PS4.");
-    text(s, 100, 430, 1, C_MUTED, m && m->status_text ? m->status_text : "ESPERANDO AUTORIZACION DEL TELEFONO");
-    if (m && m->link_code && m->link_code[0]) {
-        text(s, 100, 465, 2, C_CYAN, "CODIGO DE VINCULACION:");
-        text(s, 100, 500, 3, C_TEXT, m->link_code);
-    }
-    panel(s, 790, 155, 360, 360, 0);
-    if (m && m->session_linked) {
-        centered_text(s, 970, 295, 3, C_GREEN, "VINCULADA");
-        centered_text(s, 970, 350, 2, C_TEXT, "SESION VALIDADA");
-    } else {
-        draw_qr(s, m);
-        if (!m || !m->qr_modules)
-            centered_text(s, 970, 310, 2, C_MUTED, "QR PENDIENTE");
-        if (m && m->link_url && m->link_url[0])
-            text(s, 830, 490, 1, C_CYAN, m->link_url);
-    }
+    text(s, 100, 260, 2, C_CYAN, "ACCESO DIRECTO");
+    text(s, 100, 315, 2, C_TEXT, "1. PULSA X PARA ABRIR EL TECLADO DE PS4.");
+    text(s, 100, 355, 2, C_TEXT, "2. ESCRIBE TU CORREO DE CLOUDMOON.");
+    text(s, 100, 395, 2, C_TEXT, "3. ESCRIBE TU CONTRASENA.");
+    text(s, 100, 455, 1, C_MUTED,
+         m && m->status_text ? m->status_text : "ESPERANDO INICIO DE SESION");
+    panel(s, 790, 220, 360, 320, 0);
+    centered_text(s, 970, 280, 3, C_CYAN, "CLOUDMOON");
+    centered_text(s, 970, 340, 2, C_TEXT, "GMAIL + PASSWORD");
+    centered_text(s, 970, 390, 1, C_MUTED, "TECLADO NATIVO PS4");
+    centered_text(s, 970, 445, 1, C_GREEN, "SESION HTTPS");
 }
 
 static void draw_settings(const cm_ui_surface_t *s, const cm_ui_state_t *st) {
