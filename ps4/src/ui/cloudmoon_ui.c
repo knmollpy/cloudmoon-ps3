@@ -178,13 +178,6 @@ cm_ui_action_t cm_ui_input(cm_ui_state_t *state, unsigned int keys,
             state->view = CM_UI_HOME;
             return action(CM_UI_ACTION_BACK, -1);
         }
-        if (keys & CM_UI_KEY_UP) state->link_focus = (state->link_focus + 2) % 3;
-        if (keys & CM_UI_KEY_DOWN) state->link_focus = (state->link_focus + 1) % 3;
-        if (keys & CM_UI_KEY_CROSS) {
-            if (state->link_focus == 0) return action(CM_UI_ACTION_EDIT_EMAIL, -1);
-            if (state->link_focus == 1) return action(CM_UI_ACTION_EDIT_PASSWORD, -1);
-            return action(CM_UI_ACTION_LOGIN, -1);
-        }
         break;
     case CM_UI_SETTINGS:
         if (keys & CM_UI_KEY_CIRCLE) {
@@ -241,8 +234,8 @@ static void draw_home(const cm_ui_surface_t *s, const cm_ui_state_t *st,
     text(s, 91, 382, 3, C_TEXT, "EXPLORAR CATALOGO");
     text(s, 91, 421, 1, C_MUTED, "VER JUEGOS DISPONIBLES");
     panel(s, 62, 475, 360, 92, st->home_focus == 1);
-    text(s, 91, 500, 3, C_TEXT, "INICIAR SESION");
-    text(s, 91, 537, 1, C_MUTED, "INICIAR CON TU SESION CLOUDMOON");
+    text(s, 91, 500, 3, C_TEXT, "VINCULAR CON TELEFONO");
+    text(s, 91, 537, 1, C_MUTED, "AUTORIZAR TU CUENTA CLOUDMOON");
     panel(s, 480, 128, 735, 439, 0);
     text(s, 520, 164, 2, C_CYAN, "ESTADO DE LA CUENTA");
     if (m && m->session_linked) {
@@ -270,7 +263,7 @@ static void draw_library(const cm_ui_surface_t *s, const cm_ui_state_t *st,
         centered_text(s, s->width / 2, 310, 4, C_TEXT, "CATALOGO AUN NO VINCULADO");
         centered_text(s, s->width / 2, 385, 2, C_MUTED, "INICIA SESION DESDE LA PESTANA VINCULAR.");
         centered_text(s, s->width / 2, 430, 1, C_CYAN, "USA R1 / L1 PARA CAMBIAR DE SECCION");
-        centered_text(s, s->width / 2, 466, 1, C_MUTED, "COMPLETA GMAIL Y CONTRASENA Y PULSA INICIAR SESION.");
+        centered_text(s, s->width / 2, 466, 1, C_MUTED, "VINCULA TU CUENTA DESDE LA PESTANA VINCULAR.");
         return;
     }
     {
@@ -297,33 +290,45 @@ static void draw_library(const cm_ui_surface_t *s, const cm_ui_state_t *st,
     }
 }
 
+static void draw_qr(const cm_ui_surface_t *s, const cm_ui_model_t *m,
+                      int x, int y, int max_size) {
+    int modules, cell, side, row, col, offset;
+    if (!s || !m || !m->qr_modules || m->qr_size < 21 ||
+        m->qr_size > 177 || max_size < 100) return;
+    modules = m->qr_size + 8;
+    cell = max_size / modules;
+    if (cell < 1) return;
+    side = modules * cell;
+    offset = (max_size - side) / 2;
+    rect(s, x + offset, y + offset, side, side, C_WHITE);
+    for (row = 0; row < m->qr_size; ++row) {
+        for (col = 0; col < m->qr_size; ++col) {
+            if (m->qr_modules[(size_t)row * (size_t)m->qr_size + (size_t)col])
+                rect(s, x + offset + (col + 4) * cell,
+                     y + offset + (row + 4) * cell, cell, cell, 0xFF000000u);
+        }
+    }
+}
+
 static void draw_link(const cm_ui_surface_t *s, const cm_ui_state_t *st,
                       const cm_ui_model_t *m) {
-    char email_line[96];
-    const char *email = m && m->login_email && m->login_email[0]
-        ? m->login_email : "ESCRIBE TU GMAIL";
-    size_t n = strlen(email);
-    if (n > 34) n = 34;
-    memcpy(email_line, email, n);
-    email_line[n] = 0;
-
+    (void)st;
     text(s, 62, 125, 3, C_TEXT, "VINCULAR CUENTA CLOUDMOON");
-    text(s, 62, 170, 2, C_MUTED, "INGRESA TU GMAIL Y TU CONTRASENA.");
-    panel(s, 62, 220, 820, 105, st->link_focus == 0);
-    text(s, 92, 242, 1, C_CYAN, "GMAIL");
-    text(s, 92, 275, 2, C_TEXT, email_line);
-    panel(s, 62, 345, 820, 105, st->link_focus == 1);
-    text(s, 92, 367, 1, C_CYAN, "CONTRASENA");
-    text(s, 92, 400, 2, C_TEXT,
-         m && m->login_password_set ? "************" : "ESCRIBE TU CONTRASENA");
-    panel(s, 62, 475, 820, 76, st->link_focus == 2);
-    centered_text(s, 472, 500, 2, C_GREEN, "INICIAR SESION");
-    if (m && m->status_text)
-        text(s, 62, 570, 1, C_MUTED, m->status_text);
-    text(s, 930, 270, 1, C_MUTED, "ARRIBA / ABAJO");
-    text(s, 930, 295, 1, C_MUTED, "PARA ELEGIR");
-    text(s, 930, 335, 1, C_MUTED, "X: EDITAR / ENTRAR");
-    text(s, 930, 360, 1, C_MUTED, "O: VOLVER");
+    text(s, 62, 170, 2, C_MUTED, "ESCANEA EL CODIGO CON TU TELEFONO.");
+    panel(s, 62, 202, 330, 330, 0);
+    if (m && m->qr_size > 0) draw_qr(s, m, 72, 212, 310);
+    else centered_text(s, 227, 330, 2, C_CYAN, "INICIANDO...");
+    text(s, 440, 210, 2, C_CYAN, "DESDE TU TELEFONO");
+    text(s, 440, 260, 1, C_TEXT, "1. ABRE CLOUDMOON OFICIAL.");
+    text(s, 440, 298, 1, C_TEXT, "2. INICIA SESION Y ABRE UN JUEGO.");
+    text(s, 440, 336, 1, C_TEXT, "3. COPIA LA DIRECCION DE ESA PARTIDA.");
+    text(s, 440, 374, 1, C_TEXT, "4. PEGALA EN LA PAGINA DE VINCULACION.");
+    if (m && m->link_url) {
+        text(s, 440, 430, 1, C_MUTED, "PAGINA LOCAL:");
+        text(s, 440, 454, 1, C_CYAN, m->link_url);
+    }
+    if (m && m->status_text) text(s, 62, 570, 1, C_MUTED, m->status_text);
+    text(s, 930, 604, 1, C_MUTED, "O: VOLVER");
 }
 static void draw_settings(const cm_ui_surface_t *s, const cm_ui_state_t *st) {
     static const char *items[] = {"RESOLUCION DE STREAM", "FOTOGRAMAS POR SEGUNDO", "BITRATE"};
