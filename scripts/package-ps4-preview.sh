@@ -4,6 +4,7 @@ set -euo pipefail
 : "${OO_PS4_TOOLCHAIN:?OO_PS4_TOOLCHAIN must point to OpenOrbis PS4Toolchain}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TOOLS="${OO_PS4_TOOLCHAIN}/bin/linux"
+MODULES="${OO_PS4_TOOLCHAIN}/bin/data/modules"
 BUILD_DIR="${ROOT}/build-ps4-modules"
 OUT_DIR="${ROOT}/dist/cloudmoon-ps4"
 TITLE_ID="CLDM00001"
@@ -15,9 +16,15 @@ test -x "${TOOLS}/create-gp4"
 test -f "${TOOLS}/PkgTool.Core"
 test -f "${APP_ELF}"
 test -s "${ROOT}/assets/cacert.pem"
+# OpenOrbis homebrew packages must carry these compatibility modules.
+# Omitting them can make the PS4 report that the installed app data is corrupt.
+test -s "${MODULES}/libc.prx"
+test -s "${MODULES}/libSceFios2.prx"
 
 rm -rf "${OUT_DIR}"
-mkdir -p "${OUT_DIR}/sce_sys" "${OUT_DIR}/assets/misc"
+mkdir -p "${OUT_DIR}/sce_sys" "${OUT_DIR}/sce_module" "${OUT_DIR}/assets/misc"
+cp "${MODULES}/libc.prx" "${OUT_DIR}/sce_module/libc.prx"
+cp "${MODULES}/libSceFios2.prx" "${OUT_DIR}/sce_module/libSceFios2.prx"
 cp "${ROOT}/assets/cacert.pem" "${OUT_DIR}/assets/misc/cacert.pem"
 cp "${ROOT}/scripts/generate-ps4-icon.py" "${OUT_DIR}/generate-icon.py"
 (
@@ -48,11 +55,12 @@ cp "${ROOT}/scripts/generate-ps4-icon.py" "${OUT_DIR}/generate-icon.py"
 
     "${TOOLS}/create-gp4" -out cloudmoon_ps4.gp4 \
         --content-id="${CONTENT_ID}" \
-        --files "eboot.bin sce_sys/param.sfo sce_sys/icon0.png assets/misc/cacert.pem"
+        --files "eboot.bin sce_sys/param.sfo sce_sys/icon0.png sce_module/libc.prx sce_module/libSceFios2.prx assets/misc/cacert.pem"
     "${TOOLS}/PkgTool.Core" pkg_build cloudmoon_ps4.gp4 .
 )
 
 PKG_PATH="$(find "${OUT_DIR}" -maxdepth 2 -type f -name '*.pkg' -print -quit)"
 test -n "${PKG_PATH}"
 test -s "${PKG_PATH}"
-echo "CloudMoon PS4 application PKG created: ${PKG_PATH}"
+"${TOOLS}/PkgTool.Core" pkg_validate --verbose "${PKG_PATH}"
+echo "CloudMoon PS4 application PKG created and validated: ${PKG_PATH}"
