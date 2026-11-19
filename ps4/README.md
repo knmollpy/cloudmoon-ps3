@@ -17,7 +17,7 @@ The frontend in ps4/src/ui/cloudmoon_ui.c is independent of Moonlight's APPS/SET
 
 The dashboard is model-driven:
 - It displays games provided by the account/catalog layer, not a fabricated local list.
-- The library pages through up to 64 entries instead of silently hiding titles after the first eight.
+- The library supports up to 512 catalog entries and displays eight per page.
 - The linking view draws a QR only when a real QR matrix and link payload are supplied. It does not generate a decorative or non-working QR.
 - An unlinked account is shown as unlinked; it is not silently treated as authenticated.
 - DualShock navigation is separated from rendering so the frontend can be host-tested.
@@ -41,13 +41,13 @@ CloudMoon's public material documents the browser session fields and coordinator
 
 1. [x] Independent CloudMoon dashboard and navigation.
 2. [x] Orbis DualShock 4 input and VideoOut framebuffer adapters, cross-compiled with OpenOrbis.
-3. [x] Portable CloudMoon protocol/client, WebSocket and Mbed TLS backend, cross-compiled for Orbis.
+3. [x] Portable CloudMoon protocol/client, WebSocket and Mbed TLS backend are present in the PS4 build graph; Orbis integration still needs CI and console verification.
 4. [ ] Verify coordinator TLS/WebSocket registration on the physical 13.52 console.
-5. [ ] Port libdatachannel WebRTC callbacks, ICE/DTLS/SRTP and DataChannel input.
+5. [ ] Complete and verify the libdatachannel WebRTC callbacks, ICE/DTLS/SRTP and DataChannel input path.
 6. [ ] Add H.264 decode and present streaming frames through VideoOut.
 7. [ ] Add Opus output and full DualShock 4 touch/button mapping.
 8. [ ] Implement the real phone/session hand-off and dynamic catalog retrieval.
-9. [ ] Produce an installable PKG and validate it on firmware 13.52.
+9. [ ] Build and validate the installable preview PKG, then test installation on firmware 13.52.
 
 PS3 platform code is not copied blindly. Threading, TLS entropy, controller, filesystem, renderer, audio and package metadata each need a PS4 implementation. UI, session/account, signalling, WebRTC, decoder, audio and rendering remain separate modules so the final app does not depend on Moonlight's menu or launcher.
 
@@ -61,7 +61,7 @@ cmake --build build/cloudmoon-ps4-ui
 ctest --test-dir build/cloudmoon-ps4-ui --output-on-failure
 \`\`\`
 
-GitHub Actions runs UI, protocol and session smoke tests, and a separate OpenOrbis cross-build. The Orbis workflow exports all static libraries built for the PS4 target.
+GitHub Actions runs UI, protocol and session smoke tests, and a separate OpenOrbis cross-build. The PS4 branch now includes a standalone dashboard entrypoint and a packaging script intended to produce a clearly labelled UI-preview PKG; the latest Orbis job must pass before that artifact can be claimed.
 
 ## Current status
 
