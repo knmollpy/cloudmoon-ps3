@@ -16,6 +16,7 @@ static int cm_account_is_ready(const cm_account_session_t *account) {
 }
 
 int cm_orbis_cloudmoon_run_account(const cm_account_session_t *account,
+                                   const char *game_package,
                                    const char *ca_bundle_path,
                                    unsigned timeout_seconds,
                                    cm_cloudmoon_signal_fn on_signal,
@@ -23,7 +24,8 @@ int cm_orbis_cloudmoon_run_account(const cm_account_session_t *account,
     cm_cloudmoon_registration_t registration;
 
     if (!cm_account_is_ready(account) || !ca_bundle_path ||
-        !ca_bundle_path[0] || timeout_seconds == 0)
+        !ca_bundle_path[0] || timeout_seconds == 0 ||
+        !game_package || !game_package[0]
         return -1;
 
     if (cm_orbis_random_init() != 0)
@@ -32,7 +34,7 @@ int cm_orbis_cloudmoon_run_account(const cm_account_session_t *account,
     memset(&registration, 0, sizeof(registration));
     registration.width = 1280;
     registration.height = 720;
-    registration.game = account->game;
+    registration.game = game_package;
     registration.user_id = account->user_id;
     registration.instance_id = account->android_instance_id;
 
