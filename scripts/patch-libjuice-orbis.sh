@@ -108,3 +108,44 @@ elif new not in text:
 path.write_text(text)
 PY
 done
+
+
+# usrsctp is built in userspace. The FreeBSD target triple also defines
+# __FreeBSD__, but Orbis has no FreeBSD kernel mutex header; provide the
+# userspace dummy mutex types instead of importing kernel-only declarations.
+USRSCTP_DIR="${3:-vendor/libdatachannel/deps/usrsctp/usrsctplib}"
+test -f "$USRSCTP_DIR/user_environment.h"
+test -f "$USRSCTP_DIR/netinet/sctp_os_userspace.h"
+
+python3 - "$USRSCTP_DIR/user_environment.h" "$USRSCTP_DIR/netinet/sctp_os_userspace.h" <<'PY'
+from pathlib import Path
+import sys
+
+environment = Path(sys.argv[1])
+text = environment.read_text()
+old = """#ifdef __FreeBSD__
+#ifndef _SYS_MUTEX_H_
+#include <sys/mutex.h>
+#endif
+#endif"""
+new = """#if defined(__FreeBSD__) && !defined(__ORBIS__)
+#ifndef _SYS_MUTEX_H_
+#include <sys/mutex.h>
+#endif
+#endif"""
+if old in text:
+    text = text.replace(old, new, 1)
+elif new not in text:
+    raise SystemExit("usrsctp user_environment mutex include block changed unexpectedly")
+environment.write_text(text)
+
+userspace = Path(sys.argv[2])
+text = userspace.read_text()
+old = "#if !defined(__FreeBSD__)\nstruct mtx {int dummy;};"
+new = "#if !defined(__FreeBSD__) || defined(__ORBIS__)\nstruct mtx {int dummy;};"
+if old in text:
+    text = text.replace(old, new, 1)
+elif new not in text:
+    raise SystemExit("usrsctp userspace dummy mutex block changed unexpectedly")
+userspace.write_text(text)
+PY
