@@ -67,13 +67,17 @@ jobs:
             -DCMAKE_MAKE_PROGRAM=/usr/bin/make \
             -DCM_UI_BUILD_TESTS=OFF
 
-      - name: Cross-compile UI and Orbis hardware adapters
+      - name: Cross-compile and link CloudMoon PS4 preview
         run: cmake --build build-ps4-modules --verbose
 
-      - name: Upload cross-compile object libraries
+      - name: Package installable CloudMoon UI preview PKG
+        env:
+          DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
+        run: bash scripts/package-ps4-preview.sh
+
+      - name: Upload CloudMoon PS4 preview PKG
         uses: actions/upload-artifact@v4
         with:
-          name: cloudmoon-ps4-orbis-objects
-          path: |
-            build-ps4-modules/**/*.a
+          name: cloudmoon-ps4-preview-pkg
+          path: dist/cloudmoon-ps4-preview/*.pkg
           if-no-files-found: error
