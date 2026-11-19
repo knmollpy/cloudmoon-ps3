@@ -2,6 +2,7 @@
 #include "platform/orbis_network.h"
 
 #include <orbis/ImeDialog.h>
+#include <orbis/CommonDialog.h>
 #include "account/cloudmoon_orbis_game.h"
 #include "catalog/cloudmoon_catalog.h"
 
@@ -121,6 +122,7 @@ static int cm_read_ime_text(uint32_t user_id, OrbisImeType type,
     setting.supportedLanguages = 0;
     setting.enterLabel = ORBIS_BUTTON_LABEL_DEFAULT;
     setting.inputMethod = ORBIS__DEFAULT;
+    setting.option = (type == ORBIS_TYPE_BASIC_LATIN) ? 4u : 0u; /* ORBIS_IME_OPTION_PASSWORD */
     setting.maxTextLength = max_text_length;
     setting.inputTextBuffer = input;
     setting.posx = 0.0f;
@@ -299,6 +301,9 @@ static void app_run(void) {
     (void)sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_USER_SERVICE);
     (void)sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_PAD);
     (void)sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_VIDEO_OUT);
+    (void)sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_COMMON_DIALOG);
+    (void)sceCommonDialogInitialize();
+    (void)sceSysmoduleLoadModule(ORBIS_SYSMODULE_LIBIME);
     (void)sceSysmoduleLoadModule(ORBIS_SYSMODULE_IME_DIALOG);
 
     user_rc = sceUserServiceInitialize(NULL);
