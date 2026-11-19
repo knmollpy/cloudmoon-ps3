@@ -829,26 +829,17 @@ int cm_account_session_prepare_game(const char *ca_bundle_path,
         free(response);
         return -1;
     }
-    (void)cm_get_data_string(response, response_length, "coordinator_host",
-                             account->coordinator_host,
-                             sizeof(account->coordinator_host));
     free(response);
 
-    /* The instance identifier contains a coordinator URL in the current
-       CloudMoon client protocol. Prefer an explicit API host if supplied,
-       otherwise decode that URL and derive the Socket.IO endpoint. */
+    /* Decode the coordinator from the instance id using the same protocol
+       routine as CloudMoon's web client. */
     if (cm_cloudmoon_get_coordinator(account->android_instance_id,
-                                     encoded_instance, sizeof(encoded_instance),
+                                     account->coordinator_host,
+                                     sizeof(account->coordinator_host),
                                      &account->coordinator_port,
                                      account->coordinator_path,
-                                     sizeof(account->coordinator_path)) == 0) {
-        if (!account->coordinator_host[0])
-            (void)snprintf(account->coordinator_host,
-                           sizeof(account->coordinator_host), "%s",
-                           encoded_instance);
-    } else if (!account->coordinator_host[0]) {
+                                     sizeof(account->coordinator_path)) != 0)
         return -1;
-    }
     (void)snprintf(account->game, sizeof(account->game), "%.128s", game_package);
     return account->coordinator_host[0] && account->coordinator_port != 0 ? 0 : -1;
 }
