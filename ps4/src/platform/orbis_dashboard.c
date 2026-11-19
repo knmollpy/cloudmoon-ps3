@@ -6,6 +6,7 @@
 
 int cm_orbis_dashboard_run(cm_ui_model_t *model,
                            cm_orbis_ui_action_fn on_action,
+                           cm_orbis_ui_tick_fn on_tick,
                            void *context) {
     cm_ui_state_t state;
     int rc;
@@ -25,6 +26,15 @@ int cm_orbis_dashboard_run(cm_ui_model_t *model,
         unsigned int pressed = 0;
         cm_ui_action_t event;
         cm_ui_surface_t *surface;
+
+        if (on_tick) {
+            rc = on_tick(model, context);
+            if (rc != 0) {
+                cm_orbis_input_shutdown();
+                cm_orbis_video_shutdown();
+                return rc;
+            }
+        }
 
         if (cm_orbis_input_poll(&pressed) == 0 && pressed != 0) {
             event = cm_ui_input(&state, pressed, model);
