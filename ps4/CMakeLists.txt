@@ -200,6 +200,7 @@ if(PS4)
         SceAudioOut
         SceVideoOut
         SceUserService
+        SceImeDialog
     )
     target_compile_options(cloudmoon_ps4_orbis_platform PRIVATE -Wall -Wextra)
     # Link the standalone CloudMoon dashboard, pairing and game-streaming app.
