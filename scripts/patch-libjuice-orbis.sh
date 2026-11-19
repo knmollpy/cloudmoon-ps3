@@ -36,6 +36,51 @@ path.write_text(text)
 PY
 
 
+UDP_SOURCE="${2:-vendor/libdatachannel/deps/libjuice/src/udp.c}"
+test -f "$UDP_SOURCE"
+
+python3 - "$UDP_SOURCE" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+
+include = "#include <time.h>\n"
+orbis_include = "#include <time.h>\n\n#if defined(__ORBIS__)\n#include <fcntl.h>\n#endif\n"
+if orbis_include not in text:
+    if include not in text:
+        raise SystemExit("libjuice udp include anchor changed unexpectedly")
+    text = text.replace(include, orbis_include, 1)
+
+old = """\tctl_t nbio = 1;
+\tif (ioctlsocket(sock, FIONBIO, &nbio)) {
+\t\tJLOG_ERROR("Setting non-blocking mode on UDP socket failed, errno=%d", sockerrno);
+\t\tgoto error;
+\t}"""
+new = """#if defined(__ORBIS__)
+\tint flags = fcntl(sock, F_GETFL, 0);
+\tif (flags < 0 || fcntl(sock, F_SETFL, flags | O_NONBLOCK) < 0) {
+\t\tJLOG_ERROR("Setting non-blocking mode on UDP socket failed, errno=%d", sockerrno);
+\t\tgoto error;
+\t}
+#else
+\tctl_t nbio = 1;
+\tif (ioctlsocket(sock, FIONBIO, &nbio)) {
+\t\tJLOG_ERROR("Setting non-blocking mode on UDP socket failed, errno=%d", sockerrno);
+\t\tgoto error;
+\t}
+#endif"""
+
+if old in text:
+    text = text.replace(old, new, 1)
+elif new not in text:
+    raise SystemExit("libjuice UDP nonblocking block changed unexpectedly")
+
+path.write_text(text)
+PY
+
+
 TCP_SOURCE="${1:-vendor/libdatachannel/deps/libjuice/src/tcp.c}"
 test -f "$TCP_SOURCE"
 
