@@ -2,6 +2,7 @@
 #define CLOUDMOON_CATALOG_H
 
 #include <stddef.h>
+#include "../account/cloudmoon_session_link.h"
 
 #define CM_CATALOG_MAX_GAMES 512
 #define CM_CATALOG_TITLE_MAX 128
@@ -36,5 +37,22 @@ int cm_catalog_parse_json(const char *json, size_t length,
 int cm_catalog_fetch(const char *ca_bundle_path, unsigned timeout_seconds,
                      cm_catalog_t *catalog, char *api_host,
                      size_t api_host_capacity);
+
+/* Official CloudMoon web-account API flow. Credentials are submitted from
+   the PS4 to api.prod.cloudmoonapp.com over verified TLS. */
+int cm_account_session_authenticate(const char *ca_bundle_path,
+                                    unsigned timeout_seconds,
+                                    const char *provider,
+                                    const char *google_id_token,
+                                    const char *email,
+                                    const char *password,
+                                    int server_id,
+                                    const char *language,
+                                    const char *locale,
+                                    cm_account_session_t *account);
+int cm_account_session_prepare_game(const char *ca_bundle_path,
+                                    unsigned timeout_seconds,
+                                    cm_account_session_t *account,
+                                    const char *game_package);
 
 #endif
