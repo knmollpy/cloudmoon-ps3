@@ -269,8 +269,9 @@ static void draw_library(const cm_ui_surface_t *s, const cm_ui_state_t *st,
     if (count == 0) {
         panel(s, 62, 230, s->width - 124, 330, 0);
         centered_text(s, s->width / 2, 310, 4, C_TEXT, "CATALOGO AUN NO VINCULADO");
-        centered_text(s, s->width / 2, 390, 2, C_MUTED, "INICIA SESION PARA CARGAR TUS JUEGOS.");
-        centered_text(s, s->width / 2, 450, 2, C_CYAN, "PULSA X PARA VINCULAR");
+        centered_text(s, s->width / 2, 385, 2, C_MUTED, "INICIA SESION DESDE LA PESTANA VINCULAR.");
+        centered_text(s, s->width / 2, 430, 1, C_CYAN, "USA R1 / L1 PARA CAMBIAR DE SECCION");
+        centered_text(s, s->width / 2, 466, 1, C_MUTED, "LA X NO ABRE EL FORMULARIO DESDE ESTA PANTALLA.");
         return;
     }
     {
