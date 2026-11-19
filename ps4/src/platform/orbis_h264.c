@@ -1,6 +1,7 @@
 #include "orbis_h264.h"
 
 #include "orbis_video.h"
+#include "../ui/cloudmoon_ui.h"
 #include <orbis/Sysmodule.h>
 #include <orbis/libkernel.h>
 #include <orbis/GnmDriver.h>
@@ -341,6 +342,12 @@ static void cm_cache_invalidate(const uint8_t *data, size_t length) {
     _mm_mfence();
 }
 
+static volatile int s_game_menu_open;
+
+void cm_orbis_h264_set_game_menu(int open) {
+    __sync_lock_test_and_set(&s_game_menu_open, open ? 1 : 0);
+}
+
 static int cm_present_nv12(const uint8_t *base,
                            int width, int height, int pitch) {
     cm_ui_surface_t *surface = cm_orbis_video_surface();
@@ -372,6 +379,8 @@ static int cm_present_nv12(const uint8_t *base,
                      (uint32_t)cm_clamp_u8(blue);
         }
     }
+    if (__sync_fetch_and_add(&s_game_menu_open, 0))
+        cm_ui_draw_game_menu_overlay(surface);
     return cm_orbis_video_present();
 }
 
