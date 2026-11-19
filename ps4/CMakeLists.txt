@@ -54,6 +54,9 @@ if(PS4)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
     set(BUILD_SHARED_DEPS_LIBS OFF CACHE BOOL "" FORCE)
     set(USE_MBEDTLS ON CACHE BOOL "" FORCE)
+    # libSRTP uses its own optional MbedTLS crypto backend; keep that disabled
+    # because libdatachannel only needs SRTP's internal AES/HMAC primitives.
+    set(ENABLE_MBEDTLS OFF CACHE BOOL "" FORCE)
     set(USE_GNUTLS OFF CACHE BOOL "" FORCE)
     set(USE_NICE OFF CACHE BOOL "" FORCE)
     set(PREFER_SYSTEM_LIB OFF CACHE BOOL "" FORCE)
